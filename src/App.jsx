@@ -9,12 +9,12 @@ const SUPABASE_URL = 'https://zthuqzzholyjolteuvty.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_xkg9ULmNiqKrCcESytGbmw_u1Z12_gG';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// 결제 방식 목록
+// 옵션 목록
 const PAYMENT_OPTIONS = ["신용카드", "현금", "계좌이체", "전화예약입금", "네이버", "인스타", "미결제"];
 const PRODUCT_OPTIONS = ["꽃다발", "꽃바구니", "햇살콘플라워", "꽃묶음", "식물", "용품", "시즌한정", "기타"];
 
 export default function App() {
-  const [activeMenu, setActiveMenu] = useState('new'); // 'new' | 'orders' | 'customers' | 'notifications' | 'backup'
+  const [activeMenu, setActiveMenu] = useState('orders'); // 기본 메뉴: 주문&달력
   const [subTab, setSubTab] = useState('calendar'); // 'calendar' | 'list'
   
   const [orders, setOrders] = useState([]);
@@ -22,7 +22,7 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [editingOrder, setEditingOrder] = useState(null);
 
-  // 현재 한국 날짜 및 시간 실시간 계산 함수 (15분 단위 정렬)
+  // 한국 시각 계산 (15분 단위)
   const getNowFormatted = () => {
     const now = new Date();
     const tzOffset = now.getTimezoneOffset() * 60000;
@@ -37,7 +37,7 @@ export default function App() {
     return { date, time: `${finalHours}:${formattedMinutes}` };
   };
 
-  // ISO/Supabase 날짜시간 문자열 파싱 헬퍼 함수
+  // ISO/Supabase 파싱
   const parseDateTime = (datetimeStr, fallbackDate = '', fallbackTime = '14:00') => {
     if (!datetimeStr) return { date: fallbackDate, time: fallbackTime };
     const cleanStr = datetimeStr.replace(' ', 'T');
@@ -208,7 +208,7 @@ export default function App() {
     fetchData();
   };
 
-  // 📌 1. 주문 데이터 CSV 다운로드
+  // CSV 백업/복원
   const exportOrdersCSV = () => {
     if (orders.length === 0) return alert('다운로드할 주문 데이터가 없습니다.');
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
@@ -237,7 +237,6 @@ export default function App() {
     document.body.removeChild(link);
   };
 
-  // 📌 1. 고객 데이터 CSV 다운로드
   const exportCustomersCSV = () => {
     if (customers.length === 0) return alert('다운로드할 고객 데이터가 없습니다.');
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
@@ -261,7 +260,6 @@ export default function App() {
     document.body.removeChild(link);
   };
 
-  // 📌 2. CSV 파일 Import (복원) 기능
   const handleImportCSV = async (e, type) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -272,7 +270,6 @@ export default function App() {
       const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
       if (lines.length <= 1) return alert('올바른 CSV 파일이 아니거나 데이터가 없습니다.');
 
-      // 따옴표 및 쉼표 파싱 함수
       const parseCSVLine = (line) => {
         const result = [];
         let cur = '';
@@ -328,7 +325,7 @@ export default function App() {
       }
 
       fetchData();
-      e.target.value = ''; // 파일 선택 초기화
+      e.target.value = '';
     };
     reader.readAsText(file, 'UTF-8');
   };
@@ -346,29 +343,30 @@ export default function App() {
     : [];
 
   const menuList = [
-    { id: 'new', label: '📝 신규 등록' },
-    { id: 'orders', label: '📋 주문 & 달력' },
-    { id: 'customers', label: '🎂 고객 관리' },
-    { id: 'notifications', label: '🔔 알림 현황' },
-    { id: 'backup', label: '💾 데이터 백업/복원' },
+    { id: 'new', label: '📝 등록' },
+    { id: 'orders', label: '📋 주문/달력' },
+    { id: 'customers', label: '🎂 고객' },
+    { id: 'notifications', label: '🔔 알림' },
+    { id: 'backup', label: '💾 백업/복원' },
   ];
 
   return (
     <div className="min-h-screen bg-slate-100/70 flex flex-col md:flex-row pb-12 md:pb-0">
-      {/* 📌 사이드바 */}
-      <aside className="bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 w-full md:w-60 p-2.5 md:p-5 flex flex-col shrink-0 shadow-xs">
+      {/* 📌 사이드바 / 상단 메뉴바 (3. 가로 간격 대폭 축소) */}
+      <aside className="bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 w-full md:w-56 p-1.5 md:p-5 flex flex-col shrink-0 shadow-xs">
         <div className="hidden md:flex items-center gap-2 text-rose-600 font-extrabold text-xl mb-1">
           <span className="text-2xl">📌</span>
           <span>메뉴</span>
         </div>
         <p className="hidden md:block text-xs text-slate-400 mb-6 font-medium">이동할 메뉴를 선택하세요</p>
 
-        <nav className="flex md:flex-col gap-1.5 md:gap-2.5 overflow-x-auto no-scrollbar w-full text-xs md:text-sm py-1 md:py-0">
+        {/* 모바일 화면에서 한눈에 보이도록 간격을 gap-1, px-2로 축소 */}
+        <nav className="flex md:flex-col justify-between md:justify-start gap-1 md:gap-2.5 w-full text-xs md:text-sm py-1 md:py-0">
           {menuList.map(menu => (
             <label
               key={menu.id}
               onClick={() => handleMenuChange(menu.id)}
-              className={`flex items-center gap-1.5 md:gap-3 px-2.5 md:px-3 py-1.5 md:py-2.5 rounded-lg cursor-pointer whitespace-nowrap transition-all ${
+              className={`flex items-center justify-center md:justify-start gap-1 md:gap-3 px-1.5 md:px-3 py-1.5 md:py-2.5 rounded-lg cursor-pointer whitespace-nowrap transition-all flex-1 md:flex-none text-center ${
                 activeMenu === menu.id
                   ? 'bg-rose-50 text-rose-600 font-bold border-b-2 md:border-b-0 md:border-l-4 border-rose-500 shadow-2xs'
                   : 'text-slate-600 hover:bg-slate-200/50'
@@ -381,14 +379,14 @@ export default function App() {
                 onChange={() => {}}
                 className="w-3.5 h-3.5 md:w-4 md:h-4 accent-rose-500 cursor-pointer hidden md:inline"
               />
-              <span>{menu.label}</span>
+              <span className="text-[11px] sm:text-xs md:text-sm">{menu.label}</span>
             </label>
           ))}
         </nav>
       </aside>
 
       {/* 📌 메인 영역 */}
-      <main className="flex-1 p-3 md:p-8 max-w-6xl mx-auto w-full">
+      <main className="flex-1 p-2.5 md:p-8 max-w-6xl mx-auto w-full">
         {/* 1. 신규 주문 및 고객 등록 */}
         {activeMenu === 'new' && (
           <div className="max-w-xl mx-auto bg-white p-4 md:p-8 rounded-xl border border-slate-200 shadow-sm">
@@ -508,7 +506,6 @@ export default function App() {
                 />
               </div>
 
-              {/* 📌 3. 저장 버튼 글씨 선명하게 변경 */}
               <button
                 type="submit"
                 className="w-full py-3.5 bg-rose-600 text-white font-extrabold rounded-xl shadow-md hover:bg-rose-700 transition-colors text-base mt-2 cursor-pointer"
@@ -522,15 +519,11 @@ export default function App() {
         {/* 2. 전체 주문 목록 & 달력 */}
         {activeMenu === 'orders' && (
           <div className="space-y-4 md:space-y-6">
-            <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm">
-              <h2 className="text-xl md:text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-                <span>📋</span> 주문 내역 및 픽업 달력
-              </h2>
-
-              <div className="flex border-b border-slate-200 mb-4 md:mb-6 gap-6">
+            <div className="bg-white p-3 md:p-6 rounded-xl border border-slate-200 shadow-sm">
+              <div className="flex border-b border-slate-200 mb-3 md:mb-6 gap-6">
                 <button
                   onClick={() => setSubTab('calendar')}
-                  className={`pb-2.5 text-sm font-bold flex items-center gap-1.5 relative transition-colors ${
+                  className={`pb-2 text-xs md:text-sm font-bold flex items-center gap-1.5 relative transition-colors ${
                     subTab === 'calendar' ? 'text-rose-600' : 'text-slate-400 hover:text-slate-600'
                   }`}
                 >
@@ -540,7 +533,7 @@ export default function App() {
 
                 <button
                   onClick={() => setSubTab('list')}
-                  className={`pb-2.5 text-sm font-bold flex items-center gap-1.5 relative transition-colors ${
+                  className={`pb-2 text-xs md:text-sm font-bold flex items-center gap-1.5 relative transition-colors ${
                     subTab === 'list' ? 'text-rose-600' : 'text-slate-400 hover:text-slate-600'
                   }`}
                 >
@@ -549,12 +542,15 @@ export default function App() {
                 </button>
               </div>
 
+              {/* 📌 2. 모바일 세로모드 달력 세로 길이 및 가독성 조정 */}
               {subTab === 'calendar' && (
                 <FullCalendar
                   plugins={[dayGridPlugin, interactionPlugin]}
                   initialView="dayGridMonth"
                   locale="ko"
-                  height="auto"
+                  aspectRatio={1.1} // 달력이 너무 세로로 길어지지 않게 고정
+                  dayMaxEventRows={2} // 하루 칸에 이벤트 최대 2개 표시 후 +more 처리
+                  contentHeight="auto"
                   events={calendarEvents}
                   dateClick={(info) => setSelectedDate(info.dateStr)}
                   eventClick={(info) => {
@@ -600,23 +596,33 @@ export default function App() {
               )}
             </div>
 
+            {/* 📌 1. 달력에서 선택한 날짜 하단 리스트 - 전체 클릭 시 수정 가능하도록 적용 */}
             {subTab === 'calendar' && selectedDate && (
               <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm">
-                <h3 className="text-base md:text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
-                  <span>📅</span> {selectedDate} 픽업 주문 목록
-                </h3>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm md:text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <span>📅</span> <span className="text-rose-600">{selectedDate}</span> 픽업 주문 ({selectedDayOrders.length}건)
+                  </h3>
+                  <span className="text-xs text-slate-400">* 항목을 클릭하면 수정할 수 있습니다.</span>
+                </div>
 
                 {selectedDayOrders.length === 0 ? (
-                  <div className="bg-sky-50 text-sky-700 p-3.5 rounded-xl text-xs md:text-sm font-medium text-center border border-sky-100">
-                    해당 날짜에 픽업 예정인 주문이 없습니다.
+                  <div className="bg-slate-50 text-slate-500 p-4 rounded-xl text-xs md:text-sm text-center border border-slate-100">
+                    해당 날짜에 예정된 픽업 주문이 없습니다.
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {selectedDayOrders.map(o => (
-                      <div key={o.id} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 flex flex-col justify-between gap-2.5">
+                      <div
+                        key={o.id}
+                        onClick={() => startEditOrder(o)}
+                        className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-rose-50/50 hover:border-rose-300 transition-all cursor-pointer flex flex-col justify-between gap-2 shadow-2xs group"
+                      >
                         <div className="flex justify-between items-start">
                           <div>
-                            <span className="font-bold text-slate-900 text-sm md:text-base">{o.customers?.name || '익명'}</span>
+                            <span className="font-bold text-slate-900 text-sm md:text-base group-hover:text-rose-600 transition-colors">
+                              {o.customers?.name || '익명'}
+                            </span>
                             <span className="text-xs text-slate-500 ml-2">{o.customers?.phone || ''}</span>
                             <p className="text-xs md:text-sm font-semibold text-rose-600 mt-0.5">{o.product_name}</p>
                           </div>
@@ -627,7 +633,9 @@ export default function App() {
                         {o.memo && <p className="text-xs text-slate-600 bg-white p-2 rounded-lg border border-slate-100">💬 {o.memo}</p>}
                         <div className="flex justify-between items-center pt-2 border-t border-slate-200/80">
                           <span className="font-bold text-slate-800 text-xs md:text-sm">{o.amount?.toLocaleString()}원</span>
-                          <button onClick={() => startEditOrder(o)} className="text-xs bg-rose-600 text-white px-2.5 py-1 rounded-lg font-bold hover:bg-rose-700 transition-colors">수정</button>
+                          <span className="text-xs bg-rose-600 text-white px-2.5 py-1 rounded-lg font-bold group-hover:bg-rose-700 transition-colors">
+                            ✏️ 수정하기
+                          </span>
                         </div>
                       </div>
                     ))}
@@ -676,17 +684,16 @@ export default function App() {
           </div>
         )}
 
-        {/* 📌 1 & 2. 데이터 백업 및 복원 전용 메뉴 */}
+        {/* 5. 데이터 백업 및 복원 */}
         {activeMenu === 'backup' && (
           <div className="bg-white p-4 md:p-8 rounded-xl border border-slate-200 shadow-sm max-w-2xl mx-auto">
             <h2 className="text-lg md:text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
               <span>💾</span> 데이터 CSV 백업 및 복원
             </h2>
 
-            {/* 백업 세션 */}
             <div className="space-y-4 mb-8">
               <h3 className="text-sm font-bold text-slate-700 border-l-4 border-rose-500 pl-2">1. 데이터 CSV 백업 (다운로드)</h3>
-              <p className="text-xs text-slate-500">원하시는 항목을 각각 클릭하여 CSV 파일로 컴퓨터에 안전하게 백업하세요.</p>
+              <p className="text-xs text-slate-500">원하시는 항목을 각각 클릭하여 CSV 파일로 저장하세요.</p>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <button
@@ -709,10 +716,9 @@ export default function App() {
 
             <hr className="my-6 border-slate-100" />
 
-            {/* 복원 세션 */}
             <div className="space-y-4">
               <h3 className="text-sm font-bold text-slate-700 border-l-4 border-sky-500 pl-2">2. 데이터 CSV 복원 (업로드)</h3>
-              <p className="text-xs text-slate-500">기존 백업된 CSV 파일을 선택하여 데이터베이스에 일괄 업로드합니다.</p>
+              <p className="text-xs text-slate-500">기존 백업된 CSV 파일을 선택하여 데이터베이스에 복원합니다.</p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <label className="p-4 bg-slate-50 border border-dashed border-slate-300 rounded-xl hover:bg-sky-50 hover:border-sky-300 font-bold text-slate-700 hover:text-sky-600 transition-all flex items-center justify-between text-xs md:text-sm cursor-pointer">
@@ -867,7 +873,6 @@ export default function App() {
                   >
                     취소
                   </button>
-                  {/* 📌 3. 수정 모달 저장 버튼 글씨 선명하게 변경 */}
                   <button
                     type="submit"
                     className="px-5 py-2 bg-rose-600 text-white rounded-xl font-extrabold shadow-md hover:bg-rose-700 cursor-pointer"
