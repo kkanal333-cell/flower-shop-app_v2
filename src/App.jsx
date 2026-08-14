@@ -9,7 +9,7 @@ const SUPABASE_URL = 'https://zthuqzzholyjolteuvty.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_xkg9ULmNiqKrCcESytGbmw_u1Z12_gG';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// 요청하신 순서대로 결제 방식 업데이트
+// 결제 방식 목록
 const PAYMENT_OPTIONS = ["신용카드", "현금", "계좌이체", "전화예약입금", "네이버", "인스타", "미결제"];
 const PRODUCT_OPTIONS = ["꽃다발", "꽃바구니", "햇살콘플라워", "꽃묶음", "식물", "용품", "시즌한정", "기타"];
 
@@ -22,14 +22,20 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [editingOrder, setEditingOrder] = useState(null);
 
-  // 현재 한국 날짜 및 시간 반환 Helper (시간은 15분 단위 올림/내림 처리)
+  // 현재 한국 날짜 및 시간 실시간 계산 함수 (시간은 15분 단위 정렬)
   const getNowFormatted = () => {
     const now = new Date();
-    const date = now.toISOString().split('T')[0];
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = Math.round(now.getMinutes() / 15) * 15;
+    // 타임존 차이 보정 (한국 시간 UTC+9 기준)
+    const tzOffset = now.getTimezoneOffset() * 60000;
+    const localNow = new Date(now.getTime() - tzOffset);
+    
+    const date = localNow.toISOString().split('T')[0];
+    const hours = String(localNow.getHours()).padStart(2, '0');
+    const minutes = Math.round(localNow.getMinutes() / 15) * 15;
     const formattedMinutes = String(minutes === 60 ? 0 : minutes).padStart(2, '0');
-    return { date, time: `${hours}:${formattedMinutes}` };
+    const finalHours = minutes === 60 ? String(Number(hours) + 1).padStart(2, '0') : hours;
+
+    return { date, time: `${finalHours}:${formattedMinutes}` };
   };
 
   const [newOrder, setNewOrder] = useState({
@@ -44,6 +50,19 @@ export default function App() {
     payment_method: '신용카드',
     memo: ''
   });
+
+  // 메뉴 변경 시 '신규 등록'으로 오면 접속 당시 현재 시간으로 접수시간 최신화
+  const handleMenuChange = (menuId) => {
+    setActiveMenu(menuId);
+    if (menuId === 'new') {
+      const now = getNowFormatted();
+      setNewOrder(prev => ({
+        ...prev,
+        receipt_date: now.date,
+        receipt_time: now.time
+      }));
+    }
+  };
 
   const fetchData = async () => {
     const { data: orderData } = await supabase
@@ -111,21 +130,31 @@ export default function App() {
     }]);
 
     alert('🌸 주문이 성공적으로 등록되었습니다!');
+    
+    // 등록 후 폼 초기화 시에도 접수시간은 최신 현재 시각 반영
+    const now = getNowFormatted();
     setNewOrder({
-      ...newOrder,
       customer_name: '',
-      memo: '',
-      receipt_date: getNowFormatted().date,
-      receipt_time: getNowFormatted().time
+      phone: '010-',
+      product_name: '꽃다발',
+      amount: 55000,
+      pickup_date: new Date().toISOString().split('T')[0],
+      pickup_time: '14:00',
+      receipt_date: now.date,
+      receipt_time: now.time,
+      payment_method: '신용카드',
+      memo: ''
     });
     setActiveMenu('orders');
     fetchData();
   };
 
-  // 수정 클릭시 모달용 데이터 준비
+  // 수정 클릭/선택시 최초 신규 등록 시 사용된 시간 그대로 보존하여 세팅
   const startEditOrder = (order) => {
     const pDate = order.pickup_datetime ? order.pickup_datetime.split('T')[0] : new Date().toISOString().split('T')[0];
     const pTime = order.pickup_datetime ? order.pickup_datetime.split('T')[1]?.slice(0, 5) : '14:00';
+    
+    // 접수일시: 최초 등록에 사용했던 데이터 그대로 유지
     const rDate = order.created_at ? order.created_at.split('T')[0] : getNowFormatted().date;
     const rTime = order.created_at ? order.created_at.split('T')[1]?.slice(0, 5) : getNowFormatted().time;
 
@@ -145,7 +174,7 @@ export default function App() {
     });
   };
 
-  // 전체 신규 등록 항목 수정 처리
+  // 전체 항목 수정 업데이트
   const handleUpdateOrder = async (e) => {
     e.preventDefault();
     
@@ -228,16 +257,14 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100/70 flex flex-col md:flex-row pb-12 md:pb-0">
-      {/* 📌 사이드바 (데스크톱: 좌측 배치 / 모바일: 상단 최소화 컴팩트 스타일) */}
+      {/* 📌 사이드바 (모바일 최적화 상단 바) */}
       <aside className="bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 w-full md:w-60 p-2.5 md:p-5 flex flex-col shrink-0 shadow-xs">
-        {/* 데스크톱 타이틀 */}
         <div className="hidden md:flex items-center gap-2 text-rose-600 font-extrabold text-xl mb-1">
           <span className="text-2xl">📌</span>
           <span>메뉴</span>
         </div>
         <p className="hidden md:block text-xs text-slate-400 mb-6 font-medium">이동할 메뉴를 선택하세요</p>
 
-        {/* 메뉴 목록 (모바일은 가로 스크롤/컴팩트, 데스크톱은 세로 리스트) */}
         <nav className="flex md:flex-col gap-1.5 md:gap-2.5 overflow-x-auto no-scrollbar w-full text-xs md:text-sm py-1 md:py-0">
           {menuList.map(menu => (
             <label
@@ -246,7 +273,7 @@ export default function App() {
                 if (menu.id === 'backup') {
                   exportToCSV();
                 } else {
-                  setActiveMenu(menu.id);
+                  handleMenuChange(menu.id);
                 }
               }}
               className={`flex items-center gap-1.5 md:gap-3 px-2.5 md:px-3 py-1.5 md:py-2.5 rounded-lg cursor-pointer whitespace-nowrap transition-all ${
@@ -268,7 +295,7 @@ export default function App() {
         </nav>
       </aside>
 
-      {/* 📌 오른쪽 메인 영역 */}
+      {/* 📌 메인 영역 */}
       <main className="flex-1 p-3 md:p-8 max-w-6xl mx-auto w-full">
         {/* 1. 신규 주문 및 고객 등록 */}
         {activeMenu === 'new' && (
@@ -346,10 +373,10 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 접수 일시 */}
+              {/* 접수 일시 (접속 시점 현재 시간 자동 입력) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 bg-slate-100/70 p-3 rounded-xl border border-slate-200">
                 <div>
-                  <label className="text-xs font-bold text-slate-700">접수 날짜 (현재 기준)</label>
+                  <label className="text-xs font-bold text-slate-700">접수 날짜 (현재 시각)</label>
                   <input
                     type="date"
                     value={newOrder.receipt_date}
@@ -358,7 +385,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-700">접수 시간 (현재 기준)</label>
+                  <label className="text-xs font-bold text-slate-700">접수 시간 (현재 시각)</label>
                   <input
                     type="time"
                     step="900"
@@ -439,6 +466,7 @@ export default function App() {
                   height="auto"
                   events={calendarEvents}
                   dateClick={(info) => setSelectedDate(info.dateStr)}
+                  // 📌 달력에서 이벤트(주문 항목) 선택 시 신규 등록 항목과 동일한 수정 모달 오픈
                   eventClick={(info) => {
                     const target = orders.find(o => String(o.id) === info.event.id);
                     if (target) startEditOrder(target);
@@ -558,7 +586,7 @@ export default function App() {
           </div>
         )}
 
-        {/* 📌 신규 등록 항목을 모두 수정할 수 있는 전체 수정 모달 */}
+        {/* 📌 신규 등록과 동일한 항목 구성을 가진 전체 수정 모달 */}
         {editingOrder && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-3 z-50 overflow-y-auto">
             <div className="bg-white p-5 md:p-7 rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto my-auto">
@@ -635,7 +663,7 @@ export default function App() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                   <div>
-                    <label className="font-bold text-slate-600">접수 날짜</label>
+                    <label className="font-bold text-slate-600">접수 날짜 (최초 등록 시각 유지)</label>
                     <input
                       type="date"
                       value={editingOrder.receipt_date}
@@ -644,7 +672,7 @@ export default function App() {
                     />
                   </div>
                   <div>
-                    <label className="font-bold text-slate-600">접수 시간</label>
+                    <label className="font-bold text-slate-600">접수 시간 (최초 등록 시각 유지)</label>
                     <input
                       type="time"
                       step="900"
