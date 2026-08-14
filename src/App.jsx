@@ -140,7 +140,7 @@ export default function App() {
       memo: newOrder.memo
     }]);
 
-    alert('🌸 주문이 성공적으로 등록되었습니다!');
+    alert('주문이 성공적으로 등록되었습니다!');
     
     const now = getNowFormatted();
     setNewOrder({
@@ -298,7 +298,7 @@ export default function App() {
         }
         if (newCusts.length > 0) {
           await supabase.from('customers').insert(newCusts);
-          alert(`🎂 ${newCusts.length}명의 고객 정보 복원이 완료되었습니다.`);
+          alert(`${newCusts.length}명의 고객 정보 복원이 완료되었습니다.`);
         }
       } else if (type === 'orders') {
         const newOrders = [];
@@ -320,7 +320,7 @@ export default function App() {
         }
         if (newOrders.length > 0) {
           await supabase.from('orders').insert(newOrders);
-          alert(`📋 ${newOrders.length}건의 주문 정보 복원이 완료되었습니다.`);
+          alert(`${newOrders.length}건의 주문 정보 복원이 완료되었습니다.`);
         }
       }
 
@@ -330,7 +330,7 @@ export default function App() {
     reader.readAsText(file, 'UTF-8');
   };
 
-  // 📌 [달력 1] 개별 항목 대신 "날짜별 총 건수"만 집계하여 생성
+  // 📌 [달력] 그림 아이콘 제거하고 "2건" 형태로 표시
   const getCalendarEvents = () => {
     const countsByDate = {};
 
@@ -343,7 +343,7 @@ export default function App() {
 
     return Object.keys(countsByDate).map(date => ({
       id: date,
-      title: `🌸 ${countsByDate[date]}건`,
+      title: `${countsByDate[date]}건`,
       start: date,
       allDay: true,
       backgroundColor: '#ffe4e6', // 로즈 라이트
@@ -399,7 +399,7 @@ export default function App() {
       </aside>
 
       {/* 📌 메인 콘텐츠 영역 */}
-      <main className="flex-1 p-2.5 md:p-8 max-w-6xl mx-auto w-full">
+      <main className="flex-1 p-2 md:p-8 max-w-6xl mx-auto w-full">
         {/* 1. 신규 등록 */}
         {activeMenu === 'new' && (
           <div className="max-w-xl mx-auto bg-white p-4 md:p-8 rounded-xl border border-slate-200 shadow-sm">
@@ -519,12 +519,11 @@ export default function App() {
                 />
               </div>
 
-              {/* 📌 저장하기 버튼: 검은색 글씨 적용 */}
               <button
                 type="submit"
                 className="w-full py-3.5 bg-rose-500 text-black font-extrabold rounded-xl shadow-md hover:bg-rose-600 transition-colors text-base mt-2 cursor-pointer"
               >
-                🌸 주문 저장하기
+                주문 저장하기
               </button>
             </form>
           </div>
@@ -532,9 +531,9 @@ export default function App() {
 
         {/* 2. 주문 & 달력 */}
         {activeMenu === 'orders' && (
-          <div className="space-y-4 md:space-y-6">
-            <div className="bg-white p-3 md:p-6 rounded-xl border border-slate-200 shadow-sm">
-              <div className="flex border-b border-slate-200 mb-3 md:mb-6 gap-6">
+          <div className="space-y-3 md:space-y-6">
+            <div className="bg-white p-2 sm:p-3 md:p-6 rounded-xl border border-slate-200 shadow-sm">
+              <div className="flex border-b border-slate-200 mb-2 md:mb-6 gap-6">
                 <button
                   onClick={() => setSubTab('calendar')}
                   className={`pb-2 text-xs md:text-sm font-bold flex items-center gap-1.5 relative transition-colors ${
@@ -556,18 +555,22 @@ export default function App() {
                 </button>
               </div>
 
-              {/* 📌 달력: 건수별 이벤트 집계 표시 */}
+              {/* 📌 달력: aspectRatio={1.5} 및 행 높이 축소로 모바일 한 화면에 쏙 들어오도록 조절 */}
               {subTab === 'calendar' && (
-                <FullCalendar
-                  plugins={[dayGridPlugin, interactionPlugin]}
-                  initialView="dayGridMonth"
-                  locale="ko"
-                  aspectRatio={1.1}
-                  contentHeight="auto"
-                  events={getCalendarEvents()}
-                  dateClick={(info) => setSelectedDate(info.dateStr)}
-                  eventClick={(info) => setSelectedDate(info.event.startStr)}
-                />
+                <div className="calendar-compact">
+                  <FullCalendar
+                    plugins={[dayGridPlugin, interactionPlugin]}
+                    initialView="dayGridMonth"
+                    locale="ko"
+                    aspectRatio={1.5}
+                    fixedWeekCount={false}
+                    dayMaxEventRows={true}
+                    contentHeight="auto"
+                    events={getCalendarEvents()}
+                    dateClick={(info) => setSelectedDate(info.dateStr)}
+                    eventClick={(info) => setSelectedDate(info.event.startStr)}
+                  />
+                </div>
               )}
 
               {subTab === 'list' && (
@@ -610,25 +613,25 @@ export default function App() {
 
             {/* 선택한 날짜 리스트 */}
             {subTab === 'calendar' && selectedDate && (
-              <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm">
+              <div className="bg-white p-3 md:p-6 rounded-xl border border-slate-200 shadow-sm">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm md:text-lg font-bold text-slate-800 flex items-center gap-2">
                     <span>📅</span> <span className="text-rose-600">{selectedDate}</span> 픽업 주문 ({selectedDayOrders.length}건)
                   </h3>
-                  <span className="text-xs text-slate-400">* 항목을 클릭하면 수정할 수 있습니다.</span>
+                  <span className="text-xs text-slate-400">* 클릭하여 수정 가능</span>
                 </div>
 
                 {selectedDayOrders.length === 0 ? (
-                  <div className="bg-slate-50 text-slate-500 p-4 rounded-xl text-xs md:text-sm text-center border border-slate-100">
+                  <div className="bg-slate-50 text-slate-500 p-3 rounded-xl text-xs md:text-sm text-center border border-slate-100">
                     해당 날짜에 예정된 픽업 주문이 없습니다.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                     {selectedDayOrders.map(o => (
                       <div
                         key={o.id}
                         onClick={() => startEditOrder(o)}
-                        className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-rose-50/50 hover:border-rose-300 transition-all cursor-pointer flex flex-col justify-between gap-2 shadow-2xs group"
+                        className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-rose-50/50 hover:border-rose-300 transition-all cursor-pointer flex flex-col justify-between gap-1.5 shadow-2xs group"
                       >
                         <div className="flex justify-between items-start">
                           <div>
@@ -642,19 +645,18 @@ export default function App() {
                             {o.payment_method}
                           </span>
                         </div>
-                        {o.memo && <p className="text-xs text-slate-600 bg-white p-2 rounded-lg border border-slate-100">💬 {o.memo}</p>}
+                        {o.memo && <p className="text-xs text-slate-600 bg-white p-1.5 rounded-lg border border-slate-100">💬 {o.memo}</p>}
                         
                         <div className="flex justify-between items-center pt-2 border-t border-slate-200/80">
                           <span className="font-bold text-slate-800 text-xs md:text-sm">{o.amount?.toLocaleString()}원</span>
                           
-                          {/* 📌 수정하기 버튼 명확히 고침 (연필 아이콘 + 검은색 텍스트 + 배경색) */}
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               startEditOrder(o);
                             }}
-                            className="inline-flex items-center gap-1 text-xs bg-slate-200 hover:bg-rose-500 hover:text-white text-slate-900 font-extrabold px-3 py-1.5 rounded-lg border border-slate-300 transition-colors shadow-2xs cursor-pointer"
+                            className="inline-flex items-center gap-1 text-xs bg-slate-200 hover:bg-rose-500 hover:text-white text-slate-900 font-extrabold px-2.5 py-1 rounded-lg border border-slate-300 transition-colors shadow-2xs cursor-pointer"
                           >
                             <span>✏️</span>
                             <span>수정하기</span>
@@ -896,7 +898,6 @@ export default function App() {
                   >
                     취소
                   </button>
-                  {/* 📌 모달 내부 저장하기 버튼: 검은색 텍스트 보장 */}
                   <button
                     type="submit"
                     className="px-5 py-2 bg-rose-500 text-black font-extrabold rounded-xl shadow-md hover:bg-rose-600 cursor-pointer"
