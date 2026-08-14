@@ -14,17 +14,15 @@ const PAYMENT_OPTIONS = ["신용카드", "현금", "계좌이체", "전화예약
 const PRODUCT_OPTIONS = ["꽃다발", "꽃바구니", "햇살콘플라워", "꽃묶음", "식물", "용품", "시즌한정", "기타"];
 
 const AMPM_OPTIONS = ["오전", "오후"];
-const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')); // "01" ~ "12"
+const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
 const MINUTE_OPTIONS = ["00", "15", "30", "45"];
 
-// HH:mm (24시간) -> { ampm: "오전/오후", hour: "01~12", minute: "00,15,30,45" }
 const parseTimeToParts = (timeStr) => {
   if (!timeStr) return { ampm: "오후", hour: "02", minute: "00" };
   const [hStr, mStr] = timeStr.split(':');
   let h = parseInt(hStr, 10);
   let m = parseInt(mStr, 10);
 
-  // 15분 단위 올림/반올림
   m = Math.round(m / 15) * 15;
   if (m === 60) {
     m = 0;
@@ -42,7 +40,6 @@ const parseTimeToParts = (timeStr) => {
   };
 };
 
-// { ampm, hour, minute } -> HH:mm (24시간)
 const formatPartsToTime = (ampm, hour, minute) => {
   let h = parseInt(hour, 10);
   if (ampm === "오후" && h < 12) h += 12;
@@ -50,7 +47,6 @@ const formatPartsToTime = (ampm, hour, minute) => {
   return `${String(h).padStart(2, '0')}:${minute}`;
 };
 
-// 한국 시각 (KST UTC+9) 계산
 const getKoreaNowFormatted = () => {
   const now = new Date();
   const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
@@ -73,15 +69,14 @@ const getKoreaNowFormatted = () => {
 };
 
 export default function App() {
-  const [activeMenu, setActiveMenu] = useState('orders'); // 기본 메뉴: 주문&달력
-  const [subTab, setSubTab] = useState('calendar'); // 'calendar' | 'list'
+  const [activeMenu, setActiveMenu] = useState('orders');
+  const [subTab, setSubTab] = useState('calendar');
   
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [selectedDate, setSelectedDate] = useState(getKoreaNowFormatted().date);
   const [editingOrder, setEditingOrder] = useState(null);
 
-  // ISO/Supabase 파싱
   const parseDateTime = (datetimeStr, fallbackDate = '', fallbackTime = '14:00') => {
     if (!datetimeStr) return { date: fallbackDate, time: fallbackTime };
     const cleanStr = datetimeStr.replace(' ', 'T');
@@ -97,7 +92,7 @@ export default function App() {
   const initialKst = getKoreaNowFormatted();
   const [newOrder, setNewOrder] = useState({
     customer_name: '',
-    phone: '010-',
+    phone: '',
     product_name: '꽃다발',
     amount: 55000,
     pickup_date: initialKst.date,
@@ -141,16 +136,38 @@ export default function App() {
     fetchData();
   }, []);
 
+  // 💡 실시간 하이픈(-) 자동 추가 포맷터
   const formatPhone = (val) => {
+    if (!val) return '';
     const nums = val.replace(/[^0-9]/g, '');
-    if (nums.length <= 3) return nums;
-    if (nums.length <= 7) return `${nums.slice(0, 3)}-${nums.slice(3)}`;
-    return `${nums.slice(0, 3)}-${nums.slice(3, 7)}-${nums.slice(7, 11)}`;
+    
+    if (nums.length === 11) {
+      return `${nums.slice(0, 3)}-${nums.slice(3, 7)}-${nums.slice(7)}`;
+    }
+    if (nums.length === 10) {
+      if (nums.startsWith('02')) {
+        return `${nums.slice(0, 2)}-${nums.slice(2, 6)}-${nums.slice(6)}`;
+      }
+      return `${nums.slice(0, 3)}-${nums.slice(3, 6)}-${nums.slice(6)}`;
+    }
+    if (nums.length > 7) {
+      return `${nums.slice(0, 3)}-${nums.slice(3, 7)}-${nums.slice(7, 11)}`;
+    }
+    if (nums.length > 3) {
+      return `${nums.slice(0, 3)}-${nums.slice(3)}`;
+    }
+    return nums;
   };
 
   const handleCreateOrder = async (e) => {
     e.preventDefault();
     if (!newOrder.customer_name) return alert('고객 성명을 입력해주세요.');
+    
+    // 유효성 검사 (숫자만 10자리 이상 필요)
+    const rawNums = newOrder.phone.replace(/[^0-9]/g, '');
+    if (!newOrder.phone || rawNums.length < 10) {
+      return alert('올바른 휴대폰 번호를 입력해주세요. (최소 10자리 이상)');
+    }
 
     let customerId;
     const { data: custData } = await supabase
@@ -191,7 +208,7 @@ export default function App() {
     const kstNow = getKoreaNowFormatted();
     setNewOrder({
       customer_name: '',
-      phone: '010-',
+      phone: '',
       product_name: '꽃다발',
       amount: 55000,
       pickup_date: kstNow.date,
@@ -214,7 +231,7 @@ export default function App() {
       id: order.id,
       customer_id: order.customer_id,
       customer_name: order.customers?.name || '',
-      phone: order.customers?.phone || '010-',
+      phone: order.customers?.phone || '',
       product_name: order.product_name || '꽃다발',
       amount: order.amount || 0,
       pickup_date: pickup.date,
@@ -229,6 +246,11 @@ export default function App() {
   const handleUpdateOrder = async (e) => {
     e.preventDefault();
     
+    const rawNums = editingOrder.phone.replace(/[^0-9]/g, '');
+    if (!editingOrder.phone || rawNums.length < 10) {
+      return alert('올바른 휴대폰 번호를 입력해주세요.');
+    }
+
     if (editingOrder.customer_id) {
       await supabase.from('customers').update({
         name: editingOrder.customer_name,
@@ -255,7 +277,6 @@ export default function App() {
     fetchData();
   };
 
-  // CSV 백업/복원
   const exportOrdersCSV = () => {
     if (orders.length === 0) return alert('다운로드할 주문 데이터가 없습니다.');
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
@@ -377,7 +398,6 @@ export default function App() {
     reader.readAsText(file, 'UTF-8');
   };
 
-  // 달력 이벤트 생성
   const getCalendarEvents = () => {
     const countsByDate = {};
 
@@ -411,7 +431,6 @@ export default function App() {
     { id: 'backup', label: '💾 백업/복원' },
   ];
 
-  // 시간 커스텀 선택기 컴포넌트 (AM/PM + 시 + 15분단위 분)
   const TimePickerCustom = ({ value, onChange, bgClass = "bg-slate-50" }) => {
     const { ampm, hour, minute } = parseTimeToParts(value);
 
@@ -497,7 +516,6 @@ export default function App() {
             </h2>
 
             <form onSubmit={handleCreateOrder} className="space-y-3 md:space-y-4">
-              {/* 모바일에서도 2열 유지, 라벨 글씨 축소 (text-[10px] md:text-xs) */}
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
                   <label className="text-[10px] md:text-xs font-bold text-slate-600">고객 성명 *</label>
@@ -511,12 +529,15 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] md:text-xs font-bold text-slate-600">휴대폰 번호</label>
+                  <label className="text-[10px] md:text-xs font-bold text-slate-600">휴대폰 번호 *</label>
                   <input
                     type="text"
                     value={newOrder.phone}
                     onChange={e => setNewOrder({...newOrder, phone: formatPhone(e.target.value)})}
                     className="w-full p-2 md:p-3 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50 border-slate-200"
+                    placeholder="010-0000-0000"
+                    maxLength={13}
+                    required
                   />
                 </div>
               </div>
@@ -877,12 +898,14 @@ export default function App() {
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] md:text-xs font-bold text-slate-600">휴대폰 번호</label>
+                    <label className="text-[10px] md:text-xs font-bold text-slate-600">휴대폰 번호 *</label>
                     <input
                       type="text"
                       value={editingOrder.phone}
                       onChange={e => setEditingOrder({...editingOrder, phone: formatPhone(e.target.value)})}
                       className="w-full p-2 md:p-2.5 border rounded-xl mt-1 bg-slate-50 border-slate-200"
+                      maxLength={13}
+                      required
                     />
                   </div>
                 </div>
