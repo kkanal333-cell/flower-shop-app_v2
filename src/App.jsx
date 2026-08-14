@@ -14,7 +14,7 @@ const PAYMENT_OPTIONS = ["신용카드", "현금", "계좌이체", "전화예약
 const PRODUCT_OPTIONS = ["꽃다발", "꽃바구니", "햇살콘플라워", "꽃묶음", "식물", "용품", "시즌한정", "기타"];
 
 export default function App() {
-  const [activeMenu, setActiveMenu] = useState('new'); // 'new' | 'orders' | 'customers' | 'notifications'
+  const [activeMenu, setActiveMenu] = useState('new'); // 'new' | 'orders' | 'customers' | 'notifications' | 'backup'
   const [subTab, setSubTab] = useState('calendar'); // 'calendar' | 'list'
   
   const [orders, setOrders] = useState([]);
@@ -22,10 +22,9 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [editingOrder, setEditingOrder] = useState(null);
 
-  // 현재 한국 날짜 및 시간 실시간 계산 함수 (시간은 15분 단위 정렬)
+  // 현재 한국 날짜 및 시간 실시간 계산 함수 (15분 단위 정렬)
   const getNowFormatted = () => {
     const now = new Date();
-    // 타임존 차이 보정 (한국 시간 UTC+9 기준)
     const tzOffset = now.getTimezoneOffset() * 60000;
     const localNow = new Date(now.getTime() - tzOffset);
     
@@ -36,6 +35,19 @@ export default function App() {
     const finalHours = minutes === 60 ? String(Number(hours) + 1).padStart(2, '0') : hours;
 
     return { date, time: `${finalHours}:${formattedMinutes}` };
+  };
+
+  // ISO/Supabase 날짜시간 문자열 파싱 헬퍼 함수
+  const parseDateTime = (datetimeStr, fallbackDate = '', fallbackTime = '14:00') => {
+    if (!datetimeStr) return { date: fallbackDate, time: fallbackTime };
+    const cleanStr = datetimeStr.replace(' ', 'T');
+    const parts = cleanStr.split('T');
+    const date = parts[0] || fallbackDate;
+    let time = fallbackTime;
+    if (parts[1]) {
+      time = parts[1].slice(0, 5);
+    }
+    return { date, time };
   };
 
   const [newOrder, setNewOrder] = useState({
@@ -51,7 +63,6 @@ export default function App() {
     memo: ''
   });
 
-  // 메뉴 변경 시 '신규 등록'으로 오면 접속 당시 현재 시간으로 접수시간 최신화
   const handleMenuChange = (menuId) => {
     setActiveMenu(menuId);
     if (menuId === 'new') {
@@ -131,7 +142,6 @@ export default function App() {
 
     alert('🌸 주문이 성공적으로 등록되었습니다!');
     
-    // 등록 후 폼 초기화 시에도 접수시간은 최신 현재 시각 반영
     const now = getNowFormatted();
     setNewOrder({
       customer_name: '',
@@ -149,14 +159,9 @@ export default function App() {
     fetchData();
   };
 
-  // 수정 클릭/선택시 최초 신규 등록 시 사용된 시간 그대로 보존하여 세팅
   const startEditOrder = (order) => {
-    const pDate = order.pickup_datetime ? order.pickup_datetime.split('T')[0] : new Date().toISOString().split('T')[0];
-    const pTime = order.pickup_datetime ? order.pickup_datetime.split('T')[1]?.slice(0, 5) : '14:00';
-    
-    // 접수일시: 최초 등록에 사용했던 데이터 그대로 유지
-    const rDate = order.created_at ? order.created_at.split('T')[0] : getNowFormatted().date;
-    const rTime = order.created_at ? order.created_at.split('T')[1]?.slice(0, 5) : getNowFormatted().time;
+    const pickup = parseDateTime(order.pickup_datetime, new Date().toISOString().split('T')[0], '14:00');
+    const receipt = parseDateTime(order.created_at, getNowFormatted().date, getNowFormatted().time);
 
     setEditingOrder({
       id: order.id,
@@ -165,20 +170,18 @@ export default function App() {
       phone: order.customers?.phone || '010-',
       product_name: order.product_name || '꽃다발',
       amount: order.amount || 0,
-      pickup_date: pDate,
-      pickup_time: pTime,
-      receipt_date: rDate,
-      receipt_time: rTime,
+      pickup_date: pickup.date,
+      pickup_time: pickup.time,
+      receipt_date: receipt.date,
+      receipt_time: receipt.time,
       payment_method: order.payment_method || '신용카드',
       memo: order.memo || ''
     });
   };
 
-  // 전체 항목 수정 업데이트
   const handleUpdateOrder = async (e) => {
     e.preventDefault();
     
-    // 고객 정보 업데이트
     if (editingOrder.customer_id) {
       await supabase.from('customers').update({
         name: editingOrder.customer_name,
@@ -189,7 +192,6 @@ export default function App() {
     const pickupDatetime = `${editingOrder.pickup_date}T${editingOrder.pickup_time}:00`;
     const receiptDatetime = `${editingOrder.receipt_date}T${editingOrder.receipt_time}:00`;
 
-    // 주문 정보 업데이트
     await supabase.from('orders').update({
       product_name: editingOrder.product_name,
       product: editingOrder.product_name,
@@ -206,16 +208,16 @@ export default function App() {
     fetchData();
   };
 
-  const exportToCSV = () => {
+  // 📌 1. 주문 데이터 CSV 다운로드
+  const exportOrdersCSV = () => {
     if (orders.length === 0) return alert('다운로드할 주문 데이터가 없습니다.');
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-    csvContent += "ID,고객명,연락처,상품명,금액,결제방식,픽업일시,접수일시,메모\n";
+    csvContent += "ID,고객ID,상품명,금액,결제방식,픽업일시,접수일시,메모\n";
 
     orders.forEach(o => {
       const row = [
         o.id,
-        `"${o.customers?.name || ''}"`,
-        `"${o.customers?.phone || ''}"`,
+        o.customer_id || '',
         `"${o.product_name || ''}"`,
         o.amount || 0,
         `"${o.payment_method || ''}"`,
@@ -229,10 +231,106 @@ export default function App() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `주문목록_백업_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `주문목록_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // 📌 1. 고객 데이터 CSV 다운로드
+  const exportCustomersCSV = () => {
+    if (customers.length === 0) return alert('다운로드할 고객 데이터가 없습니다.');
+    let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+    csvContent += "ID,성명,연락처\n";
+
+    customers.forEach(c => {
+      const row = [
+        c.id,
+        `"${c.name || ''}"`,
+        `"${c.phone || ''}"`
+      ].join(",");
+      csvContent += row + "\n";
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `고객목록_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // 📌 2. CSV 파일 Import (복원) 기능
+  const handleImportCSV = async (e, type) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target.result;
+      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      if (lines.length <= 1) return alert('올바른 CSV 파일이 아니거나 데이터가 없습니다.');
+
+      // 따옴표 및 쉼표 파싱 함수
+      const parseCSVLine = (line) => {
+        const result = [];
+        let cur = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') inQuotes = !inQuotes;
+          else if (char === ',' && !inQuotes) {
+            result.push(cur.trim().replace(/^"|"$/g, ''));
+            cur = '';
+          } else {
+            cur += char;
+          }
+        }
+        result.push(cur.trim().replace(/^"|"$/g, ''));
+        return result;
+      };
+
+      if (type === 'customers') {
+        const newCusts = [];
+        for (let i = 1; i < lines.length; i++) {
+          const cols = parseCSVLine(lines[i]);
+          if (cols[1]) {
+            newCusts.push({ name: cols[1], phone: cols[2] || '' });
+          }
+        }
+        if (newCusts.length > 0) {
+          await supabase.from('customers').insert(newCusts);
+          alert(`🎂 ${newCusts.length}명의 고객 정보 복원이 완료되었습니다.`);
+        }
+      } else if (type === 'orders') {
+        const newOrders = [];
+        for (let i = 1; i < lines.length; i++) {
+          const cols = parseCSVLine(lines[i]);
+          if (cols[2]) {
+            newOrders.push({
+              customer_id: cols[1] ? Number(cols[1]) : null,
+              product_name: cols[2],
+              product: cols[2],
+              amount: Number(cols[3]) || 0,
+              payment_method: cols[4] || '신용카드',
+              status: cols[4] || '신용카드',
+              pickup_datetime: cols[5] || null,
+              created_at: cols[6] || new Date().toISOString(),
+              memo: cols[7] || ''
+            });
+          }
+        }
+        if (newOrders.length > 0) {
+          await supabase.from('orders').insert(newOrders);
+          alert(`📋 ${newOrders.length}건의 주문 정보 복원이 완료되었습니다.`);
+        }
+      }
+
+      fetchData();
+      e.target.value = ''; // 파일 선택 초기화
+    };
+    reader.readAsText(file, 'UTF-8');
   };
 
   const calendarEvents = orders.map(o => ({
@@ -252,12 +350,12 @@ export default function App() {
     { id: 'orders', label: '📋 주문 & 달력' },
     { id: 'customers', label: '🎂 고객 관리' },
     { id: 'notifications', label: '🔔 알림 현황' },
-    { id: 'backup', label: '💾 CSV 백업' },
+    { id: 'backup', label: '💾 데이터 백업/복원' },
   ];
 
   return (
     <div className="min-h-screen bg-slate-100/70 flex flex-col md:flex-row pb-12 md:pb-0">
-      {/* 📌 사이드바 (모바일 최적화 상단 바) */}
+      {/* 📌 사이드바 */}
       <aside className="bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 w-full md:w-60 p-2.5 md:p-5 flex flex-col shrink-0 shadow-xs">
         <div className="hidden md:flex items-center gap-2 text-rose-600 font-extrabold text-xl mb-1">
           <span className="text-2xl">📌</span>
@@ -269,13 +367,7 @@ export default function App() {
           {menuList.map(menu => (
             <label
               key={menu.id}
-              onClick={() => {
-                if (menu.id === 'backup') {
-                  exportToCSV();
-                } else {
-                  handleMenuChange(menu.id);
-                }
-              }}
+              onClick={() => handleMenuChange(menu.id)}
               className={`flex items-center gap-1.5 md:gap-3 px-2.5 md:px-3 py-1.5 md:py-2.5 rounded-lg cursor-pointer whitespace-nowrap transition-all ${
                 activeMenu === menu.id
                   ? 'bg-rose-50 text-rose-600 font-bold border-b-2 md:border-b-0 md:border-l-4 border-rose-500 shadow-2xs'
@@ -350,7 +442,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 픽업 일시 */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                 <div>
                   <label className="text-xs font-bold text-slate-600">픽업 날짜 *</label>
@@ -373,7 +464,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 접수 일시 (접속 시점 현재 시간 자동 입력) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 bg-slate-100/70 p-3 rounded-xl border border-slate-200">
                 <div>
                   <label className="text-xs font-bold text-slate-700">접수 날짜 (현재 시각)</label>
@@ -418,9 +508,10 @@ export default function App() {
                 />
               </div>
 
+              {/* 📌 3. 저장 버튼 글씨 선명하게 변경 */}
               <button
                 type="submit"
-                className="w-full py-3 bg-rose-500 text-white font-bold rounded-xl shadow-md hover:bg-rose-600 transition-colors text-base mt-2"
+                className="w-full py-3.5 bg-rose-600 text-white font-extrabold rounded-xl shadow-md hover:bg-rose-700 transition-colors text-base mt-2 cursor-pointer"
               >
                 🌸 주문 저장하기
               </button>
@@ -466,7 +557,6 @@ export default function App() {
                   height="auto"
                   events={calendarEvents}
                   dateClick={(info) => setSelectedDate(info.dateStr)}
-                  // 📌 달력에서 이벤트(주문 항목) 선택 시 신규 등록 항목과 동일한 수정 모달 오픈
                   eventClick={(info) => {
                     const target = orders.find(o => String(o.id) === info.event.id);
                     if (target) startEditOrder(target);
@@ -537,7 +627,7 @@ export default function App() {
                         {o.memo && <p className="text-xs text-slate-600 bg-white p-2 rounded-lg border border-slate-100">💬 {o.memo}</p>}
                         <div className="flex justify-between items-center pt-2 border-t border-slate-200/80">
                           <span className="font-bold text-slate-800 text-xs md:text-sm">{o.amount?.toLocaleString()}원</span>
-                          <button onClick={() => startEditOrder(o)} className="text-xs bg-rose-500 text-white px-2.5 py-1 rounded-lg font-semibold hover:bg-rose-600 transition-colors">수정</button>
+                          <button onClick={() => startEditOrder(o)} className="text-xs bg-rose-600 text-white px-2.5 py-1 rounded-lg font-bold hover:bg-rose-700 transition-colors">수정</button>
                         </div>
                       </div>
                     ))}
@@ -586,7 +676,72 @@ export default function App() {
           </div>
         )}
 
-        {/* 📌 신규 등록과 동일한 항목 구성을 가진 전체 수정 모달 */}
+        {/* 📌 1 & 2. 데이터 백업 및 복원 전용 메뉴 */}
+        {activeMenu === 'backup' && (
+          <div className="bg-white p-4 md:p-8 rounded-xl border border-slate-200 shadow-sm max-w-2xl mx-auto">
+            <h2 className="text-lg md:text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+              <span>💾</span> 데이터 CSV 백업 및 복원
+            </h2>
+
+            {/* 백업 세션 */}
+            <div className="space-y-4 mb-8">
+              <h3 className="text-sm font-bold text-slate-700 border-l-4 border-rose-500 pl-2">1. 데이터 CSV 백업 (다운로드)</h3>
+              <p className="text-xs text-slate-500">원하시는 항목을 각각 클릭하여 CSV 파일로 컴퓨터에 안전하게 백업하세요.</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <button
+                  onClick={exportOrdersCSV}
+                  className="p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-rose-50 hover:border-rose-300 font-bold text-slate-700 hover:text-rose-600 transition-all flex items-center justify-between text-xs md:text-sm cursor-pointer shadow-xs"
+                >
+                  <span>📋 주문 데이터 백업</span>
+                  <span className="text-lg">📥</span>
+                </button>
+
+                <button
+                  onClick={exportCustomersCSV}
+                  className="p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-rose-50 hover:border-rose-300 font-bold text-slate-700 hover:text-rose-600 transition-all flex items-center justify-between text-xs md:text-sm cursor-pointer shadow-xs"
+                >
+                  <span>🎂 고객 데이터 백업</span>
+                  <span className="text-lg">📥</span>
+                </button>
+              </div>
+            </div>
+
+            <hr className="my-6 border-slate-100" />
+
+            {/* 복원 세션 */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-slate-700 border-l-4 border-sky-500 pl-2">2. 데이터 CSV 복원 (업로드)</h3>
+              <p className="text-xs text-slate-500">기존 백업된 CSV 파일을 선택하여 데이터베이스에 일괄 업로드합니다.</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className="p-4 bg-slate-50 border border-dashed border-slate-300 rounded-xl hover:bg-sky-50 hover:border-sky-300 font-bold text-slate-700 hover:text-sky-600 transition-all flex items-center justify-between text-xs md:text-sm cursor-pointer">
+                  <span>📋 주문 데이터 파일 선택</span>
+                  <span className="text-lg">📤</span>
+                  <input
+                    type="file"
+                    accept=".csv"
+                    className="hidden"
+                    onChange={(e) => handleImportCSV(e, 'orders')}
+                  />
+                </label>
+
+                <label className="p-4 bg-slate-50 border border-dashed border-slate-300 rounded-xl hover:bg-sky-50 hover:border-sky-300 font-bold text-slate-700 hover:text-sky-600 transition-all flex items-center justify-between text-xs md:text-sm cursor-pointer">
+                  <span>🎂 고객 데이터 파일 선택</span>
+                  <span className="text-lg">📤</span>
+                  <input
+                    type="file"
+                    accept=".csv"
+                    className="hidden"
+                    onChange={(e) => handleImportCSV(e, 'customers')}
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 📌 전체 정보 수정 모달 */}
         {editingOrder && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-3 z-50 overflow-y-auto">
             <div className="bg-white p-5 md:p-7 rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto my-auto">
@@ -641,7 +796,7 @@ export default function App() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="font-bold text-slate-600">픽업 날짜</label>
+                    <label className="font-bold text-slate-600">픽업 날짜 *</label>
                     <input
                       type="date"
                       value={editingOrder.pickup_date}
@@ -650,7 +805,7 @@ export default function App() {
                     />
                   </div>
                   <div>
-                    <label className="font-bold text-slate-600">픽업 시간 (15분 단위)</label>
+                    <label className="font-bold text-slate-600">픽업 시간 * (15분 단위)</label>
                     <input
                       type="time"
                       step="900"
@@ -663,7 +818,7 @@ export default function App() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                   <div>
-                    <label className="font-bold text-slate-600">접수 날짜 (최초 등록 시각 유지)</label>
+                    <label className="font-bold text-slate-600">접수 날짜 (최초 등록 시각)</label>
                     <input
                       type="date"
                       value={editingOrder.receipt_date}
@@ -672,7 +827,7 @@ export default function App() {
                     />
                   </div>
                   <div>
-                    <label className="font-bold text-slate-600">접수 시간 (최초 등록 시각 유지)</label>
+                    <label className="font-bold text-slate-600">접수 시간 (최초 등록 시각)</label>
                     <input
                       type="time"
                       step="900"
@@ -708,13 +863,14 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setEditingOrder(null)}
-                    className="px-4 py-2 border rounded-xl font-semibold text-slate-600 hover:bg-slate-100"
+                    className="px-4 py-2 border rounded-xl font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
                   >
                     취소
                   </button>
+                  {/* 📌 3. 수정 모달 저장 버튼 글씨 선명하게 변경 */}
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-rose-500 text-white rounded-xl font-bold shadow-md hover:bg-rose-600"
+                    className="px-5 py-2 bg-rose-600 text-white rounded-xl font-extrabold shadow-md hover:bg-rose-700 cursor-pointer"
                   >
                     저장하기
                   </button>
