@@ -13,24 +13,9 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const PAYMENT_OPTIONS = ["신용카드", "현금", "계좌이체", "전화예약입금", "네이버", "인스타", "미결제"];
 const PRODUCT_OPTIONS = ["꽃다발", "꽃바구니", "햇살콘플라워", "꽃묶음", "식물", "용품", "시즌한정", "기타"];
 
-// 15분 단위 시간 옵션 리스트 생성 (00:00 ~ 23:45)
-const generateTimeOptions = () => {
-  const options = [];
-  for (let h = 0; h < 24; h++) {
-    for (let m = 0; m < 60; m += 15) {
-      const hh = String(h).padStart(2, '0');
-      const mm = String(m).padStart(2, '0');
-      options.push(`${hh}:${mm}`);
-    }
-  }
-  return options;
-};
-const TIME_OPTIONS = generateTimeOptions();
-
-// 한국 시각 (KST UTC+9) 계산 및 15분 단위 적용
+// 한국 시각 (KST UTC+9) 계산 및 15분 단위 올림/반올림 처리
 const getKoreaNowFormatted = () => {
   const now = new Date();
-  // UTC 시각 + 9시간
   const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
   const kst = new Date(utc + (9 * 60 * 60 * 1000));
 
@@ -355,7 +340,7 @@ export default function App() {
     reader.readAsText(file, 'UTF-8');
   };
 
-  // 달력 이벤트 생성 (그림 제거된 2건 형태)
+  // 달력 이벤트 생성
   const getCalendarEvents = () => {
     const countsByDate = {};
 
@@ -427,118 +412,119 @@ export default function App() {
       <main className="flex-1 p-2 md:p-8 max-w-6xl mx-auto w-full">
         {/* 1. 신규 등록 */}
         {activeMenu === 'new' && (
-          <div className="max-w-xl mx-auto bg-white p-4 md:p-8 rounded-xl border border-slate-200 shadow-sm">
-            <h2 className="text-lg md:text-xl font-bold text-slate-800 mb-4 md:mb-6 flex items-center gap-2">
+          <div className="max-w-2xl mx-auto bg-white p-3 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
+            <h2 className="text-base md:text-xl font-bold text-slate-800 mb-4 md:mb-6 flex items-center gap-2">
               <span>📝</span> 신규 주문 및 고객 등록
             </h2>
 
-            <form onSubmit={handleCreateOrder} className="space-y-3.5 md:space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+            <form onSubmit={handleCreateOrder} className="space-y-3 md:space-y-4">
+              {/* 모바일에서도 2열 유지 (grid-cols-2) */}
+              <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-600">고객 성명 *</label>
+                  <label className="text-[11px] md:text-xs font-bold text-slate-600">고객 성명 *</label>
                   <input
                     type="text"
                     value={newOrder.customer_name}
                     onChange={e => setNewOrder({...newOrder, customer_name: e.target.value})}
-                    className="w-full p-2.5 md:p-3 border rounded-xl mt-1 text-sm bg-slate-50 border-slate-200"
+                    className="w-full p-2 md:p-3 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50 border-slate-200"
                     placeholder="홍길동"
                     required
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600">휴대폰 번호</label>
+                  <label className="text-[11px] md:text-xs font-bold text-slate-600">휴대폰 번호</label>
                   <input
                     type="text"
                     value={newOrder.phone}
                     onChange={e => setNewOrder({...newOrder, phone: formatPhone(e.target.value)})}
-                    className="w-full p-2.5 md:p-3 border rounded-xl mt-1 text-sm bg-slate-50 border-slate-200"
+                    className="w-full p-2 md:p-3 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50 border-slate-200"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+              <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-600">상품종류 *</label>
+                  <label className="text-[11px] md:text-xs font-bold text-slate-600">상품종류 *</label>
                   <select
                     value={newOrder.product_name}
                     onChange={e => setNewOrder({...newOrder, product_name: e.target.value})}
-                    className="w-full p-2.5 md:p-3 border rounded-xl mt-1 text-sm bg-slate-50 border-slate-200"
+                    className="w-full p-2 md:p-3 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50 border-slate-200"
                   >
                     {PRODUCT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600">결제 금액 (원)</label>
+                  <label className="text-[11px] md:text-xs font-bold text-slate-600">결제 금액 (원)</label>
                   <input
                     type="number"
                     value={newOrder.amount}
                     onChange={e => setNewOrder({...newOrder, amount: e.target.value})}
-                    className="w-full p-2.5 md:p-3 border rounded-xl mt-1 text-sm bg-slate-50 border-slate-200"
+                    className="w-full p-2 md:p-3 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50 border-slate-200"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+              <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-600">픽업 날짜 *</label>
+                  <label className="text-[11px] md:text-xs font-bold text-slate-600">픽업 날짜 *</label>
                   <input
                     type="date"
                     value={newOrder.pickup_date}
                     onChange={e => setNewOrder({...newOrder, pickup_date: e.target.value})}
-                    className="w-full p-2.5 md:p-3 border rounded-xl mt-1 text-sm bg-slate-50 border-slate-200"
+                    className="w-full p-2 md:p-3 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50 border-slate-200"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600">픽업 시간 * (15분 단위)</label>
-                  <select
+                  <label className="text-[11px] md:text-xs font-bold text-slate-600">픽업 시간 * (15분 단위)</label>
+                  <input
+                    type="time"
+                    step="900"
                     value={newOrder.pickup_time}
                     onChange={e => setNewOrder({...newOrder, pickup_time: e.target.value})}
-                    className="w-full p-2.5 md:p-3 border rounded-xl mt-1 text-sm bg-slate-50 border-slate-200"
-                  >
-                    {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
+                    className="w-full p-2 md:p-3 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50 border-slate-200"
+                  />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 bg-slate-100/70 p-3 rounded-xl border border-slate-200">
+              <div className="grid grid-cols-2 gap-2 md:gap-4 bg-slate-50 p-2.5 md:p-3 rounded-2xl border border-slate-200">
                 <div>
-                  <label className="text-xs font-bold text-slate-700">접수 날짜 (한국 실시간)</label>
+                  <label className="text-[11px] md:text-xs font-bold text-slate-700">접수 날짜 (현재 시각)</label>
                   <input
                     type="date"
                     value={newOrder.receipt_date}
                     onChange={e => setNewOrder({...newOrder, receipt_date: e.target.value})}
-                    className="w-full p-2 border rounded-lg mt-1 text-sm bg-white border-slate-200"
+                    className="w-full p-2 border rounded-xl mt-1 text-xs md:text-sm bg-white border-slate-200"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-700">접수 시간 (한국 실시간)</label>
-                  <select
+                  <label className="text-[11px] md:text-xs font-bold text-slate-700">접수 시간 (현재 시각)</label>
+                  <input
+                    type="time"
+                    step="900"
                     value={newOrder.receipt_time}
                     onChange={e => setNewOrder({...newOrder, receipt_time: e.target.value})}
-                    className="w-full p-2 border rounded-lg mt-1 text-sm bg-white border-slate-200"
-                  >
-                    {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
+                    className="w-full p-2 border rounded-xl mt-1 text-xs md:text-sm bg-white border-slate-200"
+                  />
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-600">결제 방식 *</label>
+                <label className="text-[11px] md:text-xs font-bold text-slate-600">결제 방식 *</label>
                 <select
                   value={newOrder.payment_method}
                   onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
-                  className="w-full p-2.5 md:p-3 border rounded-xl mt-1 text-sm bg-slate-50 border-slate-200"
+                  className="w-full p-2 md:p-3 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50 border-slate-200"
                 >
                   {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
                 </select>
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-600">고객 요구사항 / 메모</label>
+                <label className="text-[11px] md:text-xs font-bold text-slate-600">고객 요구사항 / 메모</label>
                 <textarea
                   value={newOrder.memo}
                   onChange={e => setNewOrder({...newOrder, memo: e.target.value})}
-                  className="w-full p-2.5 md:p-3 border rounded-xl mt-1 text-sm bg-slate-50 border-slate-200"
+                  className="w-full p-2 md:p-3 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50 border-slate-200"
                   rows={3}
                   placeholder="요청사항이나 특이사항을 적어주세요."
                 />
@@ -546,7 +532,7 @@ export default function App() {
 
               <button
                 type="submit"
-                className="w-full py-3.5 bg-rose-500 text-black font-extrabold rounded-xl shadow-md hover:bg-rose-600 transition-colors text-base mt-2 cursor-pointer"
+                className="w-full py-3 md:py-3.5 bg-rose-500 text-black font-extrabold rounded-xl shadow-md hover:bg-rose-600 transition-colors text-sm md:text-base mt-2 cursor-pointer"
               >
                 주문 저장하기
               </button>
@@ -799,20 +785,20 @@ export default function App() {
         {/* 수정 모달 */}
         {editingOrder && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-3 z-50 overflow-y-auto">
-            <div className="bg-white p-5 md:p-7 rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto my-auto">
-              <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2 border-b pb-3">
+            <div className="bg-white p-4 md:p-7 rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto my-auto">
+              <h3 className="text-base md:text-lg font-bold text-slate-900 mb-4 flex items-center gap-2 border-b pb-3">
                 <span>✏️</span> 주문 #{editingOrder.id} 전체 정보 수정
               </h3>
 
-              <form onSubmit={handleUpdateOrder} className="space-y-3.5 text-xs md:text-sm">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <form onSubmit={handleUpdateOrder} className="space-y-3 text-xs md:text-sm">
+                <div className="grid grid-cols-2 gap-2 md:gap-3">
                   <div>
                     <label className="font-bold text-slate-600">고객 성명 *</label>
                     <input
                       type="text"
                       value={editingOrder.customer_name}
                       onChange={e => setEditingOrder({...editingOrder, customer_name: e.target.value})}
-                      className="w-full p-2.5 border rounded-xl mt-1 bg-slate-50 border-slate-200"
+                      className="w-full p-2 md:p-2.5 border rounded-xl mt-1 bg-slate-50 border-slate-200"
                       required
                     />
                   </div>
@@ -822,18 +808,18 @@ export default function App() {
                       type="text"
                       value={editingOrder.phone}
                       onChange={e => setEditingOrder({...editingOrder, phone: formatPhone(e.target.value)})}
-                      className="w-full p-2.5 border rounded-xl mt-1 bg-slate-50 border-slate-200"
+                      className="w-full p-2 md:p-2.5 border rounded-xl mt-1 bg-slate-50 border-slate-200"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2 md:gap-3">
                   <div>
                     <label className="font-bold text-slate-600">상품종류 *</label>
                     <select
                       value={editingOrder.product_name}
                       onChange={e => setEditingOrder({...editingOrder, product_name: e.target.value})}
-                      className="w-full p-2.5 border rounded-xl mt-1 bg-slate-50 border-slate-200"
+                      className="w-full p-2 md:p-2.5 border rounded-xl mt-1 bg-slate-50 border-slate-200"
                     >
                       {PRODUCT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
@@ -844,34 +830,34 @@ export default function App() {
                       type="number"
                       value={editingOrder.amount}
                       onChange={e => setEditingOrder({...editingOrder, amount: e.target.value})}
-                      className="w-full p-2.5 border rounded-xl mt-1 bg-slate-50 border-slate-200"
+                      className="w-full p-2 md:p-2.5 border rounded-xl mt-1 bg-slate-50 border-slate-200"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2 md:gap-3">
                   <div>
                     <label className="font-bold text-slate-600">픽업 날짜 *</label>
                     <input
                       type="date"
                       value={editingOrder.pickup_date}
                       onChange={e => setEditingOrder({...editingOrder, pickup_date: e.target.value})}
-                      className="w-full p-2.5 border rounded-xl mt-1 bg-slate-50 border-slate-200"
+                      className="w-full p-2 md:p-2.5 border rounded-xl mt-1 bg-slate-50 border-slate-200"
                     />
                   </div>
                   <div>
                     <label className="font-bold text-slate-600">픽업 시간 * (15분 단위)</label>
-                    <select
+                    <input
+                      type="time"
+                      step="900"
                       value={editingOrder.pickup_time}
                       onChange={e => setEditingOrder({...editingOrder, pickup_time: e.target.value})}
-                      className="w-full p-2.5 border rounded-xl mt-1 bg-slate-50 border-slate-200"
-                    >
-                      {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
+                      className="w-full p-2 md:p-2.5 border rounded-xl mt-1 bg-slate-50 border-slate-200"
+                    />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                <div className="grid grid-cols-2 gap-2 md:gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                   <div>
                     <label className="font-bold text-slate-600">접수 날짜</label>
                     <input
@@ -883,13 +869,13 @@ export default function App() {
                   </div>
                   <div>
                     <label className="font-bold text-slate-600">접수 시간 (15분 단위)</label>
-                    <select
+                    <input
+                      type="time"
+                      step="900"
                       value={editingOrder.receipt_time}
                       onChange={e => setEditingOrder({...editingOrder, receipt_time: e.target.value})}
                       className="w-full p-2 border rounded-lg mt-1 bg-white border-slate-200"
-                    >
-                      {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
+                    />
                   </div>
                 </div>
 
@@ -898,7 +884,7 @@ export default function App() {
                   <select
                     value={editingOrder.payment_method}
                     onChange={e => setEditingOrder({...editingOrder, payment_method: e.target.value})}
-                    className="w-full p-2.5 border rounded-xl mt-1 bg-slate-50 border-slate-200"
+                    className="w-full p-2 md:p-2.5 border rounded-xl mt-1 bg-slate-50 border-slate-200"
                   >
                     {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
                   </select>
@@ -909,7 +895,7 @@ export default function App() {
                   <textarea
                     value={editingOrder.memo}
                     onChange={e => setEditingOrder({...editingOrder, memo: e.target.value})}
-                    className="w-full p-2.5 border rounded-xl mt-1 bg-slate-50 border-slate-200"
+                    className="w-full p-2 md:p-2.5 border rounded-xl mt-1 bg-slate-50 border-slate-200"
                     rows={2}
                   />
                 </div>
