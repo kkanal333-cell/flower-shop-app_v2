@@ -1,34 +1,58 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css";
+
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
 
 body {
-  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+  background-color: #f8fafc;
+  margin: 0;
+  padding: 0;
+  color: #1e293b;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* FullCalendar 커스텀 스타일 */
-.fc-theme-standard td, .fc-theme-standard th {
-  border-color: #e2e8f0 !important;
+/* FullCalendar 모바일 최적화 & 깔끔한 스타일 */
+.fc {
+  font-family: inherit;
 }
-
-.fc-header-toolbar {
+.fc .fc-toolbar {
+  flex-wrap: wrap;
+  gap: 8px;
   margin-bottom: 1rem !important;
 }
-
-.fc-button-primary {
-  background-color: #f3eef9 !important;
-  color: #582c83 !important;
-  border-color: #e2d5f1 !important;
+.fc .fc-toolbar-title {
+  font-size: 1.125rem !important;
+  font-weight: 700;
+  color: #1e1b4b;
+}
+.fc .fc-button-primary {
+  background-color: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+  color: #475569 !important;
   font-weight: 600 !important;
+  padding: 6px 12px !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
 }
-
-.fc-button-primary:hover {
-  background-color: #e2d5f1 !important;
-  color: #582c83 !important;
+.fc .fc-button-primary:hover, .fc .fc-button-primary:active {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
 }
-
-.fc-daygrid-day-number {
-  font-weight: 600;
-  color: #475569;
-  padding: 4px 8px !important;
+.fc .fc-button-primary:focus {
+  box-shadow: none !important;
+}
+.fc-theme-standard td, .fc-theme-standard th {
+  border-color: #f1f5f9 !important;
+}
+.fc-daygrid-day-frame {
+  min-height: 75px !important;
+}
+.fc-event {
+  cursor: pointer;
+  border-radius: 6px !important;
+  padding: 2px 4px !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  margin-bottom: 2px !important;
+  border: none !important;
 }
