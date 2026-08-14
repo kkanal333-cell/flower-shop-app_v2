@@ -13,7 +13,9 @@ const PAYMENT_OPTIONS = ["네이버", "전화", "입금", "현금", "미결제"]
 const PRODUCT_OPTIONS = ["꽃다발", "꽃바구니", "햇살콘플라워", "꽃묶음", "식물", "용품", "시즌한정", "기타"];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('calendar');
+  const [activeMenu, setActiveMenu] = useState('orders'); // 'new' | 'orders'
+  const [subTab, setSubTab] = useState('calendar'); // 'calendar' | 'list'
+  
   const [orders, setOrders] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [editingOrder, setEditingOrder] = useState(null);
@@ -88,7 +90,7 @@ export default function App() {
 
     alert('🌸 주문이 등록되었습니다!');
     setNewOrder({ ...newOrder, customer_name: '', memo: '' });
-    setActiveTab('calendar');
+    setActiveMenu('orders');
     fetchOrders();
   };
 
@@ -120,93 +122,158 @@ export default function App() {
     : [];
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row pb-20 md:pb-0">
-      {/* 상단/좌측 헤더 & 네비게이션 */}
-      <header className="bg-white border-b md:border-b-0 md:border-r border-slate-200 w-full md:w-64 p-4 md:p-6 flex md:flex-col justify-between md:justify-start items-center md:items-start sticky top-0 z-10 shadow-sm md:shadow-none">
-        <div className="flex items-center gap-2 text-purple-900 font-extrabold text-xl">
-          <span className="text-2xl">🌸</span>
-          <span>화사한 하루</span>
+    <div className="min-h-screen bg-slate-100/70 flex flex-col md:flex-row pb-20 md:pb-0">
+      {/* 왼쪽 사이드바 (기존 프로그램 스타일 적용) */}
+      <aside className="bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 w-full md:w-64 p-5 flex flex-col shrink-0 shadow-xs">
+        <div className="flex items-center gap-2 text-rose-600 font-extrabold text-xl mb-6">
+          <span className="text-2xl">📌</span>
+          <span>메뉴</span>
         </div>
 
-        {/* PC용 메뉴 */}
-        <nav className="hidden md:flex flex-col gap-2 w-full mt-8">
+        <nav className="flex flex-col gap-1 w-full text-sm">
           <button
-            onClick={() => setActiveTab('calendar')}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all text-left ${activeTab === 'calendar' ? 'bg-purple-100 text-purple-900 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+            onClick={() => setActiveMenu('new')}
+            className={`flex items-center gap-2.5 px-3.5 py-3 rounded-lg text-left transition-all font-medium ${
+              activeMenu === 'new'
+                ? 'bg-rose-50 text-rose-600 font-bold border-l-4 border-rose-500 shadow-2xs'
+                : 'text-slate-700 hover:bg-slate-200/60'
+            }`}
           >
-            📅 픽업 달력 & 목록
+            <span>📝</span> 신규 주문 및 고객 등록
           </button>
+          
           <button
-            onClick={() => setActiveTab('new')}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all text-left ${activeTab === 'new' ? 'bg-purple-100 text-purple-900 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+            onClick={() => setActiveMenu('orders')}
+            className={`flex items-center gap-2.5 px-3.5 py-3 rounded-lg text-left transition-all font-medium ${
+              activeMenu === 'orders'
+                ? 'bg-rose-50 text-rose-600 font-bold border-l-4 border-rose-500 shadow-2xs'
+                : 'text-slate-700 hover:bg-slate-200/60'
+            }`}
           >
-            📝 신규 주문 등록
+            <span>📋</span> 전체 주문 목록 & 달력
           </button>
         </nav>
-      </header>
+      </aside>
 
-      {/* 메인 콘텐츠 영역 */}
-      <main className="flex-1 p-4 md:p-8 max-w-5xl mx-auto w-full">
-        {activeTab === 'calendar' && (
+      {/* 오른쪽 메인 본문 영역 */}
+      <main className="flex-1 p-4 md:p-8 max-w-6xl mx-auto w-full">
+        {/* 메뉴 1: 전체 주문 목록 & 달력 */}
+        {activeMenu === 'orders' && (
           <div className="space-y-6">
-            {/* 달력 영역 */}
-            <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <FullCalendar
-                plugins={[dayGridPlugin, interactionPlugin]}
-                initialView="dayGridMonth"
-                locale="ko"
-                height="auto"
-                events={calendarEvents}
-                dateClick={(info) => setSelectedDate(info.dateStr)}
-                eventClick={(info) => {
-                  const target = orders.find(o => String(o.id) === info.event.id);
-                  if (target) setEditingOrder(target);
-                }}
-              />
+            <div className="bg-white p-5 md:p-6 rounded-xl border border-slate-200 shadow-sm">
+              <h2 className="text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <span>📋</span> 주문 내역 및 픽업 달력
+              </h2>
+
+              {/* 이미지와 똑같은 픽업 달력 / 전체 주문 목록 서브 탭 */}
+              <div className="flex border-b border-slate-200 mb-6 gap-6">
+                <button
+                  onClick={() => setSubTab('calendar')}
+                  className={`pb-3 text-sm font-bold flex items-center gap-1.5 relative transition-colors ${
+                    subTab === 'calendar' ? 'text-rose-600' : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  <span>📅</span> 픽업 달력
+                  {subTab === 'calendar' && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-500 rounded-full" />
+                  )}
+                </button>
+
+                <button
+                  onClick={() => setSubTab('list')}
+                  className={`pb-3 text-sm font-bold flex items-center gap-1.5 relative transition-colors ${
+                    subTab === 'list' ? 'text-rose-600' : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  <span>📊</span> 전체 주문 목록
+                  {subTab === 'list' && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-500 rounded-full" />
+                  )}
+                </button>
+              </div>
+
+              {/* 탭 1-1: FullCalendar 달력 */}
+              {subTab === 'calendar' && (
+                <div>
+                  <FullCalendar
+                    plugins={[dayGridPlugin, interactionPlugin]}
+                    initialView="dayGridMonth"
+                    locale="ko"
+                    height="auto"
+                    events={calendarEvents}
+                    dateClick={(info) => setSelectedDate(info.dateStr)}
+                    eventClick={(info) => {
+                      const target = orders.find(o => String(o.id) === info.event.id);
+                      if (target) setEditingOrder(target);
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* 탭 1-2: 전체 주문 목록 테이블 */}
+              {subTab === 'list' && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-500 text-xs md:text-sm bg-slate-50">
+                        <th className="py-3 px-3">픽업일시</th>
+                        <th className="py-3 px-3">고객명</th>
+                        <th className="py-3 px-3">연락처</th>
+                        <th className="py-3 px-3">상품명</th>
+                        <th className="py-3 px-3">금액</th>
+                        <th className="py-3 px-3">결제수단</th>
+                        <th className="py-3 px-3">관리</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orders.map(o => (
+                        <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors text-sm">
+                          <td className="py-3 px-3 text-slate-600">{o.pickup_datetime?.replace('T', ' ').slice(0, 16) || '-'}</td>
+                          <td className="py-3 px-3 font-bold text-slate-900">{o.customers?.name || '-'}</td>
+                          <td className="py-3 px-3 text-slate-600">{o.customers?.phone || '-'}</td>
+                          <td className="py-3 px-3 font-semibold text-slate-800">{o.product_name}</td>
+                          <td className="py-3 px-3 font-bold text-rose-600">{o.amount?.toLocaleString()}원</td>
+                          <td className="py-3 px-3"><span className="px-2 py-1 bg-slate-100 rounded text-xs font-medium">{o.payment_method}</span></td>
+                          <td className="py-3 px-3">
+                            <button onClick={() => setEditingOrder(o)} className="text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded hover:bg-slate-200 font-medium">수정</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
-            {/* 선택한 날짜의 픽업 상세 카드 (모바일 최적화) */}
-            {selectedDate && (
-              <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                    <span>📌</span> {selectedDate} 픽업 목록 ({selectedDayOrders.length}건)
-                  </h3>
-                </div>
+            {/* 달력 하단: 선택한 날짜의 픽업 주문 목록 (이미지 하단 영역과 동일) */}
+            {subTab === 'calendar' && selectedDate && (
+              <div className="bg-white p-5 md:p-6 rounded-xl border border-slate-200 shadow-sm">
+                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <span>📅</span> {selectedDate} 픽업 주문 목록
+                </h3>
 
                 {selectedDayOrders.length === 0 ? (
-                  <p className="text-slate-400 text-sm py-4 text-center">해당 날짜에 예정된 픽업 주문이 없습니다.</p>
+                  <div className="bg-sky-50 text-sky-700 p-4 rounded-xl text-sm font-medium text-center border border-sky-100">
+                    해당 날짜에 픽업 예정인 주문이 없습니다.
+                  </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {selectedDayOrders.map(o => (
-                      <div key={o.id} className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-purple-50/30 transition-all flex flex-col justify-between gap-3">
+                      <div key={o.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 flex flex-col justify-between gap-3">
                         <div className="flex justify-between items-start">
                           <div>
                             <span className="font-bold text-slate-900 text-base">{o.customers?.name || '익명'}</span>
                             <span className="text-xs text-slate-500 ml-2">{o.customers?.phone || ''}</span>
-                            <p className="text-sm font-semibold text-purple-900 mt-1">{o.product_name}</p>
+                            <p className="text-sm font-semibold text-rose-600 mt-1">{o.product_name}</p>
                           </div>
-                          <span className="px-2.5 py-1 bg-white border rounded-lg text-xs font-bold text-slate-700 shadow-xs">
+                          <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-md text-xs font-bold text-slate-700">
                             {o.payment_method}
                           </span>
                         </div>
-
-                        {o.memo && (
-                          <p className="text-xs text-slate-600 bg-white p-2 rounded-lg border border-slate-100">
-                            💬 {o.memo}
-                          </p>
-                        )}
-
-                        <div className="flex justify-between items-center pt-2 border-t border-slate-200/60 mt-1">
-                          <span className="font-bold text-slate-800 text-sm">
-                            {o.amount?.toLocaleString()}원
-                          </span>
-                          <button
-                            onClick={() => setEditingOrder(o)}
-                            className="text-xs bg-purple-600 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-purple-700 transition-colors"
-                          >
-                            수정
-                          </button>
+                        {o.memo && <p className="text-xs text-slate-600 bg-white p-2 rounded-lg border border-slate-100">💬 {o.memo}</p>}
+                        <div className="flex justify-between items-center pt-2 border-t border-slate-200/80">
+                          <span className="font-bold text-slate-800 text-sm">{o.amount?.toLocaleString()}원</span>
+                          <button onClick={() => setEditingOrder(o)} className="text-xs bg-rose-500 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-rose-600 transition-colors">수정</button>
                         </div>
                       </div>
                     ))}
@@ -214,43 +281,14 @@ export default function App() {
                 )}
               </div>
             )}
-
-            {/* 수정 모달/폼 */}
-            {editingOrder && (
-              <div className="bg-white p-5 md:p-6 rounded-2xl border-2 border-purple-300 shadow-lg">
-                <h3 className="text-lg font-bold text-purple-950 mb-4 flex items-center gap-2">
-                  <span>✏️</span> 주문 #{editingOrder.id} 수정하기
-                </h3>
-                <form onSubmit={handleUpdateOrder} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-bold text-slate-600">상품명</label>
-                    <select value={editingOrder.product_name} onChange={e => setEditingOrder({...editingOrder, product_name: e.target.value})} className="w-full p-3 border rounded-xl mt-1 text-sm bg-slate-50">
-                      {PRODUCT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-600">금액</label>
-                    <input type="number" value={editingOrder.amount} onChange={e => setEditingOrder({...editingOrder, amount: e.target.value})} className="w-full p-3 border rounded-xl mt-1 text-sm bg-slate-50" />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="text-xs font-bold text-slate-600">메모</label>
-                    <textarea value={editingOrder.memo || ''} onChange={e => setEditingOrder({...editingOrder, memo: e.target.value})} className="w-full p-3 border rounded-xl mt-1 text-sm bg-slate-50" rows={2} />
-                  </div>
-                  <div className="md:col-span-2 flex justify-end gap-2 pt-2">
-                    <button type="button" onClick={() => setEditingOrder(null)} className="px-4 py-2 border rounded-xl text-sm font-semibold text-slate-600">취소</button>
-                    <button type="submit" className="px-5 py-2 bg-purple-600 text-white rounded-xl text-sm font-bold shadow-md hover:bg-purple-700">저장</button>
-                  </div>
-                </form>
-              </div>
-            )}
           </div>
         )}
 
-        {/* 신규 주문 등록 탭 */}
-        {activeTab === 'new' && (
-          <div className="max-w-xl mx-auto bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
+        {/* 메뉴 2: 신규 주문 및 고객 등록 */}
+        {activeMenu === 'new' && (
+          <div className="max-w-xl mx-auto bg-white p-6 md:p-8 rounded-xl border border-slate-200 shadow-sm">
             <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
-              <span>📝</span> 신규 주문 등록
+              <span>📝</span> 신규 주문 및 고객 등록
             </h2>
             <form onSubmit={handleCreateOrder} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -300,29 +338,58 @@ export default function App() {
                 <textarea value={newOrder.memo} onChange={e => setNewOrder({...newOrder, memo: e.target.value})} className="w-full p-3 border rounded-xl mt-1 text-sm bg-slate-50" rows={3} placeholder="요청사항을 입력하세요" />
               </div>
 
-              <button type="submit" className="w-full py-3.5 bg-purple-600 text-white font-bold rounded-xl shadow-md hover:bg-purple-700 transition-colors text-base mt-2">
+              <button type="submit" className="w-full py-3.5 bg-rose-500 text-white font-bold rounded-xl shadow-md hover:bg-rose-600 transition-colors text-base mt-2">
                 🌸 주문 저장하기
               </button>
             </form>
           </div>
         )}
+
+        {/* 수정 모달/폼 */}
+        {editingOrder && (
+          <div className="bg-white p-5 md:p-6 rounded-xl border-2 border-rose-300 shadow-lg mt-6">
+            <h3 className="text-lg font-bold text-rose-950 mb-4 flex items-center gap-2">
+              <span>✏️</span> 주문 #{editingOrder.id} 수정하기
+            </h3>
+            <form onSubmit={handleUpdateOrder} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-bold text-slate-600">상품명</label>
+                <select value={editingOrder.product_name} onChange={e => setEditingOrder({...editingOrder, product_name: e.target.value})} className="w-full p-3 border rounded-xl mt-1 text-sm bg-slate-50">
+                  {PRODUCT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-600">금액</label>
+                <input type="number" value={editingOrder.amount} onChange={e => setEditingOrder({...editingOrder, amount: e.target.value})} className="w-full p-3 border rounded-xl mt-1 text-sm bg-slate-50" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-xs font-bold text-slate-600">메모</label>
+                <textarea value={editingOrder.memo || ''} onChange={e => setEditingOrder({...editingOrder, memo: e.target.value})} className="w-full p-3 border rounded-xl mt-1 text-sm bg-slate-50" rows={2} />
+              </div>
+              <div className="md:col-span-2 flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setEditingOrder(null)} className="px-4 py-2 border rounded-xl text-sm font-semibold text-slate-600">취소</button>
+                <button type="submit" className="px-5 py-2 bg-rose-500 text-white rounded-xl text-sm font-bold shadow-md hover:bg-rose-600">저장</button>
+              </div>
+            </form>
+          </div>
+        )}
       </main>
 
-      {/* 모바일 하단 고정 네비게이션 바 */}
+      {/* 모바일 전용 하단 메뉴 바 */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around p-3 z-50">
         <button
-          onClick={() => setActiveTab('calendar')}
-          className={`flex flex-col items-center gap-1 text-xs font-bold ${activeTab === 'calendar' ? 'text-purple-700' : 'text-slate-400'}`}
+          onClick={() => setActiveMenu('orders')}
+          className={`flex flex-col items-center gap-1 text-xs font-bold ${activeMenu === 'orders' ? 'text-rose-600' : 'text-slate-400'}`}
         >
-          <span className="text-lg">📅</span>
-          <span>픽업 달력</span>
+          <span className="text-lg">📋</span>
+          <span>주문/달력</span>
         </button>
         <button
-          onClick={() => setActiveTab('new')}
-          className={`flex flex-col items-center gap-1 text-xs font-bold ${activeTab === 'new' ? 'text-purple-700' : 'text-slate-400'}`}
+          onClick={() => setActiveMenu('new')}
+          className={`flex flex-col items-center gap-1 text-xs font-bold ${activeMenu === 'new' ? 'text-rose-600' : 'text-slate-400'}`}
         >
           <span className="text-lg">📝</span>
-          <span>신규 등록</span>
+          <span>신규등록</span>
         </button>
       </div>
     </div>
