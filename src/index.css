@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+}
+
+/* FullCalendar 커스텀 스타일 */
+.fc-theme-standard td, .fc-theme-standard th {
+  border-color: #e2e8f0 !important;
+}
+
+.fc-header-toolbar {
+  margin-bottom: 1rem !important;
+}
+
+.fc-button-primary {
+  background-color: #f3eef9 !important;
+  color: #582c83 !important;
+  border-color: #e2d5f1 !important;
+  font-weight: 600 !important;
+}
+
+.fc-button-primary:hover {
+  background-color: #e2d5f1 !important;
+  color: #582c83 !important;
+}
+
+.fc-daygrid-day-number {
+  font-weight: 600;
+  color: #475569;
+  padding: 4px 8px !important;
+}
