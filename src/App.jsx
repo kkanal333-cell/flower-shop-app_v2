@@ -330,13 +330,27 @@ export default function App() {
     reader.readAsText(file, 'UTF-8');
   };
 
-  const calendarEvents = orders.map(o => ({
-    id: String(o.id),
-    title: `[${o.payment_method || '신용카드'}] ${o.customers?.name || '고객'}`,
-    start: o.pickup_datetime,
-    backgroundColor: o.payment_method === '네이버' ? '#e0f2fe' : o.payment_method === '인스타' ? '#fce7f3' : '#dcfce7',
-    textColor: '#1e293b'
-  }));
+  // 📌 [달력 1] 개별 항목 대신 "날짜별 총 건수"만 집계하여 생성
+  const getCalendarEvents = () => {
+    const countsByDate = {};
+
+    orders.forEach(o => {
+      if (o.pickup_datetime) {
+        const dateStr = o.pickup_datetime.split('T')[0];
+        countsByDate[dateStr] = (countsByDate[dateStr] || 0) + 1;
+      }
+    });
+
+    return Object.keys(countsByDate).map(date => ({
+      id: date,
+      title: `🌸 ${countsByDate[date]}건`,
+      start: date,
+      allDay: true,
+      backgroundColor: '#ffe4e6', // 로즈 라이트
+      textColor: '#9f1239', // 버건디 텍스트
+      borderColor: '#f43f5e'
+    }));
+  };
 
   const selectedDayOrders = selectedDate
     ? orders.filter(o => o.pickup_datetime && o.pickup_datetime.startsWith(selectedDate))
@@ -352,7 +366,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100/70 flex flex-col md:flex-row pb-12 md:pb-0">
-      {/* 📌 사이드바 / 상단 메뉴바 (3. 가로 간격 대폭 축소) */}
+      {/* 📌 사이드바 */}
       <aside className="bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 w-full md:w-56 p-1.5 md:p-5 flex flex-col shrink-0 shadow-xs">
         <div className="hidden md:flex items-center gap-2 text-rose-600 font-extrabold text-xl mb-1">
           <span className="text-2xl">📌</span>
@@ -360,7 +374,6 @@ export default function App() {
         </div>
         <p className="hidden md:block text-xs text-slate-400 mb-6 font-medium">이동할 메뉴를 선택하세요</p>
 
-        {/* 모바일 화면에서 한눈에 보이도록 간격을 gap-1, px-2로 축소 */}
         <nav className="flex md:flex-col justify-between md:justify-start gap-1 md:gap-2.5 w-full text-xs md:text-sm py-1 md:py-0">
           {menuList.map(menu => (
             <label
@@ -385,9 +398,9 @@ export default function App() {
         </nav>
       </aside>
 
-      {/* 📌 메인 영역 */}
+      {/* 📌 메인 콘텐츠 영역 */}
       <main className="flex-1 p-2.5 md:p-8 max-w-6xl mx-auto w-full">
-        {/* 1. 신규 주문 및 고객 등록 */}
+        {/* 1. 신규 등록 */}
         {activeMenu === 'new' && (
           <div className="max-w-xl mx-auto bg-white p-4 md:p-8 rounded-xl border border-slate-200 shadow-sm">
             <h2 className="text-lg md:text-xl font-bold text-slate-800 mb-4 md:mb-6 flex items-center gap-2">
@@ -506,9 +519,10 @@ export default function App() {
                 />
               </div>
 
+              {/* 📌 저장하기 버튼: 검은색 글씨 적용 */}
               <button
                 type="submit"
-                className="w-full py-3.5 bg-rose-600 text-white font-extrabold rounded-xl shadow-md hover:bg-rose-700 transition-colors text-base mt-2 cursor-pointer"
+                className="w-full py-3.5 bg-rose-500 text-black font-extrabold rounded-xl shadow-md hover:bg-rose-600 transition-colors text-base mt-2 cursor-pointer"
               >
                 🌸 주문 저장하기
               </button>
@@ -516,7 +530,7 @@ export default function App() {
           </div>
         )}
 
-        {/* 2. 전체 주문 목록 & 달력 */}
+        {/* 2. 주문 & 달력 */}
         {activeMenu === 'orders' && (
           <div className="space-y-4 md:space-y-6">
             <div className="bg-white p-3 md:p-6 rounded-xl border border-slate-200 shadow-sm">
@@ -542,21 +556,17 @@ export default function App() {
                 </button>
               </div>
 
-              {/* 📌 2. 모바일 세로모드 달력 세로 길이 및 가독성 조정 */}
+              {/* 📌 달력: 건수별 이벤트 집계 표시 */}
               {subTab === 'calendar' && (
                 <FullCalendar
                   plugins={[dayGridPlugin, interactionPlugin]}
                   initialView="dayGridMonth"
                   locale="ko"
-                  aspectRatio={1.1} // 달력이 너무 세로로 길어지지 않게 고정
-                  dayMaxEventRows={2} // 하루 칸에 이벤트 최대 2개 표시 후 +more 처리
+                  aspectRatio={1.1}
                   contentHeight="auto"
-                  events={calendarEvents}
+                  events={getCalendarEvents()}
                   dateClick={(info) => setSelectedDate(info.dateStr)}
-                  eventClick={(info) => {
-                    const target = orders.find(o => String(o.id) === info.event.id);
-                    if (target) startEditOrder(target);
-                  }}
+                  eventClick={(info) => setSelectedDate(info.event.startStr)}
                 />
               )}
 
@@ -586,7 +596,9 @@ export default function App() {
                           <td className="py-2.5 px-3 font-bold text-rose-600">{o.amount?.toLocaleString()}원</td>
                           <td className="py-2.5 px-3"><span className="px-2 py-0.5 bg-slate-100 rounded text-xs font-medium">{o.payment_method}</span></td>
                           <td className="py-2.5 px-3">
-                            <button onClick={() => startEditOrder(o)} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded hover:bg-slate-200 font-medium">수정</button>
+                            <button onClick={() => startEditOrder(o)} className="text-xs bg-slate-200 text-black px-2 py-1 rounded hover:bg-slate-300 font-bold cursor-pointer">
+                              수정하기
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -596,7 +608,7 @@ export default function App() {
               )}
             </div>
 
-            {/* 📌 1. 달력에서 선택한 날짜 하단 리스트 - 전체 클릭 시 수정 가능하도록 적용 */}
+            {/* 선택한 날짜 리스트 */}
             {subTab === 'calendar' && selectedDate && (
               <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm">
                 <div className="flex items-center justify-between mb-3">
@@ -631,11 +643,22 @@ export default function App() {
                           </span>
                         </div>
                         {o.memo && <p className="text-xs text-slate-600 bg-white p-2 rounded-lg border border-slate-100">💬 {o.memo}</p>}
+                        
                         <div className="flex justify-between items-center pt-2 border-t border-slate-200/80">
                           <span className="font-bold text-slate-800 text-xs md:text-sm">{o.amount?.toLocaleString()}원</span>
-                          <span className="text-xs bg-rose-600 text-white px-2.5 py-1 rounded-lg font-bold group-hover:bg-rose-700 transition-colors">
-                            ✏️ 수정하기
-                          </span>
+                          
+                          {/* 📌 수정하기 버튼 명확히 고침 (연필 아이콘 + 검은색 텍스트 + 배경색) */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startEditOrder(o);
+                            }}
+                            className="inline-flex items-center gap-1 text-xs bg-slate-200 hover:bg-rose-500 hover:text-white text-slate-900 font-extrabold px-3 py-1.5 rounded-lg border border-slate-300 transition-colors shadow-2xs cursor-pointer"
+                          >
+                            <span>✏️</span>
+                            <span>수정하기</span>
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -675,7 +698,7 @@ export default function App() {
           </div>
         )}
 
-        {/* 4. 알림 발송 현황 */}
+        {/* 4. 알림 */}
         {activeMenu === 'notifications' && (
           <div className="bg-white p-6 md:p-8 rounded-xl border border-slate-200 shadow-sm text-center py-12">
             <span className="text-3xl md:text-4xl mb-3 block">🔔</span>
@@ -684,7 +707,7 @@ export default function App() {
           </div>
         )}
 
-        {/* 5. 데이터 백업 및 복원 */}
+        {/* 5. 백업/복원 */}
         {activeMenu === 'backup' && (
           <div className="bg-white p-4 md:p-8 rounded-xl border border-slate-200 shadow-sm max-w-2xl mx-auto">
             <h2 className="text-lg md:text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
@@ -747,7 +770,7 @@ export default function App() {
           </div>
         )}
 
-        {/* 📌 전체 정보 수정 모달 */}
+        {/* 📌 수정 모달 */}
         {editingOrder && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-3 z-50 overflow-y-auto">
             <div className="bg-white p-5 md:p-7 rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto my-auto">
@@ -873,9 +896,10 @@ export default function App() {
                   >
                     취소
                   </button>
+                  {/* 📌 모달 내부 저장하기 버튼: 검은색 텍스트 보장 */}
                   <button
                     type="submit"
-                    className="px-5 py-2 bg-rose-600 text-white rounded-xl font-extrabold shadow-md hover:bg-rose-700 cursor-pointer"
+                    className="px-5 py-2 bg-rose-500 text-black font-extrabold rounded-xl shadow-md hover:bg-rose-600 cursor-pointer"
                   >
                     저장하기
                   </button>
