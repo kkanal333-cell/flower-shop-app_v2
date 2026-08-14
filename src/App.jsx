@@ -13,29 +13,51 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const PAYMENT_OPTIONS = ["신용카드", "현금", "계좌이체", "전화예약입금", "네이버", "인스타", "미결제"];
 const PRODUCT_OPTIONS = ["꽃다발", "꽃바구니", "햇살콘플라워", "꽃묶음", "식물", "용품", "시즌한정", "기타"];
 
+// 15분 단위 시간 옵션 리스트 생성 (00:00 ~ 23:45)
+const generateTimeOptions = () => {
+  const options = [];
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += 15) {
+      const hh = String(h).padStart(2, '0');
+      const mm = String(m).padStart(2, '0');
+      options.push(`${hh}:${mm}`);
+    }
+  }
+  return options;
+};
+const TIME_OPTIONS = generateTimeOptions();
+
+// 한국 시각 (KST UTC+9) 계산 및 15분 단위 적용
+const getKoreaNowFormatted = () => {
+  const now = new Date();
+  // UTC 시각 + 9시간
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const kst = new Date(utc + (9 * 60 * 60 * 1000));
+
+  const year = kst.getFullYear();
+  const month = String(kst.getMonth() + 1).padStart(2, '0');
+  const day = String(kst.getDate()).padStart(2, '0');
+  const dateStr = `${year}-${month}-${day}`;
+
+  let hours = kst.getHours();
+  let minutes = Math.round(kst.getMinutes() / 15) * 15;
+  if (minutes === 60) {
+    minutes = 0;
+    hours = (hours + 1) % 24;
+  }
+
+  const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  return { date: dateStr, time: timeStr };
+};
+
 export default function App() {
   const [activeMenu, setActiveMenu] = useState('orders'); // 기본 메뉴: 주문&달력
   const [subTab, setSubTab] = useState('calendar'); // 'calendar' | 'list'
   
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(getKoreaNowFormatted().date);
   const [editingOrder, setEditingOrder] = useState(null);
-
-  // 한국 시각 계산 (15분 단위)
-  const getNowFormatted = () => {
-    const now = new Date();
-    const tzOffset = now.getTimezoneOffset() * 60000;
-    const localNow = new Date(now.getTime() - tzOffset);
-    
-    const date = localNow.toISOString().split('T')[0];
-    const hours = String(localNow.getHours()).padStart(2, '0');
-    const minutes = Math.round(localNow.getMinutes() / 15) * 15;
-    const formattedMinutes = String(minutes === 60 ? 0 : minutes).padStart(2, '0');
-    const finalHours = minutes === 60 ? String(Number(hours) + 1).padStart(2, '0') : hours;
-
-    return { date, time: `${finalHours}:${formattedMinutes}` };
-  };
 
   // ISO/Supabase 파싱
   const parseDateTime = (datetimeStr, fallbackDate = '', fallbackTime = '14:00') => {
@@ -50,15 +72,16 @@ export default function App() {
     return { date, time };
   };
 
+  const initialKst = getKoreaNowFormatted();
   const [newOrder, setNewOrder] = useState({
     customer_name: '',
     phone: '010-',
     product_name: '꽃다발',
     amount: 55000,
-    pickup_date: new Date().toISOString().split('T')[0],
+    pickup_date: initialKst.date,
     pickup_time: '14:00',
-    receipt_date: getNowFormatted().date,
-    receipt_time: getNowFormatted().time,
+    receipt_date: initialKst.date,
+    receipt_time: initialKst.time,
     payment_method: '신용카드',
     memo: ''
   });
@@ -66,11 +89,12 @@ export default function App() {
   const handleMenuChange = (menuId) => {
     setActiveMenu(menuId);
     if (menuId === 'new') {
-      const now = getNowFormatted();
+      const kstNow = getKoreaNowFormatted();
       setNewOrder(prev => ({
         ...prev,
-        receipt_date: now.date,
-        receipt_time: now.time
+        pickup_date: kstNow.date,
+        receipt_date: kstNow.date,
+        receipt_time: kstNow.time
       }));
     }
   };
@@ -142,16 +166,16 @@ export default function App() {
 
     alert('주문이 성공적으로 등록되었습니다!');
     
-    const now = getNowFormatted();
+    const kstNow = getKoreaNowFormatted();
     setNewOrder({
       customer_name: '',
       phone: '010-',
       product_name: '꽃다발',
       amount: 55000,
-      pickup_date: new Date().toISOString().split('T')[0],
+      pickup_date: kstNow.date,
       pickup_time: '14:00',
-      receipt_date: now.date,
-      receipt_time: now.time,
+      receipt_date: kstNow.date,
+      receipt_time: kstNow.time,
       payment_method: '신용카드',
       memo: ''
     });
@@ -160,8 +184,9 @@ export default function App() {
   };
 
   const startEditOrder = (order) => {
-    const pickup = parseDateTime(order.pickup_datetime, new Date().toISOString().split('T')[0], '14:00');
-    const receipt = parseDateTime(order.created_at, getNowFormatted().date, getNowFormatted().time);
+    const kstNow = getKoreaNowFormatted();
+    const pickup = parseDateTime(order.pickup_datetime, kstNow.date, '14:00');
+    const receipt = parseDateTime(order.created_at, kstNow.date, kstNow.time);
 
     setEditingOrder({
       id: order.id,
@@ -231,7 +256,7 @@ export default function App() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `주문목록_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `주문목록_${getKoreaNowFormatted().date}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -254,7 +279,7 @@ export default function App() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `고객목록_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `고객목록_${getKoreaNowFormatted().date}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -330,7 +355,7 @@ export default function App() {
     reader.readAsText(file, 'UTF-8');
   };
 
-  // 📌 [달력] 그림 아이콘 제거하고 "2건" 형태로 표시
+  // 달력 이벤트 생성 (그림 제거된 2건 형태)
   const getCalendarEvents = () => {
     const countsByDate = {};
 
@@ -346,8 +371,8 @@ export default function App() {
       title: `${countsByDate[date]}건`,
       start: date,
       allDay: true,
-      backgroundColor: '#ffe4e6', // 로즈 라이트
-      textColor: '#9f1239', // 버건디 텍스트
+      backgroundColor: '#ffe4e6',
+      textColor: '#9f1239',
       borderColor: '#f43f5e'
     }));
   };
@@ -366,7 +391,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100/70 flex flex-col md:flex-row pb-12 md:pb-0">
-      {/* 📌 사이드바 */}
+      {/* 사이드바 */}
       <aside className="bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 w-full md:w-56 p-1.5 md:p-5 flex flex-col shrink-0 shadow-xs">
         <div className="hidden md:flex items-center gap-2 text-rose-600 font-extrabold text-xl mb-1">
           <span className="text-2xl">📌</span>
@@ -398,7 +423,7 @@ export default function App() {
         </nav>
       </aside>
 
-      {/* 📌 메인 콘텐츠 영역 */}
+      {/* 메인 콘텐츠 영역 */}
       <main className="flex-1 p-2 md:p-8 max-w-6xl mx-auto w-full">
         {/* 1. 신규 등록 */}
         {activeMenu === 'new' && (
@@ -465,19 +490,19 @@ export default function App() {
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-600">픽업 시간 * (15분 단위)</label>
-                  <input
-                    type="time"
-                    step="900"
+                  <select
                     value={newOrder.pickup_time}
                     onChange={e => setNewOrder({...newOrder, pickup_time: e.target.value})}
                     className="w-full p-2.5 md:p-3 border rounded-xl mt-1 text-sm bg-slate-50 border-slate-200"
-                  />
+                  >
+                    {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 bg-slate-100/70 p-3 rounded-xl border border-slate-200">
                 <div>
-                  <label className="text-xs font-bold text-slate-700">접수 날짜 (현재 시각)</label>
+                  <label className="text-xs font-bold text-slate-700">접수 날짜 (한국 실시간)</label>
                   <input
                     type="date"
                     value={newOrder.receipt_date}
@@ -486,14 +511,14 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-700">접수 시간 (현재 시각)</label>
-                  <input
-                    type="time"
-                    step="900"
+                  <label className="text-xs font-bold text-slate-700">접수 시간 (한국 실시간)</label>
+                  <select
                     value={newOrder.receipt_time}
                     onChange={e => setNewOrder({...newOrder, receipt_time: e.target.value})}
                     className="w-full p-2 border rounded-lg mt-1 text-sm bg-white border-slate-200"
-                  />
+                  >
+                    {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
                 </div>
               </div>
 
@@ -555,7 +580,6 @@ export default function App() {
                 </button>
               </div>
 
-              {/* 📌 달력: aspectRatio={1.5} 및 행 높이 축소로 모바일 한 화면에 쏙 들어오도록 조절 */}
               {subTab === 'calendar' && (
                 <div className="calendar-compact">
                   <FullCalendar
@@ -772,7 +796,7 @@ export default function App() {
           </div>
         )}
 
-        {/* 📌 수정 모달 */}
+        {/* 수정 모달 */}
         {editingOrder && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-3 z-50 overflow-y-auto">
             <div className="bg-white p-5 md:p-7 rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto my-auto">
@@ -837,19 +861,19 @@ export default function App() {
                   </div>
                   <div>
                     <label className="font-bold text-slate-600">픽업 시간 * (15분 단위)</label>
-                    <input
-                      type="time"
-                      step="900"
+                    <select
                       value={editingOrder.pickup_time}
                       onChange={e => setEditingOrder({...editingOrder, pickup_time: e.target.value})}
                       className="w-full p-2.5 border rounded-xl mt-1 bg-slate-50 border-slate-200"
-                    />
+                    >
+                      {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                   <div>
-                    <label className="font-bold text-slate-600">접수 날짜 (최초 등록 시각)</label>
+                    <label className="font-bold text-slate-600">접수 날짜</label>
                     <input
                       type="date"
                       value={editingOrder.receipt_date}
@@ -858,14 +882,14 @@ export default function App() {
                     />
                   </div>
                   <div>
-                    <label className="font-bold text-slate-600">접수 시간 (최초 등록 시각)</label>
-                    <input
-                      type="time"
-                      step="900"
+                    <label className="font-bold text-slate-600">접수 시간 (15분 단위)</label>
+                    <select
                       value={editingOrder.receipt_time}
                       onChange={e => setEditingOrder({...editingOrder, receipt_time: e.target.value})}
                       className="w-full p-2 border rounded-lg mt-1 bg-white border-slate-200"
-                    />
+                    >
+                      {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
                   </div>
                 </div>
 
