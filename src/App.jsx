@@ -13,7 +13,44 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const PAYMENT_OPTIONS = ["신용카드", "현금", "계좌이체", "전화예약입금", "네이버", "인스타", "미결제"];
 const PRODUCT_OPTIONS = ["꽃다발", "꽃바구니", "햇살콘플라워", "꽃묶음", "식물", "용품", "시즌한정", "기타"];
 
-// 한국 시각 (KST UTC+9) 계산 및 15분 단위 올림/반올림 처리
+const AMPM_OPTIONS = ["오전", "오후"];
+const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')); // "01" ~ "12"
+const MINUTE_OPTIONS = ["00", "15", "30", "45"];
+
+// HH:mm (24시간) -> { ampm: "오전/오후", hour: "01~12", minute: "00,15,30,45" }
+const parseTimeToParts = (timeStr) => {
+  if (!timeStr) return { ampm: "오후", hour: "02", minute: "00" };
+  const [hStr, mStr] = timeStr.split(':');
+  let h = parseInt(hStr, 10);
+  let m = parseInt(mStr, 10);
+
+  // 15분 단위 올림/반올림
+  m = Math.round(m / 15) * 15;
+  if (m === 60) {
+    m = 0;
+    h = (h + 1) % 24;
+  }
+
+  const ampm = h >= 12 ? "오후" : "오전";
+  let h12 = h % 12;
+  if (h12 === 0) h12 = 12;
+
+  return {
+    ampm,
+    hour: String(h12).padStart(2, '0'),
+    minute: String(m).padStart(2, '0')
+  };
+};
+
+// { ampm, hour, minute } -> HH:mm (24시간)
+const formatPartsToTime = (ampm, hour, minute) => {
+  let h = parseInt(hour, 10);
+  if (ampm === "오후" && h < 12) h += 12;
+  if (ampm === "오전" && h === 12) h = 0;
+  return `${String(h).padStart(2, '0')}:${minute}`;
+};
+
+// 한국 시각 (KST UTC+9) 계산
 const getKoreaNowFormatted = () => {
   const now = new Date();
   const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
@@ -374,6 +411,48 @@ export default function App() {
     { id: 'backup', label: '💾 백업/복원' },
   ];
 
+  // 시간 커스텀 선택기 컴포넌트 (AM/PM + 시 + 15분단위 분)
+  const TimePickerCustom = ({ value, onChange, bgClass = "bg-slate-50" }) => {
+    const { ampm, hour, minute } = parseTimeToParts(value);
+
+    const handleAmpmChange = (e) => {
+      onChange(formatPartsToTime(e.target.value, hour, minute));
+    };
+    const handleHourChange = (e) => {
+      onChange(formatPartsToTime(ampm, e.target.value, minute));
+    };
+    const handleMinuteChange = (e) => {
+      onChange(formatPartsToTime(ampm, hour, e.target.value));
+    };
+
+    return (
+      <div className={`flex items-center gap-1 p-1 md:p-1.5 border rounded-xl mt-1 ${bgClass} border-slate-200`}>
+        <select
+          value={ampm}
+          onChange={handleAmpmChange}
+          className="bg-transparent text-xs md:text-sm font-semibold p-1 focus:outline-none cursor-pointer"
+        >
+          {AMPM_OPTIONS.map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <select
+          value={hour}
+          onChange={handleHourChange}
+          className="bg-transparent text-xs md:text-sm font-semibold p-1 focus:outline-none cursor-pointer flex-1 text-center"
+        >
+          {HOUR_OPTIONS.map(h => <option key={h} value={h}>{h}시</option>)}
+        </select>
+        <span className="text-xs text-slate-400 font-bold">:</span>
+        <select
+          value={minute}
+          onChange={handleMinuteChange}
+          className="bg-transparent text-xs md:text-sm font-semibold p-1 focus:outline-none cursor-pointer flex-1 text-center"
+        >
+          {MINUTE_OPTIONS.map(m => <option key={m} value={m}>{m}분</option>)}
+        </select>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-slate-100/70 flex flex-col md:flex-row pb-12 md:pb-0">
       {/* 사이드바 */}
@@ -418,10 +497,10 @@ export default function App() {
             </h2>
 
             <form onSubmit={handleCreateOrder} className="space-y-3 md:space-y-4">
-              {/* 모바일에서도 2열 유지 (grid-cols-2) */}
+              {/* 모바일에서도 2열 유지, 라벨 글씨 축소 (text-[10px] md:text-xs) */}
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-slate-600">고객 성명 *</label>
+                  <label className="text-[10px] md:text-xs font-bold text-slate-600">고객 성명 *</label>
                   <input
                     type="text"
                     value={newOrder.customer_name}
@@ -432,7 +511,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-slate-600">휴대폰 번호</label>
+                  <label className="text-[10px] md:text-xs font-bold text-slate-600">휴대폰 번호</label>
                   <input
                     type="text"
                     value={newOrder.phone}
@@ -444,7 +523,7 @@ export default function App() {
 
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-slate-600">상품종류 *</label>
+                  <label className="text-[10px] md:text-xs font-bold text-slate-600">상품종류 *</label>
                   <select
                     value={newOrder.product_name}
                     onChange={e => setNewOrder({...newOrder, product_name: e.target.value})}
@@ -454,7 +533,7 @@ export default function App() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-slate-600">결제 금액 (원)</label>
+                  <label className="text-[10px] md:text-xs font-bold text-slate-600">결제 금액 (원)</label>
                   <input
                     type="number"
                     value={newOrder.amount}
@@ -466,7 +545,7 @@ export default function App() {
 
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-slate-600">픽업 날짜 *</label>
+                  <label className="text-[10px] md:text-xs font-bold text-slate-600">픽업 날짜 *</label>
                   <input
                     type="date"
                     value={newOrder.pickup_date}
@@ -475,20 +554,17 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-slate-600">픽업 시간 * (15분 단위)</label>
-                  <input
-                    type="time"
-                    step="900"
+                  <label className="text-[10px] md:text-xs font-bold text-slate-600">픽업 시간 * (15분 단위)</label>
+                  <TimePickerCustom
                     value={newOrder.pickup_time}
-                    onChange={e => setNewOrder({...newOrder, pickup_time: e.target.value})}
-                    className="w-full p-2 md:p-3 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50 border-slate-200"
+                    onChange={val => setNewOrder({...newOrder, pickup_time: val})}
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2 md:gap-4 bg-slate-50 p-2.5 md:p-3 rounded-2xl border border-slate-200">
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-slate-700">접수 날짜 (현재 시각)</label>
+                  <label className="text-[10px] md:text-xs font-bold text-slate-700">접수 날짜 (현재 시각)</label>
                   <input
                     type="date"
                     value={newOrder.receipt_date}
@@ -497,19 +573,17 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-slate-700">접수 시간 (현재 시각)</label>
-                  <input
-                    type="time"
-                    step="900"
+                  <label className="text-[10px] md:text-xs font-bold text-slate-700">접수 시간 (현재 시각)</label>
+                  <TimePickerCustom
                     value={newOrder.receipt_time}
-                    onChange={e => setNewOrder({...newOrder, receipt_time: e.target.value})}
-                    className="w-full p-2 border rounded-xl mt-1 text-xs md:text-sm bg-white border-slate-200"
+                    onChange={val => setNewOrder({...newOrder, receipt_time: val})}
+                    bgClass="bg-white"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-[11px] md:text-xs font-bold text-slate-600">결제 방식 *</label>
+                <label className="text-[10px] md:text-xs font-bold text-slate-600">결제 방식 *</label>
                 <select
                   value={newOrder.payment_method}
                   onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
@@ -520,7 +594,7 @@ export default function App() {
               </div>
 
               <div>
-                <label className="text-[11px] md:text-xs font-bold text-slate-600">고객 요구사항 / 메모</label>
+                <label className="text-[10px] md:text-xs font-bold text-slate-600">고객 요구사항 / 메모</label>
                 <textarea
                   value={newOrder.memo}
                   onChange={e => setNewOrder({...newOrder, memo: e.target.value})}
@@ -793,7 +867,7 @@ export default function App() {
               <form onSubmit={handleUpdateOrder} className="space-y-3 text-xs md:text-sm">
                 <div className="grid grid-cols-2 gap-2 md:gap-3">
                   <div>
-                    <label className="font-bold text-slate-600">고객 성명 *</label>
+                    <label className="text-[10px] md:text-xs font-bold text-slate-600">고객 성명 *</label>
                     <input
                       type="text"
                       value={editingOrder.customer_name}
@@ -803,7 +877,7 @@ export default function App() {
                     />
                   </div>
                   <div>
-                    <label className="font-bold text-slate-600">휴대폰 번호</label>
+                    <label className="text-[10px] md:text-xs font-bold text-slate-600">휴대폰 번호</label>
                     <input
                       type="text"
                       value={editingOrder.phone}
@@ -815,7 +889,7 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-2 md:gap-3">
                   <div>
-                    <label className="font-bold text-slate-600">상품종류 *</label>
+                    <label className="text-[10px] md:text-xs font-bold text-slate-600">상품종류 *</label>
                     <select
                       value={editingOrder.product_name}
                       onChange={e => setEditingOrder({...editingOrder, product_name: e.target.value})}
@@ -825,7 +899,7 @@ export default function App() {
                     </select>
                   </div>
                   <div>
-                    <label className="font-bold text-slate-600">금액 (원)</label>
+                    <label className="text-[10px] md:text-xs font-bold text-slate-600">금액 (원)</label>
                     <input
                       type="number"
                       value={editingOrder.amount}
@@ -837,7 +911,7 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-2 md:gap-3">
                   <div>
-                    <label className="font-bold text-slate-600">픽업 날짜 *</label>
+                    <label className="text-[10px] md:text-xs font-bold text-slate-600">픽업 날짜 *</label>
                     <input
                       type="date"
                       value={editingOrder.pickup_date}
@@ -846,20 +920,17 @@ export default function App() {
                     />
                   </div>
                   <div>
-                    <label className="font-bold text-slate-600">픽업 시간 * (15분 단위)</label>
-                    <input
-                      type="time"
-                      step="900"
+                    <label className="text-[10px] md:text-xs font-bold text-slate-600">픽업 시간 * (15분 단위)</label>
+                    <TimePickerCustom
                       value={editingOrder.pickup_time}
-                      onChange={e => setEditingOrder({...editingOrder, pickup_time: e.target.value})}
-                      className="w-full p-2 md:p-2.5 border rounded-xl mt-1 bg-slate-50 border-slate-200"
+                      onChange={val => setEditingOrder({...editingOrder, pickup_time: val})}
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 md:gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                   <div>
-                    <label className="font-bold text-slate-600">접수 날짜</label>
+                    <label className="text-[10px] md:text-xs font-bold text-slate-600">접수 날짜</label>
                     <input
                       type="date"
                       value={editingOrder.receipt_date}
@@ -868,19 +939,17 @@ export default function App() {
                     />
                   </div>
                   <div>
-                    <label className="font-bold text-slate-600">접수 시간 (15분 단위)</label>
-                    <input
-                      type="time"
-                      step="900"
+                    <label className="text-[10px] md:text-xs font-bold text-slate-600">접수 시간 (15분 단위)</label>
+                    <TimePickerCustom
                       value={editingOrder.receipt_time}
-                      onChange={e => setEditingOrder({...editingOrder, receipt_time: e.target.value})}
-                      className="w-full p-2 border rounded-lg mt-1 bg-white border-slate-200"
+                      onChange={val => setEditingOrder({...editingOrder, receipt_time: val})}
+                      bgClass="bg-white"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="font-bold text-slate-600">결제 방식 *</label>
+                  <label className="text-[10px] md:text-xs font-bold text-slate-600">결제 방식 *</label>
                   <select
                     value={editingOrder.payment_method}
                     onChange={e => setEditingOrder({...editingOrder, payment_method: e.target.value})}
@@ -891,7 +960,7 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label className="font-bold text-slate-600">요구사항 / 메모</label>
+                  <label className="text-[10px] md:text-xs font-bold text-slate-600">요구사항 / 메모</label>
                   <textarea
                     value={editingOrder.memo}
                     onChange={e => setEditingOrder({...editingOrder, memo: e.target.value})}
