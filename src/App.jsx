@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -47,14 +47,15 @@ const getKoreaNowFormatted = () => {
   const kst = new Date(now.getTime() + kstOffset);
   const date = kst.toISOString().split('T')[0];
   const time = kst.toTimeString().split(' ')[0].substring(0, 5);
-  return { date, time };
+  return { date, time, kstDateObj: kst };
 };
 
-// [요구사항 1] 현재 시간 직후 15분 단위 올림 계산 함수
-const getNextPickupTimeParts = () => {
+// [수정사항 1] 현재 시간 직후 15분 단위 올림 계산 함수
+const getNextPickupDateTime = () => {
   const now = new Date();
   const kstOffset = 9 * 60 * 60 * 1000;
   const kst = new Date(now.getTime() + kstOffset);
+  
   let h = kst.getHours();
   let m = kst.getMinutes();
 
@@ -62,14 +63,17 @@ const getNextPickupTimeParts = () => {
   if (m >= 60) {
     m = 0;
     h = (h + 1) % 24;
+    if (h === 0) {
+      kst.setDate(kst.getDate() + 1);
+    }
   }
+  
+  const targetDateStr = kst.toISOString().split('T')[0];
   const ampm = h >= 12 ? "오후" : "오전";
   const h12 = h % 12 === 0 ? 12 : h % 12;
-  return {
-    ampm,
-    hour: String(h12).padStart(2, '0'),
-    minute: String(m).padStart(2, '0')
-  };
+  const timeStr = `${ampm} ${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+  return { date: targetDateStr, time: timeStr };
 };
 
 // CSV 다운로드 및 파싱 유틸
@@ -165,7 +169,7 @@ export default function App() {
   // 수정 모달 상태
   const [editingOrder, setEditingOrder] = useState(null);
 
-  // [요구사항 3] 모바일 뒤로가기 종료 확인 팝업
+  // [수정사항 3] 모바일에서 뒤로가기 버튼 누를 때 종료 확인 팝업
   useEffect(() => {
     const handlePopState = (e) => {
       e.preventDefault();
@@ -182,7 +186,7 @@ export default function App() {
     };
   }, []);
 
-  // [요구사항 5] 개별 주문 출력 함수
+  // [수정사항 5] 개별 주문 출력 함수
   const handlePrintOrder = (order) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -275,13 +279,15 @@ export default function App() {
     }
   };
 
-  // [요구사항 1] 신규 주문 메뉴 진입 시 현재 시간 직후 15분 단위 세팅
+  // [수정사항 1 & 2] 신규 주문 메뉴 진입 또는 특정 날짜 지정 진입 시 시간/날짜 자동 설정
   const handleMenuChange = (menuId, prefilledDate = null) => {
     setActiveMenu(menuId);
     if (menuId === 'new') {
       const kstNow = getKoreaNowFormatted();
-      const nextTime = getNextPickupTimeParts();
-      const targetDate = prefilledDate || kstNow.date;
+      const nextPickup = getNextPickupDateTime();
+      
+      // [수정사항 2 반영] 달력 등에서 넘겨준 날짜가 있으면 그 날짜로 픽업일 설정, 없으면 다음 15분 단위 시간의 날짜 사용
+      const targetDate = prefilledDate || nextPickup.date;
       
       setNewOrder({
         customer_name: '',
@@ -289,7 +295,7 @@ export default function App() {
         product_name: '꽃다발',
         amount_thousands: '55',
         pickup_date: targetDate,
-        pickup_time: formatPartsToTime(nextTime.ampm, nextTime.hour, nextTime.minute),
+        pickup_time: nextPickup.time,
         receipt_date: kstNow.date,
         receipt_time: kstNow.time,
         payment_method: '신용카드',
@@ -497,7 +503,7 @@ export default function App() {
           alert("가져올 데이터가 없습니다.");
           return;
         }
-        if (!window.confirm(`총 ${rows.length개의 데이터를 가져오시겠습니까? 기존 데이터에 추가됩니다.`)) return;
+        if (!window.confirm(`총 ${rows.length}개의 데이터를 가져오시겠습니까? 기존 데이터에 추가됩니다.`)) return;
 
         setLoading(true);
         for (let r of rows) {
@@ -608,7 +614,7 @@ export default function App() {
               👥 고객관리
             </button>
 
-            {/* [요구사항 4] 백업 메뉴 글자색을 명확히 검은색(text-black)으로 지정 */}
+            {/* [수정사항 4] 백업/복원 메뉴 내보내기 버튼 글자색 명확한 검은색(text-black) 지정 */}
             <div className="flex items-center gap-1 border-l pl-2 ml-1 border-gray-200">
               <button
                 onClick={exportBackupCSV}
@@ -753,7 +759,7 @@ export default function App() {
                     </div>
 
                     <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
-                      {/* [요구사항 5] 개별 주문 출력 버튼 */}
+                      {/* [수정사항 5] 개별 주문 출력 버튼 */}
                       <button
                         onClick={() => handlePrintOrder(order)}
                         className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition"
@@ -806,13 +812,12 @@ export default function App() {
               />
             </div>
 
-            {/* 선택된 날짜 상세 내역 */}
+            {/* [수정사항 2] 선택된 날짜 상세 내역 및 신규 주문 바로가기 기능 */}
             <div className="bg-white p-6 rounded-2xl shadow-xs border border-gray-200">
               <div className="flex flex-wrap justify-between items-center mb-4 pb-2 border-b">
                 <h3 className="text-lg font-bold text-gray-800">
                   📅 <span className="text-rose-600">{selectedDate}</span> 픽업 예정 주문 ({selectedDayOrders.length}건)
                 </h3>
-                {/* [요구사항 2] 달력 날짜별 선택 시 신규 주문 입력하기 버튼 */}
                 <button
                   onClick={() => handleMenuChange('new', selectedDate)}
                   className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white text-sm font-semibold rounded-xl shadow-sm transition"
@@ -822,8 +827,14 @@ export default function App() {
               </div>
 
               {selectedDayOrders.length === 0 ? (
-                <div className="text-center py-8 text-gray-400">
-                  선택한 날짜에 예정된 주문이 없습니다. 위 버튼을 눌러 새 주문을 추가해보세요.
+                <div className="text-center py-8 text-gray-400 space-y-3">
+                  <p>선택한 날짜에 예정된 주문이 없습니다.</p>
+                  <button
+                    onClick={() => handleMenuChange('new', selectedDate)}
+                    className="inline-block px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 text-sm font-semibold rounded-xl border border-rose-200 transition"
+                  >
+                    + 이 날짜로 신규 주문 입력하기
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -841,7 +852,7 @@ export default function App() {
                         {order.memo && <div className="text-xs text-amber-800 bg-amber-50 p-1.5 rounded mt-1">메모: {order.memo}</div>}
                       </div>
                       <div className="flex items-center gap-2 self-end sm:self-center">
-                        {/* [요구사항 5] 개별 주문 출력 버튼 */}
+                        {/* [수정사항 5] 개별 주문 출력 버튼 */}
                         <button
                           onClick={() => handlePrintOrder(order)}
                           className="px-3 py-1.5 bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 text-xs font-semibold rounded-lg transition"
@@ -1181,7 +1192,7 @@ export default function App() {
               </div>
 
               <div className="flex justify-end gap-2 pt-4 border-t">
-                {/* [요구사항 5] 수정 모달 내부에서도 개별 출력 가능 */}
+                {/* [수정사항 5] 수정 모달 내부에서도 개별 출력 가능 */}
                 <button
                   type="button"
                   onClick={() => handlePrintOrder(editingOrder)}
