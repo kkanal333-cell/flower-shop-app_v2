@@ -50,7 +50,7 @@ const getKoreaNowFormatted = () => {
   return { date, time, kstDateObj: kst };
 };
 
-// [수정사항 1] 현재 시간 직후 15분 단위 올림 계산 함수
+// [수정사항 1] 신규입력 메뉴: 픽업 날짜와 시간을 현재 시간 직후 15분 단위로 올림 설정
 const getNextPickupDateTime = () => {
   const now = new Date();
   const kstOffset = 9 * 60 * 60 * 1000;
@@ -186,7 +186,7 @@ export default function App() {
     };
   }, []);
 
-  // [수정사항 5] 개별 주문 출력 함수
+  // [수정사항 5] 주문 내역 건건이 출력 기능 (전체 목록 및 달력 하단 리스트에서 호출)
   const handlePrintOrder = (order) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -279,14 +279,14 @@ export default function App() {
     }
   };
 
-  // [수정사항 1 & 2] 신규 주문 메뉴 진입 또는 특정 날짜 지정 진입 시 시간/날짜 자동 설정
+  // [수정사항 1 & 2] 신규 주문 메뉴 진입 또는 달력에서 특정 날짜 지정 진입 시 처리
   const handleMenuChange = (menuId, prefilledDate = null) => {
     setActiveMenu(menuId);
     if (menuId === 'new') {
       const kstNow = getKoreaNowFormatted();
       const nextPickup = getNextPickupDateTime();
       
-      // [수정사항 2 반영] 달력 등에서 넘겨준 날짜가 있으면 그 날짜로 픽업일 설정, 없으면 다음 15분 단위 시간의 날짜 사용
+      // [수정사항 2] 달력에서 선택한 날짜가 있으면 픽업 날짜로 우선 지정
       const targetDate = prefilledDate || nextPickup.date;
       
       setNewOrder({
@@ -470,7 +470,7 @@ export default function App() {
     };
   });
 
-  // 선택된 날짜의 상세 주문 리스트
+  // [수정사항 2] 선택된 날짜의 상세 주문 리스트
   const selectedDayOrders = orders.filter(o => o.pickup_datetime && o.pickup_datetime.startsWith(selectedDate));
 
   // CSV 백업 내보내기/가져오기 함수
@@ -812,7 +812,7 @@ export default function App() {
               />
             </div>
 
-            {/* [수정사항 2] 선택된 날짜 상세 내역 및 신규 주문 바로가기 기능 */}
+            {/* [수정사항 2] 달력 아래 리스트 / 주문 없을 때 안내 및 신규 주문 입력 버튼 */}
             <div className="bg-white p-6 rounded-2xl shadow-xs border border-gray-200">
               <div className="flex flex-wrap justify-between items-center mb-4 pb-2 border-b">
                 <h3 className="text-lg font-bold text-gray-800">
@@ -828,7 +828,7 @@ export default function App() {
 
               {selectedDayOrders.length === 0 ? (
                 <div className="text-center py-8 text-gray-400 space-y-3">
-                  <p>선택한 날짜에 예정된 주문이 없습니다.</p>
+                  <p>주문 내역이 없습니다.</p>
                   <button
                     onClick={() => handleMenuChange('new', selectedDate)}
                     className="inline-block px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 text-sm font-semibold rounded-xl border border-rose-200 transition"
@@ -1192,7 +1192,7 @@ export default function App() {
               </div>
 
               <div className="flex justify-end gap-2 pt-4 border-t">
-                {/* [수정사항 5] 수정 모달 내부에서도 개별 출력 가능 */}
+                {/* [수정사항 5] 수정 모달 내 개별 출력 버튼 */}
                 <button
                   type="button"
                   onClick={() => handlePrintOrder(editingOrder)}
