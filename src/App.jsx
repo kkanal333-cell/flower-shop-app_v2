@@ -1341,20 +1341,20 @@ export default function App() {
                     검색 결과: 총 <strong className="text-rose-600">{sortedAndFilteredOrders.length}</strong>건
                   </div>
 
-                  {/* 요청사항 반영: 접수일시 위치를 메모 뒤로 보냄 & YY-MM-DD HH:MM 포맷 적용 */}
+                  {/* 수정사항 반영: 리스트 내 텍스트 볼드 제거 */}
                   <div className="overflow-x-auto border border-slate-200 rounded-xl">
                     <table className="w-full text-left border-collapse table-fixed min-w-[780px]">
                       <thead>
-                        <tr className="border-b border-slate-200 text-slate-700 text-xs md:text-sm bg-slate-100 font-bold">
-                          <th className="py-2.5 px-2 w-28">픽업일시</th>
-                          <th className="py-2.5 px-2 w-20">고객명</th>
-                          <th className="py-2.5 px-2 w-28">연락처</th>
-                          <th className="py-2.5 px-2 w-20">상품명</th>
-                          <th className="py-2.5 px-2 w-20">금액</th>
-                          <th className="py-2.5 px-2 w-20">결제수단</th>
-                          <th className="py-2.5 px-2 w-32">메모</th>
-                          <th className="py-2.5 px-2 w-28">접수일시</th>
-                          <th className="py-2.5 px-2 w-16 text-center">관리</th>
+                        <tr className="border-b border-slate-200 text-slate-700 text-xs md:text-sm bg-slate-100 font-normal">
+                          <th className="py-2.5 px-2 w-28 font-semibold">픽업일시</th>
+                          <th className="py-2.5 px-2 w-20 font-semibold">고객명</th>
+                          <th className="py-2.5 px-2 w-28 font-semibold">연락처</th>
+                          <th className="py-2.5 px-2 w-20 font-semibold">상품명</th>
+                          <th className="py-2.5 px-2 w-20 font-semibold">금액</th>
+                          <th className="py-2.5 px-2 w-20 font-semibold">결제수단</th>
+                          <th className="py-2.5 px-2 w-32 font-semibold">메모</th>
+                          <th className="py-2.5 px-2 w-28 font-semibold">접수일시</th>
+                          <th className="py-2.5 px-2 w-16 text-center font-semibold">관리</th>
                           <th className="py-2.5 px-2 w-12 text-center">
                             <input
                               type="checkbox"
@@ -1380,30 +1380,30 @@ export default function App() {
                             return (
                               <tr 
                                 key={o.id} 
-                                className={`border-b border-slate-100 transition-colors text-xs md:text-sm ${
+                                className={`border-b border-slate-100 transition-colors text-xs md:text-sm font-normal ${
                                   isPast 
                                     ? 'text-slate-300 opacity-40 bg-slate-100/50 hover:bg-slate-100' 
                                     : 'text-slate-900 hover:bg-slate-50'
                                 }`}
                               >
-                                {/* 픽업일시: YY-MM-DD HH:MM 표기 */}
-                                <td className={`py-2.5 px-2 font-bold whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
+                                {/* 픽업일시 */}
+                                <td className={`py-2.5 px-2 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
                                   {formatShortDateTime(o.pickup_datetime)}
                                 </td>
-                                <td className={`py-2.5 px-2 font-bold truncate ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
+                                <td className={`py-2.5 px-2 truncate ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
                                   {o.customers?.name || '-'}
                                 </td>
-                                <td className={`py-2.5 px-2 font-medium truncate ${isPast ? 'text-slate-300' : 'text-slate-700'}`}>
+                                <td className={`py-2.5 px-2 truncate ${isPast ? 'text-slate-300' : 'text-slate-700'}`}>
                                   {o.customers?.phone || '-'}
                                 </td>
-                                <td className={`py-2.5 px-2 font-bold truncate ${isPast ? 'text-slate-300' : 'text-slate-800'}`}>
+                                <td className={`py-2.5 px-2 truncate ${isPast ? 'text-slate-300' : 'text-slate-800'}`}>
                                   {o.product_name}
                                 </td>
-                                <td className={`py-2.5 px-2 font-extrabold truncate ${isPast ? 'text-slate-300' : 'text-rose-600'}`}>
+                                <td className={`py-2.5 px-2 truncate ${isPast ? 'text-slate-300' : 'text-rose-600'}`}>
                                   {o.amount?.toLocaleString()}원
                                 </td>
                                 <td className="py-2.5 px-2">
-                                  <span className={`px-1.5 py-0.5 border rounded text-[11px] font-semibold block text-center truncate ${
+                                  <span className={`px-1.5 py-0.5 border rounded text-[11px] block text-center truncate ${
                                     isPast ? 'bg-slate-100 border-slate-200 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-800'
                                   }`}>
                                     {o.payment_method}
@@ -1412,7 +1412,7 @@ export default function App() {
                                 <td className={`py-2.5 px-2 truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo}>
                                   {o.memo || '-'}
                                 </td>
-                                {/* 접수일시 (메모 뒤 배치): YY-MM-DD HH:MM 표기 */}
+                                {/* 접수일시 */}
                                 <td className={`py-2.5 px-2 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-500'}`}>
                                   {formatShortDateTime(o.created_at)}
                                 </td>
@@ -1420,7 +1420,7 @@ export default function App() {
                                 <td className="py-2.5 px-2 text-center">
                                   <button
                                     onClick={() => startEditOrder(o)}
-                                    className={`text-xs bg-white hover:bg-slate-100 border font-bold px-2 py-1 rounded-lg cursor-pointer shadow-2xs ${
+                                    className={`text-xs bg-white hover:bg-slate-100 border px-2 py-1 rounded-lg cursor-pointer shadow-2xs ${
                                       isPast ? 'text-slate-400 border-slate-300' : 'text-slate-900 border-slate-800'
                                     }`}
                                   >
