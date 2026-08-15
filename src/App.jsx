@@ -90,16 +90,15 @@ const getKoreaNowFormatted = () => {
   return { date: dateStr, time: timeStr, dayOfWeek, currentHour, kstDateObj: kst };
 };
 
-// 수정사항 1: 현재 시간 직후의 가장 가까운 15분 단위 픽업 일시 계산 함수
+// 수정사항 1: 현재 시간 직후의 가장 가까운 15분(또는 30분) 단위 픽업 일시 계산 함수
 const getNextQuarterHourDateTime = () => {
   const now = new Date();
   const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
   const kst = new Date(utc + (9 * 60 * 60 * 1000));
 
-  // 현재 분을 올림하여 다음 15분 단위로 설정 (+1분 여유를 주어 정각일 때 바로 다음 15분이 되도록)
   const totalMinutes = kst.getHours() * 60 + kst.getMinutes() + 1;
-  const remainder = totalMinutes % 15;
-  const roundedMinutes = totalMinutes + (15 - remainder);
+  const remainder = totalMinutes % 30; // 30분 단위 올림 적용
+  const roundedMinutes = totalMinutes + (30 - remainder);
 
   const targetDate = new Date(kst.getTime());
   targetDate.setHours(Math.floor(roundedMinutes / 60), roundedMinutes % 60, 0, 0);
@@ -207,6 +206,9 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState(getKoreaNowFormatted().date);
   const [editingOrder, setEditingOrder] = useState(null);
 
+  // 수정사항 2: 달력 하단 팝업형 신규 입력 모달 상태 관리
+  const [isCalendarOrderModalOpen, setIsCalendarOrderModalOpen] = useState(false);
+
   const [selectedOrderIds, setSelectedOrderIds] = useState([]);
   const [selectedCustomerIds, setSelectedCustomerIds] = useState([]);
 
@@ -219,21 +221,20 @@ export default function App() {
   // 메모 자동완성 여부 상태
   const [isMemoAutofilled, setIsMemoAutofilled] = useState(false);
 
-  // 수정사항 3: 모바일 뒤로가기 버튼 팝업 가로채기 처리
+  // 수정사항 3: 모바일 뒤로가기 버튼 팝업 가로채기 처리 (취소 후에도 지속 생성되도록 수정)
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    // 히스토리 스택에 더미 상태 추가
+    // 초기 히스토리 스택 푸시
     window.history.pushState({ page: 'main' }, '', window.location.href);
 
     const handlePopState = (event) => {
+      // 뒤로가기 감지 시 다시 히스토리를 푸시하여 연속 방지망 유지
+      window.history.pushState({ page: 'main' }, '', window.location.href);
+      
       const confirmExit = window.confirm("정말 앱을 종료하시겠습니까?");
       if (confirmExit) {
-        // 확인 시 실제 뒤로가기(종료) 허용
-        window.history.back();
-      } else {
-        // 취소 시 다시 더미 상태를 푸시하여 뒤로가기 방지 유지
-        window.history.pushState({ page: 'main' }, '', window.location.href);
+        window.close();
       }
     };
 
@@ -537,7 +538,7 @@ export default function App() {
     });
     setIsMemoAutofilled(false);
     setMatchedCustomerList([]);
-    setActiveMenu('orders');
+    setIsCalendarOrderModalOpen(false); // 팝업형 신규입력 모달 닫기
     fetchData();
   };
 
@@ -597,7 +598,7 @@ export default function App() {
     fetchData();
   };
 
-  // 수정사항 5: 개별 주문 영수증 인쇄 함수
+  // 수정사항 5: 개별 주문 영수증 인쇄 함수 (아이콘 없이 '출력' 문구만 표출)
   const handlePrintSingleOrder = (o) => {
     const printWindow = window.open('', '_blank', 'width=450,height=600');
     if (!printWindow) {
@@ -642,7 +643,7 @@ export default function App() {
           </div>
           <div class="footer">감사합니다. 정성을 다해 준비하겠습니다!</div>
           <div style="text-align: center; margin-top: 20px;">
-            <button onclick="window.print()" style="padding: 10px 20px; background: #333; color: #fff; border: none; border-radius: 5px; font-weight: bold; cursor: pointer;">🖨️ 인쇄하기</button>
+            <button onclick="window.print()" style="padding: 10px 20px; background: #333; color: #fff; border: none; border-radius: 5px; font-weight: bold; cursor: pointer;">인쇄하기</button>
           </div>
         </div>
       </body>
@@ -1209,6 +1210,154 @@ export default function App() {
           </div>
         )}
 
+        {/* 수정사항 2: 달력 하단 팝업형 신규 입력 모달 */}
+        {isCalendarOrderModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 z-50">
+            <div className="bg-white rounded-2xl p-4 md:p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-xl border border-slate-200">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-base md:text-lg font-bold text-slate-900">➕ 신규 주문 입력 ({newOrder.pickup_date})</h3>
+                <button onClick={() => setIsCalendarOrderModalOpen(false)} className="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer">✕</button>
+              </div>
+
+              <form onSubmit={handleCreateOrder} className="space-y-3">
+                <div className="grid grid-cols-2 gap-2 relative">
+                  <div className="relative">
+                    <label className="text-[11px] font-bold text-slate-700">고객 성명 *</label>
+                    <input
+                      type="text"
+                      value={newOrder.customer_name}
+                      onChange={e => handleCustomerNameChange(e.target.value)}
+                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium"
+                      placeholder="홍길동"
+                      required
+                    />
+
+                    {matchedCustomerList.length > 0 && (
+                      <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-rose-300 rounded-xl shadow-lg z-20 max-h-48 overflow-y-auto p-1">
+                        <div className="text-[10px] text-rose-600 font-bold px-2 py-1 bg-rose-50 rounded-t-lg">
+                          💡 검색된 고객 목록:
+                        </div>
+                        {matchedCustomerList.map(c => (
+                          <div
+                            key={c.id || c.name}
+                            onClick={() => selectCustomerForNewOrder(c)}
+                            className="p-2 text-xs hover:bg-rose-50 rounded-lg cursor-pointer flex justify-between items-center"
+                          >
+                            <span className="font-bold text-slate-900">{c.name}</span>
+                            <span className="text-slate-600 text-[10px]">{c.phone || '-'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700">휴대폰 번호 *</label>
+                    <input
+                      type="text"
+                      value={newOrder.phone}
+                      onChange={e => setNewOrder({...newOrder, phone: formatPhone(e.target.value)})}
+                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium"
+                      placeholder="010-0000-0000"
+                      maxLength={13}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700">상품종류 *</label>
+                    <select
+                      value={newOrder.product_name}
+                      onChange={e => setNewOrder({...newOrder, product_name: e.target.value})}
+                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium"
+                    >
+                      {PRODUCT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700">금액 (천원 단위)</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        value={newOrder.amount_thousands}
+                        onChange={e => setNewOrder({...newOrder, amount_thousands: e.target.value})}
+                        className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium pr-14"
+                        placeholder="예: 55"
+                      />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-rose-600 pointer-events-none">
+                        = {((Number(newOrder.amount_thousands) || 0) * 1000).toLocaleString()}원
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700">픽업 날짜 *</label>
+                    <input
+                      type="date"
+                      value={newOrder.pickup_date}
+                      onChange={e => setNewOrder({...newOrder, pickup_date: e.target.value})}
+                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700">픽업 시간 *</label>
+                    <TimePickerCustom
+                      value={newOrder.pickup_time}
+                      onChange={val => setNewOrder({...newOrder, pickup_time: val})}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700">결제 방식 *</label>
+                  <select
+                    value={newOrder.payment_method}
+                    onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
+                    className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium"
+                  >
+                    {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700">요청사항 / 메모</label>
+                  <textarea
+                    value={newOrder.memo}
+                    onChange={e => {
+                      setNewOrder({ ...newOrder, memo: e.target.value });
+                      setIsMemoAutofilled(false);
+                    }}
+                    onFocus={e => e.target.select()}
+                    className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium"
+                    rows={2}
+                    placeholder="요청사항을 적어주세요."
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 bg-white hover:bg-slate-100 text-black border border-black font-extrabold rounded-xl text-xs cursor-pointer"
+                  >
+                    주문 저장하기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsCalendarOrderModalOpen(false)}
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-300 cursor-pointer"
+                  >
+                    취소
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {/* 1. 신규주문 */}
         {activeMenu === 'new' && (
           <div className="max-w-2xl mx-auto bg-white p-3 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
@@ -1308,7 +1457,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-slate-700">픽업 시간 * (15분 단위)</label>
+                  <label className="text-[11px] md:text-xs font-bold text-slate-700">픽업 시간 * (30분 단위)</label>
                   <TimePickerCustom
                     value={newOrder.pickup_time}
                     onChange={val => setNewOrder({...newOrder, pickup_time: val})}
@@ -1534,12 +1683,13 @@ export default function App() {
                                     >
                                       수정
                                     </button>
+                                    {/* 수정사항 5: 출력 버튼 아이콘 제거 및 '출력' 문구만 표출 */}
                                     <button
                                       onClick={() => handlePrintSingleOrder(o)}
                                       className="text-[11px] bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 font-bold px-1.5 py-0.5 rounded cursor-pointer shadow-2xs"
                                       title="주문서 출력"
                                     >
-                                      🖨️출력
+                                      출력
                                     </button>
                                   </div>
                                 </td>
@@ -1563,7 +1713,7 @@ export default function App() {
               )}
             </div>
 
-            {/* 달력 하단 선택 날짜 상세 주문 목록 & 신규 주문 입력 버튼 추가 (수정사항 2) */}
+            {/* 수정사항 2: 달력 하단 선택 날짜 상세 주문 목록 & 팝업형 '+신규입력' 버튼 */}
             {subTab === 'calendar' && selectedDate && (
               <div className="bg-white p-3 md:p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-2">
@@ -1572,10 +1722,28 @@ export default function App() {
                   </h3>
 
                   <button
-                    onClick={() => handleMenuChange('new', selectedDate)}
+                    onClick={() => {
+                      const nextQ = getNextQuarterHourDateTime();
+                      const kstNow = getKoreaNowFormatted();
+                      setNewOrder({
+                        customer_name: '',
+                        phone: '010-',
+                        product_name: '꽃다발',
+                        amount_thousands: '55',
+                        pickup_date: selectedDate, // 선택한 달력 날짜 반영
+                        pickup_time: nextQ.time,
+                        receipt_date: kstNow.date,
+                        receipt_time: kstNow.time,
+                        payment_method: '신용카드',
+                        memo: ''
+                      });
+                      setIsMemoAutofilled(false);
+                      setMatchedCustomerList([]);
+                      setIsCalendarOrderModalOpen(true);
+                    }}
                     className="px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
                   >
-                    <span>➕</span> {selectedDate} 신규 주문 입력
+                    <span>➕</span> +신규입력
                   </button>
                 </div>
 
@@ -1633,11 +1801,12 @@ export default function App() {
                               >
                                 수정
                               </button>
+                              {/* 수정사항 5: 출력 버튼 아이콘 제거 및 '출력' 문구만 표출 */}
                               <button
                                 onClick={() => handlePrintSingleOrder(o)}
                                 className="text-xs bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 font-bold px-2 py-0.5 rounded cursor-pointer whitespace-nowrap"
                               >
-                                🖨️ 출력
+                                출력
                               </button>
                             </div>
                           </div>
@@ -1761,7 +1930,7 @@ export default function App() {
                 - <code className="text-rose-600 font-bold">export_orders_{getKoreaNowFormatted().date}.csv</code><br />
                 - <code className="text-rose-600 font-bold">export_customers_{getKoreaNowFormatted().date}.csv</code>
               </p>
-              {/* 수정사항 4: 내보내기 버튼 글자색 명확한 검은색으로 변경 */}
+              {/* 내보내기 버튼 글자색 명확한 검은색으로 지정 */}
               <button
                 onClick={handleExportCSV}
                 className="w-full py-2.5 px-4 bg-rose-200 hover:bg-rose-300 text-slate-900 font-extrabold rounded-xl text-xs md:text-sm shadow-xs transition-colors cursor-pointer border border-rose-400"
