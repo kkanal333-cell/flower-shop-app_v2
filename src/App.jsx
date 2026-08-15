@@ -1052,7 +1052,6 @@ export default function App() {
 
                 <div>
                   <label className="text-[11px] font-bold text-slate-700">메모</label>
-                  {/* 수정사항 3 반영: 포커스 시 전체 선택 */}
                   <textarea
                     value={editingOrder.memo}
                     onChange={e => setEditingOrder({ ...editingOrder, memo: e.target.value })}
@@ -1227,7 +1226,6 @@ export default function App() {
 
               <div>
                 <label className="text-[11px] md:text-xs font-bold text-slate-700">고객 요구사항 / 메모</label>
-                {/* 수정사항 2, 3 반영: 자동완성시 연한 글씨 적용 및 클릭 시 전체 선택 */}
                 <textarea
                   value={newOrder.memo}
                   onChange={e => {
@@ -1325,9 +1323,9 @@ export default function App() {
                     검색 결과: 총 <strong className="text-rose-600">{sortedAndFilteredOrders.length}</strong>건
                   </div>
 
-                  {/* 수정사항 1 반영: table-fixed를 이용해 메모란 및 각 컬럼 너비를 엄격히 유지 */}
+                  {/* 메모란 너비를 w-28 ~ w-32로 작게 축소하여 모바일 레이아웃 보호 */}
                   <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                    <table className="w-full text-left border-collapse table-fixed min-w-[750px]">
+                    <table className="w-full text-left border-collapse table-fixed min-w-[720px]">
                       <thead>
                         <tr className="border-b border-slate-200 text-slate-700 text-xs md:text-sm bg-slate-100 font-bold">
                           <th className="py-2.5 px-2 w-28">픽업일시</th>
@@ -1337,8 +1335,8 @@ export default function App() {
                           <th className="py-2.5 px-2 w-20">상품명</th>
                           <th className="py-2.5 px-2 w-20">금액</th>
                           <th className="py-2.5 px-2 w-20">결제수단</th>
-                          <th className="py-2.5 px-2 w-36">메모</th>
-                          <th className="py-2.5 px-2 w-20 text-center">관리</th>
+                          <th className="py-2.5 px-2 w-28">메모</th>
+                          <th className="py-2.5 px-2 w-16 text-center">관리</th>
                           <th className="py-2.5 px-2 w-12 text-center">
                             <input
                               type="checkbox"
@@ -1395,7 +1393,7 @@ export default function App() {
                                     {o.payment_method}
                                   </span>
                                 </td>
-                                {/* 수정사항 1: 메모 내용이 길어도 한 줄 말줄임(truncate) 처리하여 세로 찌그러짐 차단 */}
+                                {/* 고정 폭 슬림 처리 및 말줄임(truncate)으로 세로 찌그러짐 현상 완벽 방지 */}
                                 <td className={`py-2.5 px-2 truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo}>
                                   {o.memo || '-'}
                                 </td>
