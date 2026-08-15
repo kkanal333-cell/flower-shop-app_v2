@@ -321,7 +321,7 @@ export default function App() {
     }
   };
 
-  // [수정1] 새로 추가된 고객 정보 포함 자동완성이 정상 작동하도록 매칭 로직 개선
+  // [수정1 반영] 새로 추가된 고객 정보 포함 자동완성이 정상 작동하도록 매칭 로직 개선
   const handleCustomerNameChange = (nameInput) => {
     setNewOrder(prev => ({ ...prev, customer_name: nameInput }));
 
@@ -668,7 +668,6 @@ export default function App() {
     }
   };
 
-  // [수정3] 달력 내 날짜별 건수 라벨 색상을 검은색(#000000)으로 변경 및 진하게 설정
   const getCalendarEvents = () => {
     const countsByDate = {};
 
@@ -687,7 +686,7 @@ export default function App() {
       start: date,
       allDay: true,
       backgroundColor: '#fbe7e8',
-      textColor: '#000000',
+      textColor: '#be123c',
       borderColor: '#fda4af'
     }));
   };
@@ -753,19 +752,12 @@ export default function App() {
     { id: 'backup', label: '💾 백업/복원' },
   ];
 
-  // [수정4] 최근 픽업일 구하는 함수: 모든 픽업 내역 중 '가장 최신의 픽업일'을 찾아 반환하도록 개선
   const getCustomerPickupDate = (customerId, customerName) => {
-    const matchedOrders = orders.filter(
-      o => (o.customer_id === customerId || o.customers?.name === customerName) && o.pickup_datetime
-    );
-    if (matchedOrders.length === 0) return '-';
-
-    // 픽업일시 기준 내림차순 정렬하여 가장 최근 날짜 추출
-    matchedOrders.sort((a, b) => {
-      return b.pickup_datetime.localeCompare(a.pickup_datetime);
-    });
-
-    return matchedOrders[0].pickup_datetime.replace(' ', 'T').split('T')[0];
+    const match = orders.find(o => o.customer_id === customerId || o.customers?.name === customerName);
+    if (match && match.pickup_datetime) {
+      return match.pickup_datetime.replace(' ', 'T').split('T')[0];
+    }
+    return '-';
   };
 
   const TimePickerCustom = ({ value, onChange, bgClass = "bg-white" }) => {
@@ -859,11 +851,6 @@ export default function App() {
         }
         .fc .fc-daygrid-day-frame {
           min-height: 36px !important;
-        }
-        /* [수정3 반영] 달력 이벤트 글씨를 굵은 검은색으로 설정 */
-        .fc-event-title {
-          font-weight: bold !important;
-          color: #000000 !important;
         }
         @media (max-width: 768px) {
           .fc .fc-daygrid-day-frame {
@@ -1096,7 +1083,7 @@ export default function App() {
                     required
                   />
 
-                  {/* 입력 시 매칭되는 고객명 자동완성 목록 팝업 */}
+                  {/* [수정1 반영] 입력 시 매칭되는 고객명 자동완성 목록 팝업 */}
                   {matchedCustomerList.length > 0 && (
                     <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-rose-300 rounded-xl shadow-lg z-20 max-h-48 overflow-y-auto p-1">
                       <div className="text-[11px] text-rose-600 font-bold px-2 py-1 bg-rose-50 rounded-t-lg">
@@ -1350,9 +1337,9 @@ export default function App() {
                               <tr 
                                 key={o.id} 
                                 className={`border-b border-slate-100 transition-colors text-xs md:text-sm ${
-                                  /* [수정2 반영] 지난 날짜 리스트 글씨색을 훨씬 더 연하게(text-slate-300 opacity-30) 변경 */
+                                  /* [수정2 반영] 지난 날짜 리스트 글씨색을 훨씬 더 연하게(text-slate-300 opacity-40) 변경 */
                                   isPast 
-                                    ? 'text-slate-300 opacity-30 bg-slate-100/30 hover:bg-slate-100/50' 
+                                    ? 'text-slate-300 opacity-40 bg-slate-100/50 hover:bg-slate-100' 
                                     : 'text-slate-900 hover:bg-slate-50'
                                 }`}
                               >
@@ -1386,7 +1373,7 @@ export default function App() {
                                   <button
                                     onClick={() => startEditOrder(o)}
                                     className={`text-xs bg-white hover:bg-slate-100 border font-bold px-3 py-1 rounded-lg cursor-pointer whitespace-nowrap shadow-2xs ${
-                                      isPast ? 'text-slate-300 border-slate-200' : 'text-slate-900 border-slate-800'
+                                      isPast ? 'text-slate-400 border-slate-300' : 'text-slate-900 border-slate-800'
                                     }`}
                                   >
                                     수정하기
