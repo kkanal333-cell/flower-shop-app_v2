@@ -9,8 +9,8 @@ const SUPABASE_URL = 'https://zthuqzzholyjolteuvty.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_xkg9ULmNiqKrCcESytGbmw_u1Z12_gG';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// 🔒 최초 접속 비밀번호 (원하는 4자리 숫자로 변경 가능)
-const APP_PASSWORD = "1234"; 
+// 기본 비밀번호 (저장된 비밀번호가 없을 경우 사용)
+const DEFAULT_APP_PASSWORD = "1234"; 
 
 // 옵션 목록
 const PAYMENT_OPTIONS = ["신용카드", "현금", "계좌이체", "전화예약입금", "네이버", "인스타", "미결제"];
@@ -147,12 +147,22 @@ const parseCSVText = (text) => {
 };
 
 export default function App() {
+  // 비밀번호 상태 관리 (localStorage에 저장)
+  const [appPassword, setAppPassword] = useState(() => {
+    return localStorage.getItem('app_password') || DEFAULT_APP_PASSWORD;
+  });
+
   // 비밀번호 인증 상태 (세션 스토리지 기억)
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return sessionStorage.getItem('app_authenticated') === 'true';
   });
   const [inputPin, setInputPin] = useState('');
   const [pinError, setPinError] = useState(false);
+
+  // 비밀번호 변경 모달 상태
+  const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   const [activeMenu, setActiveMenu] = useState('orders');
   const [subTab, setSubTab] = useState('calendar');
@@ -177,7 +187,7 @@ export default function App() {
   // 비밀번호 확인 핸들러
   const handlePinSubmit = (e) => {
     e.preventDefault();
-    if (inputPin === APP_PASSWORD) {
+    if (inputPin === appPassword) {
       setIsAuthenticated(true);
       sessionStorage.setItem('app_authenticated', 'true');
       setPinError(false);
@@ -185,6 +195,24 @@ export default function App() {
       setPinError(true);
       setInputPin('');
     }
+  };
+
+  // 비밀번호 변경 핸들러
+  const handlePasswordChange = (e) => {
+    e.preventDefault();
+    if (newPassword.length !== 4) {
+      return alert('비밀번호는 숫자 4자리여야 합니다.');
+    }
+    if (newPassword !== confirmPassword) {
+      return alert('새 비밀번호와 비밀번호 확인이 일치하지 않습니다.');
+    }
+
+    localStorage.setItem('app_password', newPassword);
+    setAppPassword(newPassword);
+    alert('🔑 비밀번호가 성공적으로 변경되었습니다!');
+    setShowPasswordChangeModal(false);
+    setNewPassword('');
+    setConfirmPassword('');
   };
 
   const parseDateTime = (datetimeStr, fallbackDate = '', fallbackTime = '14:00') => {
@@ -217,7 +245,6 @@ export default function App() {
   useEffect(() => {
     const checkBackupSchedule = () => {
       const nowInfo = getKoreaNowFormatted();
-      // 매주 월요일(1) 12시 이후
       if (nowInfo.dayOfWeek === 1 && nowInfo.currentHour >= 12) {
         const lastNotified = localStorage.getItem('last_backup_notice_date');
         if (lastNotified !== nowInfo.date) {
@@ -227,7 +254,7 @@ export default function App() {
     };
 
     checkBackupSchedule();
-    const interval = setInterval(checkBackupSchedule, 60000); // 1분마다 주기적 감지
+    const interval = setInterval(checkBackupSchedule, 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -316,7 +343,6 @@ export default function App() {
     }
   };
 
-  // 신규 주문시 고객명 입력 반응 함수 (동명이인 리스트 추출)
   const handleCustomerNameChange = (nameInput) => {
     setNewOrder(prev => ({ ...prev, customer_name: nameInput }));
 
@@ -498,7 +524,7 @@ export default function App() {
     fetchData();
   };
 
-  // --- 주문 삭제 관련 핸들러 ---
+  // --- 주문 삭제 핸들러 ---
   const handleToggleSelectAllOrders = (e) => {
     if (e.target.checked) {
       setSelectedOrderIds(filteredOrders.map(o => o.id));
@@ -527,7 +553,7 @@ export default function App() {
     }
   };
 
-  // --- 고객 삭제 관련 핸들러 ---
+  // --- 고객 삭제 핸들러 ---
   const handleToggleSelectAllCustomers = (e) => {
     if (e.target.checked) {
       setSelectedCustomerIds(filteredCustomers.map(c => c.id));
@@ -691,7 +717,6 @@ export default function App() {
         })
     : [];
 
-  // 주문 목록 검색 필터
   const filteredOrders = orders.filter(o => {
     const q = orderSearch.trim().toLowerCase();
     if (!q) return true;
@@ -704,7 +729,6 @@ export default function App() {
     return nameMatch || phoneMatch;
   });
 
-  // 고객 목록 검색 필터
   const filteredCustomers = customers.filter(c => {
     const q = customerSearch.trim().toLowerCase();
     if (!q) return true;
@@ -777,14 +801,14 @@ export default function App() {
     );
   };
 
-  // 🔒 4단계: 비밀번호 잠금 화면
+  // 1. 비밀번호 접속 화면 (버튼 색상/테두리 완벽 개선)
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-800 flex items-center justify-center p-4">
-        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center border border-slate-200">
+        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center border-2 border-slate-400">
           <div className="text-4xl mb-3">🔒</div>
           <h2 className="text-xl font-bold text-slate-900 mb-1">시스템 접속 잠금</h2>
-          <p className="text-xs text-slate-500 mb-6">4자리 비밀번호를 입력해주세요.</p>
+          <p className="text-xs text-slate-600 mb-6">4자리 비밀번호를 입력해주세요.</p>
 
           <form onSubmit={handlePinSubmit} className="space-y-4">
             <div>
@@ -794,17 +818,18 @@ export default function App() {
                 value={inputPin}
                 onChange={e => setInputPin(e.target.value.replace(/[^0-9]/g, ''))}
                 placeholder="• • • •"
-                className="w-full text-center text-2xl font-bold tracking-[1em] p-3 border-2 border-slate-300 rounded-xl focus:border-rose-500 focus:outline-none text-slate-900 bg-slate-50"
+                className="w-full text-center text-2xl font-bold tracking-[1em] p-3 border-2 border-slate-400 rounded-xl focus:border-rose-500 focus:outline-none text-slate-900 bg-slate-50"
                 autoFocus
               />
               {pinError && (
-                <p className="text-rose-500 text-xs mt-2 font-bold">⚠️ 비밀번호가 올바르지 않습니다.</p>
+                <p className="text-rose-600 text-xs mt-2 font-bold">⚠️ 비밀번호가 올바르지 않습니다.</p>
               )}
             </div>
 
+            {/* 비밀번호 확인 버튼: 흰색 배경, 검정 글자, 또렷한 테두리 */}
             <button
               type="submit"
-              className="w-full py-3 bg-slate-900 hover:bg-black text-white font-bold rounded-xl shadow-md transition-all text-sm cursor-pointer"
+              className="w-full py-3 bg-white hover:bg-slate-100 text-slate-900 font-extrabold rounded-xl border-2 border-slate-900 shadow-md transition-all text-sm cursor-pointer"
             >
               확인 및 접속
             </button>
@@ -844,6 +869,60 @@ export default function App() {
           }
         ` : ''}
       `}</style>
+
+      {/* 3. 비밀번호 변경 모달 */}
+      {showPasswordChangeModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border-2 border-slate-800 text-center space-y-4">
+            <h3 className="text-lg font-bold text-slate-900">🔑 비밀번호 변경</h3>
+            <p className="text-xs text-slate-600">접속할 새 숫자 4자리를 입력해주세요.</p>
+            
+            <form onSubmit={handlePasswordChange} className="space-y-3 text-left">
+              <div>
+                <label className="text-xs font-bold text-slate-700">새 비밀번호 (숫자 4자리)</label>
+                <input
+                  type="password"
+                  maxLength={4}
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="예: 5678"
+                  className="w-full p-2.5 border-2 border-slate-300 rounded-xl mt-1 text-center text-lg font-bold text-slate-900"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700">비밀번호 확인</label>
+                <input
+                  type="password"
+                  maxLength={4}
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="다시 한번 입력"
+                  className="w-full p-2.5 border-2 border-slate-300 rounded-xl mt-1 text-center text-lg font-bold text-slate-900"
+                  required
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  변경 저장
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordChangeModal(false)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold border border-slate-300 cursor-pointer"
+                >
+                  취소
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* 📢 주간 백업 팝업 알림 모달 */}
       {showBackupAlertModal && (
@@ -902,15 +981,24 @@ export default function App() {
           ))}
         </nav>
 
-        <button
-          onClick={() => {
-            sessionStorage.removeItem('app_authenticated');
-            setIsAuthenticated(false);
-          }}
-          className="hidden md:block mt-auto py-1.5 px-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-[11px] font-bold border border-slate-300 text-center cursor-pointer"
-        >
-          🔒 잠금
-        </button>
+        {/* 사이드바 하단 암호 변경 & 잠금 버튼 */}
+        <div className="hidden md:flex flex-col gap-1 mt-auto pt-2 border-t border-slate-200">
+          <button
+            onClick={() => setShowPasswordChangeModal(true)}
+            className="py-1.5 px-2 bg-white hover:bg-slate-100 text-slate-900 rounded-lg text-[11px] font-bold border border-slate-400 text-center cursor-pointer"
+          >
+            🔑 암호 변경
+          </button>
+          <button
+            onClick={() => {
+              sessionStorage.removeItem('app_authenticated');
+              setIsAuthenticated(false);
+            }}
+            className="py-1.5 px-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg text-[11px] font-bold border border-slate-300 text-center cursor-pointer"
+          >
+            🔒 잠금
+          </button>
+        </div>
       </aside>
 
       {/* 메인 콘텐츠 영역 */}
@@ -1229,7 +1317,6 @@ export default function App() {
 
               {subTab === 'list' && (
                 <div className="space-y-3">
-                  {/* 🔍 주문 검색창 추가 */}
                   <div className="flex flex-col md:flex-row gap-2 justify-between items-stretch md:items-center">
                     <input
                       type="text"
@@ -1239,10 +1326,11 @@ export default function App() {
                       className="flex-1 p-2.5 border border-slate-300 rounded-xl text-xs md:text-sm bg-white text-slate-900 focus:outline-none focus:border-rose-500"
                     />
 
+                    {/* 2. 삭제 버튼: 또렷한 검정 글씨, 빨간 테두리 및 명확한 시각적 지정 */}
                     {selectedOrderIds.length > 0 && (
                       <button
                         onClick={handleDeleteSelectedOrders}
-                        className="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer border border-rose-800 shadow-xs flex items-center justify-center gap-1"
+                        className="px-3 py-2 bg-white hover:bg-rose-50 text-slate-900 font-extrabold rounded-xl text-xs border-2 border-rose-600 transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1"
                       >
                         🗑️ 선택 항목 ({selectedOrderIds.length}개) 삭제
                       </button>
@@ -1293,11 +1381,10 @@ export default function App() {
                               <td className="py-2.5 px-3 font-extrabold text-rose-600 whitespace-nowrap">{o.amount?.toLocaleString()}원</td>
                               <td className="py-2.5 px-3"><span className="px-2 py-0.5 bg-slate-100 border border-slate-300 rounded text-xs font-semibold text-slate-800 whitespace-nowrap">{o.payment_method}</span></td>
                               
-                              {/* 1번: 선명한 버튼 스타일 수정 (검정 글자 + 테두리) */}
                               <td className="py-2.5 px-3 text-center">
                                 <button
                                   onClick={() => startEditOrder(o)}
-                                  className="text-xs bg-white hover:bg-slate-100 border-2 border-slate-700 text-slate-900 font-bold px-3 py-1 rounded-lg cursor-pointer whitespace-nowrap shadow-2xs"
+                                  className="text-xs bg-white hover:bg-slate-100 border-2 border-slate-800 text-slate-900 font-bold px-3 py-1 rounded-lg cursor-pointer whitespace-nowrap shadow-2xs"
                                 >
                                   수정하기
                                 </button>
@@ -1375,10 +1462,9 @@ export default function App() {
                                 {o.amount?.toLocaleString()}원
                               </span>
                               
-                              {/* 선명한 수정 버튼 */}
                               <button
                                 onClick={() => startEditOrder(o)}
-                                className="text-xs bg-white hover:bg-slate-100 border-2 border-slate-700 text-slate-900 font-bold px-2 py-0.5 rounded cursor-pointer"
+                                className="text-xs bg-white hover:bg-slate-100 border-2 border-slate-800 text-slate-900 font-bold px-2 py-0.5 rounded cursor-pointer"
                               >
                                 수정
                               </button>
@@ -1401,10 +1487,12 @@ export default function App() {
               <h2 className="text-base md:text-xl font-bold text-slate-900 flex items-center gap-2">
                 <span>🎂</span> 고객 목록 (총 <span className="text-rose-600">{filteredCustomers.length}</span>명)
               </h2>
+              
+              {/* 고객 삭제 버튼도 검정 글자 + 선명한 테두리로 수정 */}
               {selectedCustomerIds.length > 0 && (
                 <button
                   onClick={handleDeleteSelectedCustomers}
-                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer border border-rose-800 shadow-xs"
+                  className="px-3 py-1.5 bg-white hover:bg-rose-50 text-slate-900 font-extrabold rounded-xl text-xs border-2 border-rose-600 transition-colors cursor-pointer shadow-xs"
                 >
                   🗑️ 선택 고객 ({selectedCustomerIds.length}명) 삭제
                 </button>
