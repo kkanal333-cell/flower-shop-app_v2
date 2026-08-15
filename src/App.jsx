@@ -162,9 +162,7 @@ export default function App() {
     return nums;
   };
 
-  // 고객 검색어 입력 핸들러 (입력 시 자동 하이픈 추가)
   const handleCustomerSearchChange = (val) => {
-    // 문자 중 숫자가 포함된 검색어 형태면 하이픈 자동 포맷팅 적용
     const rawNums = val.replace(/[^0-9]/g, '');
     if (rawNums.length > 0) {
       setCustomerSearch(formatPhone(val));
@@ -173,7 +171,6 @@ export default function App() {
     }
   };
 
-  // 성명 입력 시 기존 고객 정보 및 최근 주문 자동 완성
   const handleCustomerNameChange = (nameInput) => {
     setNewOrder(prev => {
       const updated = { ...prev, customer_name: nameInput };
@@ -368,17 +365,13 @@ export default function App() {
     return '-';
   };
 
-  // 검색어로 필터링된 고객 리스트 (하이픈 제거 비교 적용)
   const filteredCustomers = customers.filter(c => {
     const q = customerSearch.trim().toLowerCase();
     if (!q) return true;
 
     const nameMatch = c.name && c.name.toLowerCase().includes(q);
-    
-    // 전화번호 비교 시 입력값과 DB값 모두에서 하이픈(-)을 제거한 후 비교
     const cleanSearchPhone = q.replace(/[^0-9]/g, '');
     const cleanCustomerPhone = (c.phone || '').replace(/[^0-9]/g, '');
-    
     const phoneMatch = cleanSearchPhone !== '' && cleanCustomerPhone.includes(cleanSearchPhone);
 
     return nameMatch || phoneMatch;
@@ -430,6 +423,32 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100/70 flex flex-col md:flex-row pb-12 md:pb-0">
+      {/* 캘린더 모바일 주간격 축소 및 날짜 선택 스타일 주입 */}
+      <style>{`
+        .fc .fc-daygrid-body-unbalanced .fc-daygrid-day-events {
+          min-height: 1.2em !important;
+        }
+        .fc-theme-standard td, .fc-theme-standard th {
+          padding: 1px !important;
+        }
+        .fc .fc-daygrid-day-frame {
+          min-height: 48px !important;
+        }
+        @media (max-width: 768px) {
+          .fc .fc-daygrid-day-frame {
+            min-height: 40px !important;
+          }
+          .fc .fc-toolbar-title {
+            font-size: 1.1rem !important;
+          }
+        }
+        ${selectedDate ? `
+          td[data-date="${selectedDate}"] {
+            background-color: #ffe4e6 !important;
+          }
+        ` : ''}
+      `}</style>
+
       {/* 사이드바 */}
       <aside className="bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 w-full md:w-56 p-1.5 md:p-5 flex flex-col shrink-0 shadow-xs">
         <div className="hidden md:flex items-center gap-2 text-rose-400 font-extrabold text-xl mb-1">
@@ -600,10 +619,10 @@ export default function App() {
                 />
               </div>
 
+              {/* 1. 회색 둘레 테두리 박스 및 일반체 글꼴 적용 */}
               <button
                 type="submit"
-                className="w-full py-3.5 px-4 bg-rose-200 hover:bg-rose-300 text-slate-800 font-bold rounded-xl shadow-2xs transition-all text-sm md:text-base mt-4 cursor-pointer text-center block border border-rose-300/50"
-                style={{ backgroundColor: '#fecdd3', color: '#475569' }}
+                className="w-full py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 font-normal rounded-xl shadow-2xs transition-all text-sm md:text-base mt-4 cursor-pointer text-center block border border-slate-300"
               >
                 주문 저장하기
               </button>
@@ -615,7 +634,7 @@ export default function App() {
         {activeMenu === 'orders' && (
           <div className="space-y-3 md:space-y-6">
             <div className="bg-white p-2 sm:p-3 md:p-6 rounded-xl border border-slate-200 shadow-sm">
-              <div className="flex border-b border-slate-200 mb-2 md:mb-6 gap-6">
+              <div className="flex border-b border-slate-200 mb-2 md:mb-4 gap-6">
                 <button
                   onClick={() => setSubTab('calendar')}
                   className={`pb-2 text-xs md:text-sm font-bold flex items-center gap-1.5 relative transition-colors ${
@@ -643,7 +662,7 @@ export default function App() {
                     plugins={[dayGridPlugin, interactionPlugin]}
                     initialView="dayGridMonth"
                     locale="ko"
-                    aspectRatio={1.5}
+                    aspectRatio={1.7}
                     fixedWeekCount={false}
                     dayMaxEventRows={true}
                     contentHeight="auto"
@@ -654,9 +673,10 @@ export default function App() {
                 </div>
               )}
 
+              {/* 5. 모바일 주문 목록 및 전체 주문 목록 한줄 출력 처리 (whitespace-nowrap) */}
               {subTab === 'list' && (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
+                  <table className="w-full text-left border-collapse whitespace-nowrap">
                     <thead>
                       <tr className="border-b border-slate-200 text-slate-500 text-xs md:text-sm bg-slate-50">
                         <th className="py-2.5 px-3">픽업일시</th>
@@ -674,13 +694,13 @@ export default function App() {
                         <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors text-xs md:text-sm">
                           <td className="py-2.5 px-3 text-slate-600">{o.pickup_datetime?.replace('T', ' ').slice(0, 16) || '-'}</td>
                           <td className="py-2.5 px-3 text-xs text-slate-400">{o.created_at?.replace('T', ' ').slice(0, 16) || '-'}</td>
-                          <td className="py-2.5 px-3 font-bold text-slate-900">{o.customers?.name || '-'}</td>
-                          <td className="py-2.5 px-3 text-slate-600">{o.customers?.phone || '-'}</td>
-                          <td className="py-2.5 px-3 font-semibold text-slate-800">{o.product_name}</td>
-                          <td className="py-2.5 px-3 font-bold text-rose-500">{o.amount?.toLocaleString()}원</td>
-                          <td className="py-2.5 px-3"><span className="px-2 py-0.5 bg-slate-100 rounded text-xs font-medium">{o.payment_method}</span></td>
+                          <td className="py-2.5 px-3 font-bold text-slate-900 whitespace-nowrap">{o.customers?.name || '-'}</td>
+                          <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">{o.customers?.phone || '-'}</td>
+                          <td className="py-2.5 px-3 font-semibold text-slate-800 whitespace-nowrap">{o.product_name}</td>
+                          <td className="py-2.5 px-3 font-bold text-rose-500 whitespace-nowrap">{o.amount?.toLocaleString()}원</td>
+                          <td className="py-2.5 px-3"><span className="px-2 py-0.5 bg-slate-100 rounded text-xs font-medium whitespace-nowrap">{o.payment_method}</span></td>
                           <td className="py-2.5 px-3">
-                            <button onClick={() => startEditOrder(o)} className="text-xs bg-slate-200 text-black px-2 py-1 rounded hover:bg-slate-300 font-bold cursor-pointer">
+                            <button onClick={() => startEditOrder(o)} className="text-xs bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 px-2.5 py-1 rounded-lg font-normal cursor-pointer whitespace-nowrap">
                               수정하기
                             </button>
                           </td>
@@ -692,7 +712,7 @@ export default function App() {
               )}
             </div>
 
-            {/* 선택한 날짜 리스트 */}
+            {/* 4. 달력 하단 일자별 한줄 리스트 출력 개선 */}
             {subTab === 'calendar' && selectedDate && (
               <div className="bg-white p-3 md:p-6 rounded-xl border border-slate-200 shadow-sm">
                 <div className="flex items-center justify-between mb-3">
@@ -707,29 +727,40 @@ export default function App() {
                     해당 날짜에 예정된 픽업 주문이 없습니다.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                  <div className="flex flex-col gap-2">
                     {selectedDayOrders.map(o => (
                       <div
                         key={o.id}
                         onClick={() => startEditOrder(o)}
-                        className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-rose-50/50 hover:border-rose-200 transition-all cursor-pointer flex flex-col justify-between gap-1.5 shadow-2xs group"
+                        className="p-3 rounded-xl border border-slate-200 bg-white hover:border-rose-300 transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-2 shadow-2xs group"
                       >
-                        <div className="flex justify-between items-start">
-                          <div>
+                        {/* 한 줄 형태 레이아웃 */}
+                        <div className="flex flex-wrap items-center gap-2 md:gap-4 flex-1">
+                          <div className="flex items-center gap-2 whitespace-nowrap">
                             <span className="font-bold text-slate-900 text-sm md:text-base group-hover:text-rose-500 transition-colors">
                               {o.customers?.name || '익명'}
                             </span>
-                            <span className="text-xs text-slate-500 ml-2">{o.customers?.phone || ''}</span>
-                            <p className="text-xs md:text-sm font-semibold text-rose-500 mt-0.5">{o.product_name}</p>
+                            <span className="text-xs text-slate-500">{o.customers?.phone || ''}</span>
                           </div>
-                          <span className="px-2 py-0.5 bg-white border border-slate-200 rounded text-xs font-bold text-slate-700">
-                            {o.payment_method}
-                          </span>
+
+                          <div className="flex items-center gap-2 whitespace-nowrap">
+                            <span className="text-xs md:text-sm font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
+                              {o.product_name}
+                            </span>
+                            <span className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-600">
+                              {o.payment_method}
+                            </span>
+                          </div>
+
+                          {o.memo && (
+                            <span className="text-xs text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-100 truncate max-w-xs">
+                              💬 {o.memo}
+                            </span>
+                          )}
                         </div>
-                        {o.memo && <p className="text-xs text-slate-600 bg-white p-1.5 rounded-lg border border-slate-100">💬 {o.memo}</p>}
-                        
-                        <div className="flex justify-between items-center pt-2 border-t border-slate-200/80">
-                          <span className="font-bold text-slate-800 text-xs md:text-sm">{o.amount?.toLocaleString()}원</span>
+
+                        <div className="flex items-center justify-between md:justify-end gap-3 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 whitespace-nowrap">
+                          <span className="font-bold text-slate-800 text-sm">{o.amount?.toLocaleString()}원</span>
                           
                           <button
                             type="button"
@@ -737,7 +768,7 @@ export default function App() {
                               e.stopPropagation();
                               startEditOrder(o);
                             }}
-                            className="inline-flex items-center gap-1 text-xs bg-slate-200 hover:bg-rose-200 hover:text-slate-800 text-slate-800 font-extrabold px-2.5 py-1 rounded-lg border border-slate-300 transition-colors shadow-2xs cursor-pointer"
+                            className="inline-flex items-center gap-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-normal px-2.5 py-1 rounded-lg border border-slate-300 transition-colors cursor-pointer"
                           >
                             <span>✏️</span>
                             <span>수정하기</span>
@@ -760,7 +791,6 @@ export default function App() {
                 <span>🎂</span> 고객 목록 ({filteredCustomers.length}명 / 전체 {customers.length}명)
               </h2>
 
-              {/* 검색 기능 (자동 하이픈 입력 적용) */}
               <div className="relative w-full md:w-64">
                 <input
                   type="text"
@@ -776,7 +806,7 @@ export default function App() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full text-left border-collapse whitespace-nowrap">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 text-xs md:text-sm bg-slate-50">
                     <th className="py-2.5 px-3">고객명</th>
@@ -787,9 +817,9 @@ export default function App() {
                 <tbody>
                   {filteredCustomers.map(c => (
                     <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors text-xs md:text-sm">
-                      <td className="py-2.5 px-3 font-bold text-slate-900">{c.name}</td>
-                      <td className="py-2.5 px-3 text-slate-600">{c.phone || '-'}</td>
-                      <td className="py-2.5 px-3 text-slate-500">{getCustomerPickupDate(c.id, c.name)}</td>
+                      <td className="py-2.5 px-3 font-bold text-slate-900 whitespace-nowrap">{c.name}</td>
+                      <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">{c.phone || '-'}</td>
+                      <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap">{getCustomerPickupDate(c.id, c.name)}</td>
                     </tr>
                   ))}
                   {filteredCustomers.length === 0 && (
@@ -805,7 +835,7 @@ export default function App() {
           </div>
         )}
 
-        {/* 4. 알림 (기본 안내) */}
+        {/* 4. 알림 */}
         {activeMenu === 'notifications' && (
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm text-center py-12">
             <span className="text-4xl">🔔</span>
@@ -814,7 +844,7 @@ export default function App() {
           </div>
         )}
 
-        {/* 5. 백업/복원 (기본 안내) */}
+        {/* 5. 백업/복원 */}
         {activeMenu === 'backup' && (
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm text-center py-12">
             <span className="text-4xl">💾</span>
@@ -924,14 +954,13 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setEditingOrder(null)}
-                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs md:text-sm"
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-normal border border-slate-300 rounded-xl text-xs md:text-sm cursor-pointer"
                 >
                   취소
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-rose-200 hover:bg-rose-300 text-slate-800 font-bold rounded-xl text-xs md:text-sm"
-                  style={{ backgroundColor: '#fecdd3' }}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-normal border border-slate-300 rounded-xl text-xs md:text-sm cursor-pointer"
                 >
                   저장하기
                 </button>
