@@ -172,6 +172,9 @@ export default function App() {
 
   const [showBackupAlertModal, setShowBackupAlertModal] = useState(false);
 
+  // 메모 자동완성 여부 상태
+  const [isMemoAutofilled, setIsMemoAutofilled] = useState(false);
+
   const handlePinSubmit = (e) => {
     e.preventDefault();
     if (inputPin === appPassword) {
@@ -253,6 +256,7 @@ export default function App() {
         payment_method: '신용카드',
         memo: ''
       });
+      setIsMemoAutofilled(false);
       setMatchedCustomerList([]);
     }
   };
@@ -321,7 +325,6 @@ export default function App() {
     }
   };
 
-  // [수정1 반영] 새로 추가된 고객 정보 포함 자동완성이 정상 작동하도록 매칭 로직 개선
   const handleCustomerNameChange = (nameInput) => {
     setNewOrder(prev => ({ ...prev, customer_name: nameInput }));
 
@@ -331,8 +334,6 @@ export default function App() {
     }
 
     const cleanInput = nameInput.trim().toLowerCase();
-    
-    // 기존 customers 및 orders의 모든 고객명 데이터를 종합하여 자동완성 후보 생성
     const allKnownCustomers = [...customers];
     
     orders.forEach(o => {
@@ -351,7 +352,10 @@ export default function App() {
     setMatchedCustomerList(matches);
   };
 
+  // 4번 & 5번 요구사항: 고객 선택 시 가장 최근 주문 정보(메모 포함)를 자동 완성하고 연한 표시 적용
   const selectCustomerForNewOrder = (cust) => {
+    let hasAutofilledMemo = false;
+
     setNewOrder(prev => {
       const updated = { 
         ...prev, 
@@ -359,14 +363,26 @@ export default function App() {
         phone: cust.phone || '010-' 
       };
 
-      const recentOrder = orders.find(o => o.customer_id === cust.id || o.customers?.name === cust.name);
+      // 동일인의 주문 내역 중 가장 최근 주문(ID가 가장 큰 주문) 검색
+      const matchingOrders = orders
+        .filter(o => o.customer_id === cust.id || o.customers?.name === cust.name)
+        .sort((a, b) => b.id - a.id);
+
+      const recentOrder = matchingOrders[0];
+
       if (recentOrder) {
         if (recentOrder.product_name) updated.product_name = recentOrder.product_name;
         if (recentOrder.amount) updated.amount_thousands = String(Math.floor(recentOrder.amount / 1000));
         if (recentOrder.payment_method) updated.payment_method = recentOrder.payment_method;
+        if (recentOrder.memo) {
+          updated.memo = recentOrder.memo;
+          hasAutofilledMemo = true;
+        }
       }
       return updated;
     });
+
+    setIsMemoAutofilled(hasAutofilledMemo);
     setMatchedCustomerList([]);
   };
 
@@ -449,6 +465,7 @@ export default function App() {
       payment_method: '신용카드',
       memo: ''
     });
+    setIsMemoAutofilled(false);
     setMatchedCustomerList([]);
     setActiveMenu('orders');
     fetchData();
@@ -814,13 +831,17 @@ export default function App() {
 
           <form onSubmit={handlePinSubmit} className="space-y-4">
             <div>
+              {/* 3번 요구사항: 모바일 입력 시 숫자 전용 대형 키패드 호출 */}
               <input
-                type="password"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 maxLength={4}
                 value={inputPin}
                 onChange={e => setInputPin(e.target.value.replace(/[^0-9]/g, ''))}
                 placeholder="• • • •"
                 className="w-full text-center text-2xl font-bold tracking-[1em] p-3 border-2 border-slate-400 rounded-xl focus:border-rose-500 focus:outline-none text-slate-900 bg-slate-50"
+                style={{ WebkitTextSecurity: 'disc' }}
                 autoFocus
               />
               {pinError && (
@@ -1083,7 +1104,6 @@ export default function App() {
                     required
                   />
 
-                  {/* [수정1 반영] 입력 시 매칭되는 고객명 자동완성 목록 팝업 */}
                   {matchedCustomerList.length > 0 && (
                     <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-rose-300 rounded-xl shadow-lg z-20 max-h-48 overflow-y-auto p-1">
                       <div className="text-[11px] text-rose-600 font-bold px-2 py-1 bg-rose-50 rounded-t-lg">
@@ -1183,7 +1203,8 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-slate-700">접수 시간 (실시간 HH:mm)</label>
+                  {/* 2번 요구사항: (실시간 HH:mm) 텍스트 제거 */}
+                  <label className="text-[11px] md:text-xs font-bold text-slate-700">접수 시간</label>
                   <input
                     type="time"
                     value={newOrder.receipt_time}
@@ -1208,10 +1229,16 @@ export default function App() {
 
               <div>
                 <label className="text-[11px] md:text-xs font-bold text-slate-700">고객 요구사항 / 메모</label>
+                {/* 5번 요구사항: 자동완성된 글씨는 연하게(text-slate-400), 직접 수정 시 진한 글씨 적용 */}
                 <textarea
                   value={newOrder.memo}
-                  onChange={e => setNewOrder({...newOrder, memo: e.target.value})}
-                  className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
+                  onChange={e => {
+                    setNewOrder({ ...newOrder, memo: e.target.value });
+                    setIsMemoAutofilled(false);
+                  }}
+                  className={`w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white font-medium ${
+                    isMemoAutofilled ? 'text-slate-400' : 'text-slate-900'
+                  }`}
                   style={{ backgroundColor: '#ffffff' }}
                   rows={3}
                   placeholder="요청사항이나 특이사항을 적어주세요."
@@ -1299,19 +1326,21 @@ export default function App() {
                     검색 결과: 총 <strong className="text-rose-600">{sortedAndFilteredOrders.length}</strong>건
                   </div>
 
+                  {/* 1번 요구사항: table-layout: fixed 및 각 셀 너비/말줄임(truncate)을 지정하여 모바일 세로모드 시인성 확보 */}
                   <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                    <table className="w-full text-left border-collapse whitespace-nowrap">
+                    <table className="w-full text-left border-collapse table-fixed min-w-[700px]">
                       <thead>
                         <tr className="border-b border-slate-200 text-slate-700 text-xs md:text-sm bg-slate-100 font-bold">
-                          <th className="py-2.5 px-3">픽업일시</th>
-                          <th className="py-2.5 px-3">접수일시</th>
-                          <th className="py-2.5 px-3">고객명</th>
-                          <th className="py-2.5 px-3">연락처</th>
-                          <th className="py-2.5 px-3">상품명</th>
-                          <th className="py-2.5 px-3">금액</th>
-                          <th className="py-2.5 px-3">결제수단</th>
-                          <th className="py-2.5 px-3 text-center">관리</th>
-                          <th className="py-2.5 px-3 text-center">
+                          <th className="py-2.5 px-2 w-28">픽업일시</th>
+                          <th className="py-2.5 px-2 w-28">접수일시</th>
+                          <th className="py-2.5 px-2 w-20">고객명</th>
+                          <th className="py-2.5 px-2 w-28">연락처</th>
+                          <th className="py-2.5 px-2 w-20">상품명</th>
+                          <th className="py-2.5 px-2 w-20">금액</th>
+                          <th className="py-2.5 px-2 w-20">결제수단</th>
+                          <th className="py-2.5 px-2 w-36">메모</th>
+                          <th className="py-2.5 px-2 w-20 text-center">관리</th>
+                          <th className="py-2.5 px-2 w-12 text-center">
                             <input
                               type="checkbox"
                               onChange={handleToggleSelectAllOrders}
@@ -1324,7 +1353,7 @@ export default function App() {
                       <tbody>
                         {sortedAndFilteredOrders.length === 0 ? (
                           <tr>
-                            <td colSpan={9} className="py-6 text-center text-slate-500 text-xs md:text-sm">
+                            <td colSpan={10} className="py-6 text-center text-slate-500 text-xs md:text-sm">
                               검색 결과가 없습니다.
                             </td>
                           </tr>
@@ -1337,50 +1366,53 @@ export default function App() {
                               <tr 
                                 key={o.id} 
                                 className={`border-b border-slate-100 transition-colors text-xs md:text-sm ${
-                                  /* [수정2 반영] 지난 날짜 리스트 글씨색을 훨씬 더 연하게(text-slate-300 opacity-40) 변경 */
                                   isPast 
                                     ? 'text-slate-300 opacity-40 bg-slate-100/50 hover:bg-slate-100' 
                                     : 'text-slate-900 hover:bg-slate-50'
                                 }`}
                               >
-                                <td className={`py-2.5 px-3 font-medium ${isPast ? 'text-slate-300' : 'text-slate-700'}`}>
+                                <td className={`py-2.5 px-2 font-medium truncate ${isPast ? 'text-slate-300' : 'text-slate-700'}`}>
                                   {o.pickup_datetime?.replace('T', ' ').slice(0, 16) || '-'}
                                 </td>
-                                <td className={`py-2.5 px-3 text-xs ${isPast ? 'text-slate-300' : 'text-slate-500'}`}>
+                                <td className={`py-2.5 px-2 text-xs truncate ${isPast ? 'text-slate-300' : 'text-slate-500'}`}>
                                   {o.created_at?.replace('T', ' ').slice(0, 16) || '-'}
                                 </td>
-                                <td className={`py-2.5 px-3 font-bold whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
+                                <td className={`py-2.5 px-2 font-bold truncate ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
                                   {o.customers?.name || '-'}
                                 </td>
-                                <td className={`py-2.5 px-3 font-medium whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-700'}`}>
+                                <td className={`py-2.5 px-2 font-medium truncate ${isPast ? 'text-slate-300' : 'text-slate-700'}`}>
                                   {o.customers?.phone || '-'}
                                 </td>
-                                <td className={`py-2.5 px-3 font-bold whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-800'}`}>
+                                <td className={`py-2.5 px-2 font-bold truncate ${isPast ? 'text-slate-300' : 'text-slate-800'}`}>
                                   {o.product_name}
                                 </td>
-                                <td className={`py-2.5 px-3 font-extrabold whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-rose-600'}`}>
+                                <td className={`py-2.5 px-2 font-extrabold truncate ${isPast ? 'text-slate-300' : 'text-rose-600'}`}>
                                   {o.amount?.toLocaleString()}원
                                 </td>
-                                <td className="py-2.5 px-3">
-                                  <span className={`px-2 py-0.5 border rounded text-xs font-semibold whitespace-nowrap ${
+                                <td className="py-2.5 px-2">
+                                  <span className={`px-1.5 py-0.5 border rounded text-[11px] font-semibold block text-center truncate ${
                                     isPast ? 'bg-slate-100 border-slate-200 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-800'
                                   }`}>
                                     {o.payment_method}
                                   </span>
                                 </td>
+                                {/* 메모란: 한 줄로 깔끔하게 말줄임 표기하여 식물, 입금 등의 열이 쪼개지지 않음 */}
+                                <td className={`py-2.5 px-2 truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo}>
+                                  {o.memo || '-'}
+                                </td>
                                 
-                                <td className="py-2.5 px-3 text-center">
+                                <td className="py-2.5 px-2 text-center">
                                   <button
                                     onClick={() => startEditOrder(o)}
-                                    className={`text-xs bg-white hover:bg-slate-100 border font-bold px-3 py-1 rounded-lg cursor-pointer whitespace-nowrap shadow-2xs ${
+                                    className={`text-xs bg-white hover:bg-slate-100 border font-bold px-2 py-1 rounded-lg cursor-pointer shadow-2xs ${
                                       isPast ? 'text-slate-400 border-slate-300' : 'text-slate-900 border-slate-800'
                                     }`}
                                   >
-                                    수정하기
+                                    수정
                                   </button>
                                 </td>
 
-                                <td className="py-2.5 px-3 text-center">
+                                <td className="py-2.5 px-2 text-center">
                                   <input
                                     type="checkbox"
                                     checked={selectedOrderIds.includes(o.id)}
