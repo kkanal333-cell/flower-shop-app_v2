@@ -678,7 +678,7 @@ export default function App() {
     } catch (err) {
       console.error(err);
       alert('CSV 복원 중 오류가 발생했습니다. CSV 형식을 확인해주세요.');
-    } finally {
+    } fontally {
       e.target.value = '';
     }
   };
@@ -1323,7 +1323,7 @@ export default function App() {
                     검색 결과: 총 <strong className="text-rose-600">{sortedAndFilteredOrders.length}</strong>건
                   </div>
 
-                  {/* 메모란 너비를 w-28 ~ w-32로 작게 축소하여 모바일 레이아웃 보호 */}
+                  {/* table-fixed와 max-w-[112px] truncate로 세로 깨짐 완벽 조치 */}
                   <div className="overflow-x-auto border border-slate-200 rounded-xl">
                     <table className="w-full text-left border-collapse table-fixed min-w-[720px]">
                       <thead>
@@ -1393,8 +1393,7 @@ export default function App() {
                                     {o.payment_method}
                                   </span>
                                 </td>
-                                {/* 고정 폭 슬림 처리 및 말줄임(truncate)으로 세로 찌그러짐 현상 완벽 방지 */}
-                                <td className={`py-2.5 px-2 truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo}>
+                                <td className={`py-2.5 px-2 max-w-[112px] truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo}>
                                   {o.memo || '-'}
                                 </td>
                                 
