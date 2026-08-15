@@ -20,6 +20,24 @@ const AMPM_OPTIONS = ["오전", "오후"];
 const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
 const MINUTE_OPTIONS = ["00", "15", "30", "45"];
 
+// 날짜/시간 문자열을 YY-MM-DD HH:MM 포맷으로 변환하는 헬퍼 함수
+const formatShortDateTime = (datetimeStr) => {
+  if (!datetimeStr) return '-';
+  const cleanStr = datetimeStr.replace(' ', 'T');
+  const [datePart, timePart] = cleanStr.split('T');
+  if (!datePart) return '-';
+
+  const dateComponents = datePart.split('-');
+  if (dateComponents.length !== 3) return datetimeStr;
+
+  const yy = dateComponents[0].slice(-2); // 2026 -> 26
+  const mm = dateComponents[1];
+  const dd = dateComponents[2];
+  const time = timePart ? timePart.slice(0, 5) : '00:00';
+
+  return `${yy}-${mm}-${dd} ${time}`;
+};
+
 // 15분 단위 픽업 시간 파싱 함수
 const parseTimeToParts = (timeStr) => {
   if (!timeStr) return { ampm: "오후", hour: "02", minute: "00" };
@@ -1323,19 +1341,20 @@ export default function App() {
                     검색 결과: 총 <strong className="text-rose-600">{sortedAndFilteredOrders.length}</strong>건
                   </div>
 
+                  {/* 요청사항 반영: 접수일시 위치를 메모 뒤로 보냄 & YY-MM-DD HH:MM 포맷 적용 */}
                   <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                    <table className="w-full text-left border-collapse table-fixed min-w-[750px]">
+                    <table className="w-full text-left border-collapse table-fixed min-w-[780px]">
                       <thead>
                         <tr className="border-b border-slate-200 text-slate-700 text-xs md:text-sm bg-slate-100 font-bold">
                           <th className="py-2.5 px-2 w-28">픽업일시</th>
-                          <th className="py-2.5 px-2 w-28">접수일시</th>
                           <th className="py-2.5 px-2 w-20">고객명</th>
                           <th className="py-2.5 px-2 w-28">연락처</th>
                           <th className="py-2.5 px-2 w-20">상품명</th>
                           <th className="py-2.5 px-2 w-20">금액</th>
                           <th className="py-2.5 px-2 w-20">결제수단</th>
-                          <th className="py-2.5 px-2 w-36">메모</th>
-                          <th className="py-2.5 px-2 w-20 text-center">관리</th>
+                          <th className="py-2.5 px-2 w-32">메모</th>
+                          <th className="py-2.5 px-2 w-28">접수일시</th>
+                          <th className="py-2.5 px-2 w-16 text-center">관리</th>
                           <th className="py-2.5 px-2 w-12 text-center">
                             <input
                               type="checkbox"
@@ -1367,11 +1386,9 @@ export default function App() {
                                     : 'text-slate-900 hover:bg-slate-50'
                                 }`}
                               >
-                                <td className={`py-2.5 px-2 font-medium truncate ${isPast ? 'text-slate-300' : 'text-slate-700'}`}>
-                                  {o.pickup_datetime?.replace('T', ' ').slice(0, 16) || '-'}
-                                </td>
-                                <td className={`py-2.5 px-2 text-xs truncate ${isPast ? 'text-slate-300' : 'text-slate-500'}`}>
-                                  {o.created_at?.replace('T', ' ').slice(0, 16) || '-'}
+                                {/* 픽업일시: YY-MM-DD HH:MM 표기 */}
+                                <td className={`py-2.5 px-2 font-bold whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
+                                  {formatShortDateTime(o.pickup_datetime)}
                                 </td>
                                 <td className={`py-2.5 px-2 font-bold truncate ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
                                   {o.customers?.name || '-'}
@@ -1394,6 +1411,10 @@ export default function App() {
                                 </td>
                                 <td className={`py-2.5 px-2 truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo}>
                                   {o.memo || '-'}
+                                </td>
+                                {/* 접수일시 (메모 뒤 배치): YY-MM-DD HH:MM 표기 */}
+                                <td className={`py-2.5 px-2 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-500'}`}>
+                                  {formatShortDateTime(o.created_at)}
                                 </td>
                                 
                                 <td className="py-2.5 px-2 text-center">
@@ -1460,7 +1481,6 @@ export default function App() {
                             </span>
                           </div>
 
-                          {/* 요청 반영: 가로 정렬 고정 및 메모 축소(말줄임) 레이아웃 */}
                           <div className="flex items-center justify-between gap-1 text-xs">
                             <div className="flex items-center gap-1.5 overflow-hidden flex-1 min-w-0">
                               <span className="font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 shrink-0 whitespace-nowrap">
