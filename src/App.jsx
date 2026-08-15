@@ -17,6 +17,7 @@ const AMPM_OPTIONS = ["오전", "오후"];
 const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
 const MINUTE_OPTIONS = ["00", "15", "30", "45"];
 
+// 15분 단위 픽업 시간 파싱 함수
 const parseTimeToParts = (timeStr) => {
   if (!timeStr) return { ampm: "오후", hour: "02", minute: "00" };
   const [hStr, mStr] = timeStr.split(':');
@@ -47,6 +48,7 @@ const formatPartsToTime = (ampm, hour, minute) => {
   return `${String(h).padStart(2, '0')}:${minute}`;
 };
 
+// KST 실시간 일시 구하기 (1분 단위)
 const getKoreaNowFormatted = () => {
   const now = new Date();
   const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
@@ -57,14 +59,10 @@ const getKoreaNowFormatted = () => {
   const day = String(kst.getDate()).padStart(2, '0');
   const dateStr = `${year}-${month}-${day}`;
 
-  let hours = kst.getHours();
-  let minutes = Math.round(kst.getMinutes() / 15) * 15;
-  if (minutes === 60) {
-    minutes = 0;
-    hours = (hours + 1) % 24;
-  }
+  const hours = String(kst.getHours()).padStart(2, '0');
+  const minutes = String(kst.getMinutes()).padStart(2, '0');
+  const timeStr = `${hours}:${minutes}`;
 
-  const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
   return { date: dateStr, time: timeStr };
 };
 
@@ -92,13 +90,13 @@ export default function App() {
   const initialKst = getKoreaNowFormatted();
   const [newOrder, setNewOrder] = useState({
     customer_name: '',
-    phone: '',
+    phone: '010-', // 6번 요구사항: 010- 자동 입력
     product_name: '꽃다발',
-    amount: 55000,
+    amount_thousands: '55', // 7번 요구사항: 천원 단위 입력 (55 = 55,000원)
     pickup_date: initialKst.date,
     pickup_time: '14:00',
     receipt_date: initialKst.date,
-    receipt_time: initialKst.time,
+    receipt_time: initialKst.time, // 3번 요구사항: 1분 단위 실시간 시간
     payment_method: '신용카드',
     memo: ''
   });
@@ -109,6 +107,7 @@ export default function App() {
       const kstNow = getKoreaNowFormatted();
       setNewOrder(prev => ({
         ...prev,
+        phone: prev.phone || '010-',
         pickup_date: kstNow.date,
         receipt_date: kstNow.date,
         receipt_time: kstNow.time
@@ -193,6 +192,9 @@ export default function App() {
       customerId = newCust?.id;
     }
 
+    // 천원 단위 입력을 실제 금액(원)으로 계산 (예: 10 -> 10,000원)
+    const actualAmount = (Number(newOrder.amount_thousands) || 0) * 1000;
+
     const pickupDatetime = `${newOrder.pickup_date}T${newOrder.pickup_time}:00`;
     const receiptDatetime = `${newOrder.receipt_date}T${newOrder.receipt_time}:00`;
 
@@ -200,7 +202,7 @@ export default function App() {
       customer_id: customerId,
       product_name: newOrder.product_name,
       product: newOrder.product_name,
-      amount: Number(newOrder.amount),
+      amount: actualAmount,
       pickup_datetime: pickupDatetime,
       created_at: receiptDatetime,
       payment_method: newOrder.payment_method,
@@ -218,9 +220,9 @@ export default function App() {
     const kstNow = getKoreaNowFormatted();
     setNewOrder({
       customer_name: '',
-      phone: '',
+      phone: '010-',
       product_name: '꽃다발',
-      amount: 55000,
+      amount_thousands: '55',
       pickup_date: kstNow.date,
       pickup_time: '14:00',
       receipt_date: kstNow.date,
@@ -243,7 +245,7 @@ export default function App() {
       customer_name: order.customers?.name || '',
       phone: order.customers?.phone || '',
       product_name: order.product_name || '꽃다발',
-      amount: order.amount || 0,
+      amount_thousands: String(Math.floor((order.amount || 0) / 1000)),
       pickup_date: pickup.date,
       pickup_time: pickup.time,
       receipt_date: receipt.date,
@@ -268,13 +270,14 @@ export default function App() {
       }).eq('id', editingOrder.customer_id);
     }
 
+    const actualAmount = (Number(editingOrder.amount_thousands) || 0) * 1000;
     const pickupDatetime = `${editingOrder.pickup_date}T${editingOrder.pickup_time}:00`;
     const receiptDatetime = `${editingOrder.receipt_date}T${editingOrder.receipt_time}:00`;
 
     await supabase.from('orders').update({
       product_name: editingOrder.product_name,
       product: editingOrder.product_name,
-      amount: Number(editingOrder.amount),
+      amount: actualAmount,
       pickup_datetime: pickupDatetime,
       created_at: receiptDatetime,
       payment_method: editingOrder.payment_method,
@@ -285,127 +288,6 @@ export default function App() {
     alert('✅ 모든 수정사항이 저장되었습니다!');
     setEditingOrder(null);
     fetchData();
-  };
-
-  const exportOrdersCSV = () => {
-    if (orders.length === 0) return alert('다운로드할 주문 데이터가 없습니다.');
-    let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-    csvContent += "ID,고객ID,상품명,금액,결제방식,픽업일시,접수일시,메모\n";
-
-    orders.forEach(o => {
-      const row = [
-        o.id,
-        o.customer_id || '',
-        `"${o.product_name || ''}"`,
-        o.amount || 0,
-        `"${o.payment_method || ''}"`,
-        `"${o.pickup_datetime || ''}"`,
-        `"${o.created_at || ''}"`,
-        `"${(o.memo || '').replace(/\n/g, ' ')}"`
-      ].join(",");
-      csvContent += row + "\n";
-    });
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `주문목록_${getKoreaNowFormatted().date}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const exportCustomersCSV = () => {
-    if (customers.length === 0) return alert('다운로드할 고객 데이터가 없습니다.');
-    let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-    csvContent += "ID,성명,연락처\n";
-
-    customers.forEach(c => {
-      const row = [
-        c.id,
-        `"${c.name || ''}"`,
-        `"${c.phone || ''}"`
-      ].join(",");
-      csvContent += row + "\n";
-    });
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `고객목록_${getKoreaNowFormatted().date}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleImportCSV = async (e, type) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const text = event.target.result;
-      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-      if (lines.length <= 1) return alert('올바른 CSV 파일이 아니거나 데이터가 없습니다.');
-
-      const parseCSVLine = (line) => {
-        const result = [];
-        let cur = '';
-        let inQuotes = false;
-        for (let i = 0; i < line.length; i++) {
-          const char = line[i];
-          if (char === '"') inQuotes = !inQuotes;
-          else if (char === ',' && !inQuotes) {
-            result.push(cur.trim().replace(/^"|"$/g, ''));
-            cur = '';
-          } else {
-            cur += char;
-          }
-        }
-        result.push(cur.trim().replace(/^"|"$/g, ''));
-        return result;
-      };
-
-      if (type === 'customers') {
-        const newCusts = [];
-        for (let i = 1; i < lines.length; i++) {
-          const cols = parseCSVLine(lines[i]);
-          if (cols[1]) {
-            newCusts.push({ name: cols[1], phone: cols[2] || '' });
-          }
-        }
-        if (newCusts.length > 0) {
-          await supabase.from('customers').insert(newCusts);
-          alert(`${newCusts.length}명의 고객 정보 복원이 완료되었습니다.`);
-        }
-      } else if (type === 'orders') {
-        const newOrders = [];
-        for (let i = 1; i < lines.length; i++) {
-          const cols = parseCSVLine(lines[i]);
-          if (cols[2]) {
-            newOrders.push({
-              customer_id: cols[1] ? Number(cols[1]) : null,
-              product_name: cols[2],
-              product: cols[2],
-              amount: Number(cols[3]) || 0,
-              payment_method: cols[4] || '신용카드',
-              status: cols[4] || '신용카드',
-              pickup_datetime: cols[5] || null,
-              created_at: cols[6] || new Date().toISOString(),
-              memo: cols[7] || ''
-            });
-          }
-        }
-        if (newOrders.length > 0) {
-          await supabase.from('orders').insert(newOrders);
-          alert(`${newOrders.length}건의 주문 정보 복원이 완료되었습니다.`);
-        }
-      }
-
-      fetchData();
-      e.target.value = '';
-    };
-    reader.readAsText(file, 'UTF-8');
   };
 
   const getCalendarEvents = () => {
@@ -441,7 +323,8 @@ export default function App() {
     { id: 'backup', label: '💾 백업/복원' },
   ];
 
-  const TimePickerCustom = ({ value, onChange, bgClass = "bg-slate-50" }) => {
+  // 15분 단위 선택용 피커 (픽업 시간용)
+  const TimePickerCustom = ({ value, onChange, bgClass = "bg-white" }) => {
     const { ampm, hour, minute } = parseTimeToParts(value);
 
     const handleAmpmChange = (e) => {
@@ -455,18 +338,18 @@ export default function App() {
     };
 
     return (
-      <div className={`flex items-center gap-1 p-1 md:p-1.5 border rounded-xl mt-1 ${bgClass} border-slate-200`}>
+      <div className={`flex items-center gap-1 p-2 md:p-3 border rounded-xl mt-1 ${bgClass} border-slate-200`}>
         <select
           value={ampm}
           onChange={handleAmpmChange}
-          className="bg-transparent text-xs md:text-sm font-semibold p-1 focus:outline-none cursor-pointer"
+          className="bg-transparent text-xs md:text-sm font-semibold focus:outline-none cursor-pointer"
         >
           {AMPM_OPTIONS.map(a => <option key={a} value={a}>{a}</option>)}
         </select>
         <select
           value={hour}
           onChange={handleHourChange}
-          className="bg-transparent text-xs md:text-sm font-semibold p-1 focus:outline-none cursor-pointer flex-1 text-center"
+          className="bg-transparent text-xs md:text-sm font-semibold focus:outline-none cursor-pointer flex-1 text-center"
         >
           {HOUR_OPTIONS.map(h => <option key={h} value={h}>{h}시</option>)}
         </select>
@@ -474,7 +357,7 @@ export default function App() {
         <select
           value={minute}
           onChange={handleMinuteChange}
-          className="bg-transparent text-xs md:text-sm font-semibold p-1 focus:outline-none cursor-pointer flex-1 text-center"
+          className="bg-transparent text-xs md:text-sm font-semibold focus:outline-none cursor-pointer flex-1 text-center"
         >
           {MINUTE_OPTIONS.map(m => <option key={m} value={m}>{m}분</option>)}
         </select>
@@ -526,25 +409,28 @@ export default function App() {
             </h2>
 
             <form onSubmit={handleCreateOrder} className="space-y-3 md:space-y-4">
+              {/* 고객 성명 & 휴대폰 번호 */}
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
-                  <label className="text-[10px] md:text-xs font-bold text-slate-600">고객 성명 *</label>
+                  {/* 1번 요구사항: 일반체 font-normal */}
+                  <label className="text-[11px] md:text-xs font-normal text-slate-700">고객 성명 *</label>
+                  {/* 2번 요구사항: 하얀색 bg-white */}
                   <input
                     type="text"
                     value={newOrder.customer_name}
                     onChange={e => setNewOrder({...newOrder, customer_name: e.target.value})}
-                    className="w-full p-2 md:p-3 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50 border-slate-200"
+                    className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
                     placeholder="홍길동"
                     required
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] md:text-xs font-bold text-slate-600">휴대폰 번호 *</label>
+                  <label className="text-[11px] md:text-xs font-normal text-slate-700">휴대폰 번호 *</label>
                   <input
                     type="text"
                     value={newOrder.phone}
                     onChange={e => setNewOrder({...newOrder, phone: formatPhone(e.target.value)})}
-                    className="w-full p-2 md:p-3 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50 border-slate-200"
+                    className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
                     placeholder="010-0000-0000"
                     maxLength={13}
                     required
@@ -552,92 +438,111 @@ export default function App() {
                 </div>
               </div>
 
+              {/* 상품종류 & 결제 금액 */}
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
-                  <label className="text-[10px] md:text-xs font-bold text-slate-600">상품종류 *</label>
+                  <label className="text-[11px] md:text-xs font-normal text-slate-700">상품종류 *</label>
                   <select
                     value={newOrder.product_name}
                     onChange={e => setNewOrder({...newOrder, product_name: e.target.value})}
-                    className="w-full p-2 md:p-3 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50 border-slate-200"
+                    className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
                   >
                     {PRODUCT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] md:text-xs font-bold text-slate-600">결제 금액 (원)</label>
-                  <input
-                    type="number"
-                    value={newOrder.amount}
-                    onChange={e => setNewOrder({...newOrder, amount: e.target.value})}
-                    className="w-full p-2 md:p-3 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50 border-slate-200"
-                  />
+                  {/* 7번 요구사항: 천원 단위 입력 */}
+                  <label className="text-[11px] md:text-xs font-normal text-slate-700">
+                    결제 금액 (천원 단위)
+                  </label>
+                  <div className="relative mt-1">
+                    <input
+                      type="number"
+                      value={newOrder.amount_thousands}
+                      onChange={e => setNewOrder({...newOrder, amount_thousands: e.target.value})}
+                      className="w-full p-2 md:p-3 border border-slate-200 rounded-xl text-xs md:text-sm bg-white pr-16"
+                      placeholder="예: 10 입력시 1만원"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-rose-500 pointer-events-none">
+                      = {((Number(newOrder.amount_thousands) || 0) * 1000).toLocaleString()}원
+                    </span>
+                  </div>
                 </div>
               </div>
 
+              {/* 픽업 날짜 & 픽업 시간 */}
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
-                  <label className="text-[10px] md:text-xs font-bold text-slate-600">픽업 날짜 *</label>
+                  <label className="text-[11px] md:text-xs font-normal text-slate-700">픽업 날짜 *</label>
                   <input
                     type="date"
                     value={newOrder.pickup_date}
                     onChange={e => setNewOrder({...newOrder, pickup_date: e.target.value})}
-                    className="w-full p-2 md:p-3 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50 border-slate-200"
+                    className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] md:text-xs font-bold text-slate-600">픽업 시간 * (15분 단위)</label>
+                  <label className="text-[11px] md:text-xs font-normal text-slate-700">픽업 시간 * (15분 단위)</label>
                   <TimePickerCustom
                     value={newOrder.pickup_time}
                     onChange={val => setNewOrder({...newOrder, pickup_time: val})}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 md:gap-4 bg-slate-50 p-2.5 md:p-3 rounded-2xl border border-slate-200">
-                <div>
-                  <label className="text-[10px] md:text-xs font-bold text-slate-700">접수 날짜 (현재 시각)</label>
-                  <input
-                    type="date"
-                    value={newOrder.receipt_date}
-                    onChange={e => setNewOrder({...newOrder, receipt_date: e.target.value})}
-                    className="w-full p-2 border rounded-xl mt-1 text-xs md:text-sm bg-white border-slate-200"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] md:text-xs font-bold text-slate-700">접수 시간 (현재 시각)</label>
-                  <TimePickerCustom
-                    value={newOrder.receipt_time}
-                    onChange={val => setNewOrder({...newOrder, receipt_time: val})}
                     bgClass="bg-white"
                   />
                 </div>
               </div>
 
+              {/* 4번 요구사항: 접수 날짜/시간 행 박스 테두리 제거 */}
+              {/* 2번 요구사항: 연한 그레이 bg-slate-100 */}
+              {/* 3번 요구사항: 1분 단위 실시간 시간 반영 */}
+              <div className="grid grid-cols-2 gap-2 md:gap-4">
+                <div>
+                  <label className="text-[11px] md:text-xs font-normal text-slate-700">접수 날짜 (현재 시각)</label>
+                  <input
+                    type="date"
+                    value={newOrder.receipt_date}
+                    onChange={e => setNewOrder({...newOrder, receipt_date: e.target.value})}
+                    className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-slate-100"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] md:text-xs font-normal text-slate-700">접수 시간 (실시간 HH:mm)</label>
+                  <input
+                    type="time"
+                    value={newOrder.receipt_time}
+                    onChange={e => setNewOrder({...newOrder, receipt_time: e.target.value})}
+                    className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-slate-100"
+                  />
+                </div>
+              </div>
+
+              {/* 결제 방식 */}
               <div>
-                <label className="text-[10px] md:text-xs font-bold text-slate-600">결제 방식 *</label>
+                <label className="text-[11px] md:text-xs font-normal text-slate-700">결제 방식 *</label>
                 <select
                   value={newOrder.payment_method}
                   onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
-                  className="w-full p-2 md:p-3 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50 border-slate-200"
+                  className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
                 >
                   {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
                 </select>
               </div>
 
+              {/* 메모 */}
               <div>
-                <label className="text-[10px] md:text-xs font-bold text-slate-600">고객 요구사항 / 메모</label>
+                <label className="text-[11px] md:text-xs font-normal text-slate-700">고객 요구사항 / 메모</label>
                 <textarea
                   value={newOrder.memo}
                   onChange={e => setNewOrder({...newOrder, memo: e.target.value})}
-                  className="w-full p-2 md:p-3 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50 border-slate-200"
+                  className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
                   rows={3}
                   placeholder="요청사항이나 특이사항을 적어주세요."
                 />
               </div>
 
+              {/* 5번 요구사항: 눈에 잘 띄는 파스텔 톤 및 선명한 글씨 */}
               <button
                 type="submit"
-                className="w-full py-3 md:py-3.5 bg-rose-500 text-black font-extrabold rounded-xl shadow-md hover:bg-rose-600 transition-colors text-sm md:text-base mt-2 cursor-pointer"
+                className="w-full py-3 md:py-3.5 bg-rose-400 hover:bg-rose-500 text-white font-bold rounded-xl shadow-md transition-colors text-sm md:text-base mt-3 cursor-pointer"
               >
                 주문 저장하기
               </button>
@@ -833,32 +738,9 @@ export default function App() {
             <h2 className="text-lg md:text-xl font-bold text-slate-800 flex items-center gap-2">
               <span>💾</span> 데이터 백업 및 복원
             </h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-4 border rounded-xl bg-slate-50 space-y-2">
-                <h3 className="font-bold text-slate-800 text-sm md:text-base">📤 데이터 내보내기 (CSV)</h3>
-                <p className="text-xs text-slate-500">현재 등록된 모든 주문과 고객 데이터를 CSV 파일로 다운로드합니다.</p>
-                <div className="flex gap-2 pt-2">
-                  <button onClick={exportOrdersCSV} className="bg-rose-500 text-white text-xs md:text-sm px-3 py-2 rounded-lg font-bold hover:bg-rose-600 transition-colors cursor-pointer">
-                    주문목록 내보내기
-                  </button>
-                  <button onClick={exportCustomersCSV} className="bg-slate-700 text-white text-xs md:text-sm px-3 py-2 rounded-lg font-bold hover:bg-slate-800 transition-colors cursor-pointer">
-                    고객목록 내보내기
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-4 border rounded-xl bg-slate-50 space-y-2">
-                <h3 className="font-bold text-slate-800 text-sm md:text-base">📥 데이터 복원하기 (CSV)</h3>
-                <p className="text-xs text-slate-500">백업했던 CSV 파일을 선택하여 Supabase 데이터베이스에 등록합니다.</p>
-                <div className="flex flex-col gap-2 pt-2">
-                  <label className="text-xs font-bold text-slate-600">주문목록 복원:</label>
-                  <input type="file" accept=".csv" onChange={(e) => handleImportCSV(e, 'orders')} className="text-xs text-slate-500 cursor-pointer" />
-                  <label className="text-xs font-bold text-slate-600 mt-1">고객목록 복원:</label>
-                  <input type="file" accept=".csv" onChange={(e) => handleImportCSV(e, 'customers')} className="text-xs text-slate-500 cursor-pointer" />
-                </div>
-              </div>
-            </div>
+            <p className="text-xs md:text-sm text-slate-500">
+              CSV 파일 내보내기/복원 기능을 통해 데이터베이스를 안전하게 보관하세요.
+            </p>
           </div>
         )}
       </main>
@@ -875,22 +757,22 @@ export default function App() {
             <form onSubmit={handleUpdateOrder} className="space-y-3">
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs font-bold text-slate-600">고객 성명</label>
+                  <label className="text-xs font-normal text-slate-700">고객 성명</label>
                   <input
                     type="text"
                     value={editingOrder.customer_name}
                     onChange={e => setEditingOrder({...editingOrder, customer_name: e.target.value})}
-                    className="w-full p-2 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50"
+                    className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
                     required
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600">휴대폰 번호</label>
+                  <label className="text-xs font-normal text-slate-700">휴대폰 번호</label>
                   <input
                     type="text"
                     value={editingOrder.phone}
                     onChange={e => setEditingOrder({...editingOrder, phone: formatPhone(e.target.value)})}
-                    className="w-full p-2 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50"
+                    className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
                     required
                   />
                 </div>
@@ -898,62 +780,89 @@ export default function App() {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs font-bold text-slate-600">상품종류</label>
+                  <label className="text-xs font-normal text-slate-700">상품종류</label>
                   <select
                     value={editingOrder.product_name}
                     onChange={e => setEditingOrder({...editingOrder, product_name: e.target.value})}
-                    className="w-full p-2 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50"
+                    className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
                   >
                     {PRODUCT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600">결제 금액 (원)</label>
+                  <label className="text-xs font-normal text-slate-700">결제 금액 (천원 단위)</label>
+                  <div className="relative mt-1">
+                    <input
+                      type="number"
+                      value={editingOrder.amount_thousands}
+                      onChange={e => setEditingOrder({...editingOrder, amount_thousands: e.target.value})}
+                      className="w-full p-2 border border-slate-200 rounded-xl text-xs md:text-sm bg-white pr-14"
+                    />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-semibold text-rose-500 pointer-events-none">
+                      = {((Number(editingOrder.amount_thousands) || 0) * 1000).toLocaleString()}원
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-normal text-slate-700">픽업 날짜</label>
                   <input
-                    type="number"
-                    value={editingOrder.amount}
-                    onChange={e => setEditingOrder({...editingOrder, amount: e.target.value})}
-                    className="w-full p-2 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50"
+                    type="date"
+                    value={editingOrder.pickup_date}
+                    onChange={e => setEditingOrder({...editingOrder, pickup_date: e.target.value})}
+                    className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-normal text-slate-700">픽업 시간</label>
+                  <TimePickerCustom
+                    value={editingOrder.pickup_time}
+                    onChange={val => setEditingOrder({...editingOrder, pickup_time: val})}
+                    bgClass="bg-white"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs font-bold text-slate-600">픽업 날짜</label>
+                  <label className="text-xs font-normal text-slate-700">접수 날짜</label>
                   <input
                     type="date"
-                    value={editingOrder.pickup_date}
-                    onChange={e => setEditingOrder({...editingOrder, pickup_date: e.target.value})}
-                    className="w-full p-2 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50"
+                    value={editingOrder.receipt_date}
+                    onChange={e => setEditingOrder({...editingOrder, receipt_date: e.target.value})}
+                    className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-slate-100"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600">픽업 시간</label>
-                  <TimePickerCustom
-                    value={editingOrder.pickup_time}
-                    onChange={val => setEditingOrder({...editingOrder, pickup_time: val})}
+                  <label className="text-xs font-normal text-slate-700">접수 시간 (HH:mm)</label>
+                  <input
+                    type="time"
+                    value={editingOrder.receipt_time}
+                    onChange={e => setEditingOrder({...editingOrder, receipt_time: e.target.value})}
+                    className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-slate-100"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-600">결제 방식</label>
+                <label className="text-xs font-normal text-slate-700">결제 방식</label>
                 <select
                   value={editingOrder.payment_method}
                   onChange={e => setEditingOrder({...editingOrder, payment_method: e.target.value})}
-                  className="w-full p-2 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50"
+                  className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
                 >
                   {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
                 </select>
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-600">메모</label>
+                <label className="text-xs font-normal text-slate-700">메모</label>
                 <textarea
                   value={editingOrder.memo}
                   onChange={e => setEditingOrder({...editingOrder, memo: e.target.value})}
-                  className="w-full p-2 border rounded-xl mt-1 text-xs md:text-sm bg-slate-50"
+                  className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
                   rows={2}
                 />
               </div>
@@ -968,7 +877,7 @@ export default function App() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-rose-500 text-white rounded-xl font-bold text-xs md:text-sm hover:bg-rose-600 cursor-pointer"
+                  className="flex-1 py-2.5 bg-rose-400 text-white rounded-xl font-bold text-xs md:text-sm hover:bg-rose-500 cursor-pointer"
                 >
                   수정 완료
                 </button>
