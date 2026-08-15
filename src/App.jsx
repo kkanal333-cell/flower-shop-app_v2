@@ -90,13 +90,13 @@ export default function App() {
   const initialKst = getKoreaNowFormatted();
   const [newOrder, setNewOrder] = useState({
     customer_name: '',
-    phone: '010-', // 6번 요구사항: 010- 자동 입력
+    phone: '010-',
     product_name: '꽃다발',
-    amount_thousands: '55', // 7번 요구사항: 천원 단위 입력 (55 = 55,000원)
+    amount_thousands: '55',
     pickup_date: initialKst.date,
     pickup_time: '14:00',
     receipt_date: initialKst.date,
-    receipt_time: initialKst.time, // 3번 요구사항: 1분 단위 실시간 시간
+    receipt_time: initialKst.time,
     payment_method: '신용카드',
     memo: ''
   });
@@ -192,9 +192,7 @@ export default function App() {
       customerId = newCust?.id;
     }
 
-    // 천원 단위 입력을 실제 금액(원)으로 계산 (예: 10 -> 10,000원)
     const actualAmount = (Number(newOrder.amount_thousands) || 0) * 1000;
-
     const pickupDatetime = `${newOrder.pickup_date}T${newOrder.pickup_time}:00`;
     const receiptDatetime = `${newOrder.receipt_date}T${newOrder.receipt_time}:00`;
 
@@ -409,17 +407,15 @@ export default function App() {
             </h2>
 
             <form onSubmit={handleCreateOrder} className="space-y-3 md:space-y-4">
-              {/* 고객 성명 & 휴대폰 번호 */}
+              {/* 고객 성명 & 휴대폰 번호 (하얀색 bg-white) */}
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
-                  {/* 1번 요구사항: 일반체 font-normal */}
                   <label className="text-[11px] md:text-xs font-normal text-slate-700">고객 성명 *</label>
-                  {/* 2번 요구사항: 하얀색 bg-white */}
                   <input
                     type="text"
                     value={newOrder.customer_name}
                     onChange={e => setNewOrder({...newOrder, customer_name: e.target.value})}
-                    className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
+                    className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm !bg-white"
                     placeholder="홍길동"
                     required
                   />
@@ -430,7 +426,7 @@ export default function App() {
                     type="text"
                     value={newOrder.phone}
                     onChange={e => setNewOrder({...newOrder, phone: formatPhone(e.target.value)})}
-                    className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
+                    className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm !bg-white"
                     placeholder="010-0000-0000"
                     maxLength={13}
                     required
@@ -438,20 +434,19 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 상품종류 & 결제 금액 */}
+              {/* 상품종류 & 결제 금액 (하얀색 bg-white) */}
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
                   <label className="text-[11px] md:text-xs font-normal text-slate-700">상품종류 *</label>
                   <select
                     value={newOrder.product_name}
                     onChange={e => setNewOrder({...newOrder, product_name: e.target.value})}
-                    className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
+                    className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm !bg-white"
                   >
                     {PRODUCT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
                 <div>
-                  {/* 7번 요구사항: 천원 단위 입력 */}
                   <label className="text-[11px] md:text-xs font-normal text-slate-700">
                     결제 금액 (천원 단위)
                   </label>
@@ -460,7 +455,7 @@ export default function App() {
                       type="number"
                       value={newOrder.amount_thousands}
                       onChange={e => setNewOrder({...newOrder, amount_thousands: e.target.value})}
-                      className="w-full p-2 md:p-3 border border-slate-200 rounded-xl text-xs md:text-sm bg-white pr-16"
+                      className="w-full p-2 md:p-3 border border-slate-200 rounded-xl text-xs md:text-sm !bg-white pr-16"
                       placeholder="예: 10 입력시 1만원"
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-rose-500 pointer-events-none">
@@ -470,7 +465,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 픽업 날짜 & 픽업 시간 */}
+              {/* 픽업 날짜 & 픽업 시간 (하얀색 bg-white) */}
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
                   <label className="text-[11px] md:text-xs font-normal text-slate-700">픽업 날짜 *</label>
@@ -478,7 +473,7 @@ export default function App() {
                     type="date"
                     value={newOrder.pickup_date}
                     onChange={e => setNewOrder({...newOrder, pickup_date: e.target.value})}
-                    className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
+                    className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm !bg-white"
                   />
                 </div>
                 <div>
@@ -486,14 +481,12 @@ export default function App() {
                   <TimePickerCustom
                     value={newOrder.pickup_time}
                     onChange={val => setNewOrder({...newOrder, pickup_time: val})}
-                    bgClass="bg-white"
+                    bgClass="!bg-white"
                   />
                 </div>
               </div>
 
-              {/* 4번 요구사항: 접수 날짜/시간 행 박스 테두리 제거 */}
-              {/* 2번 요구사항: 연한 그레이 bg-slate-100 */}
-              {/* 3번 요구사항: 1분 단위 실시간 시간 반영 */}
+              {/* 2번 수정사항: 접수 날짜 & 접수 시간 -> 연한 그레이 (bg-slate-100 / #f1f5f9) */}
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
                   <label className="text-[11px] md:text-xs font-normal text-slate-700">접수 날짜 (현재 시각)</label>
@@ -501,7 +494,8 @@ export default function App() {
                     type="date"
                     value={newOrder.receipt_date}
                     onChange={e => setNewOrder({...newOrder, receipt_date: e.target.value})}
-                    className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-slate-100"
+                    className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm !bg-slate-100 text-slate-700 font-medium"
+                    style={{ backgroundColor: '#f1f5f9' }}
                   />
                 </div>
                 <div>
@@ -510,7 +504,8 @@ export default function App() {
                     type="time"
                     value={newOrder.receipt_time}
                     onChange={e => setNewOrder({...newOrder, receipt_time: e.target.value})}
-                    className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-slate-100"
+                    className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm !bg-slate-100 text-slate-700 font-medium"
+                    style={{ backgroundColor: '#f1f5f9' }}
                   />
                 </div>
               </div>
@@ -521,7 +516,7 @@ export default function App() {
                 <select
                   value={newOrder.payment_method}
                   onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
-                  className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
+                  className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm !bg-white"
                 >
                   {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
                 </select>
@@ -533,16 +528,17 @@ export default function App() {
                 <textarea
                   value={newOrder.memo}
                   onChange={e => setNewOrder({...newOrder, memo: e.target.value})}
-                  className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
+                  className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm !bg-white"
                   rows={3}
                   placeholder="요청사항이나 특이사항을 적어주세요."
                 />
               </div>
 
-              {/* 5번 요구사항: 눈에 잘 띄는 파스텔 톤 및 선명한 글씨 */}
+              {/* 5번 수정사항: 눈에 선명하게 띄는 예쁜 파스텔 로즈/핑크 버튼 */}
               <button
                 type="submit"
-                className="w-full py-3 md:py-3.5 bg-rose-400 hover:bg-rose-500 text-white font-bold rounded-xl shadow-md transition-colors text-sm md:text-base mt-3 cursor-pointer"
+                className="w-full py-3.5 px-4 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl shadow-md transition-all text-sm md:text-base mt-4 cursor-pointer text-center block"
+                style={{ backgroundColor: '#f43f5e', color: '#ffffff' }}
               >
                 주문 저장하기
               </button>
@@ -762,7 +758,7 @@ export default function App() {
                     type="text"
                     value={editingOrder.customer_name}
                     onChange={e => setEditingOrder({...editingOrder, customer_name: e.target.value})}
-                    className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
+                    className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm !bg-white"
                     required
                   />
                 </div>
@@ -772,7 +768,7 @@ export default function App() {
                     type="text"
                     value={editingOrder.phone}
                     onChange={e => setEditingOrder({...editingOrder, phone: formatPhone(e.target.value)})}
-                    className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
+                    className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm !bg-white"
                     required
                   />
                 </div>
@@ -784,7 +780,7 @@ export default function App() {
                   <select
                     value={editingOrder.product_name}
                     onChange={e => setEditingOrder({...editingOrder, product_name: e.target.value})}
-                    className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
+                    className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm !bg-white"
                   >
                     {PRODUCT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
@@ -796,7 +792,7 @@ export default function App() {
                       type="number"
                       value={editingOrder.amount_thousands}
                       onChange={e => setEditingOrder({...editingOrder, amount_thousands: e.target.value})}
-                      className="w-full p-2 border border-slate-200 rounded-xl text-xs md:text-sm bg-white pr-14"
+                      className="w-full p-2 border border-slate-200 rounded-xl text-xs md:text-sm !bg-white pr-14"
                     />
                     <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-semibold text-rose-500 pointer-events-none">
                       = {((Number(editingOrder.amount_thousands) || 0) * 1000).toLocaleString()}원
@@ -812,7 +808,7 @@ export default function App() {
                     type="date"
                     value={editingOrder.pickup_date}
                     onChange={e => setEditingOrder({...editingOrder, pickup_date: e.target.value})}
-                    className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
+                    className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm !bg-white"
                   />
                 </div>
                 <div>
@@ -820,7 +816,7 @@ export default function App() {
                   <TimePickerCustom
                     value={editingOrder.pickup_time}
                     onChange={val => setEditingOrder({...editingOrder, pickup_time: val})}
-                    bgClass="bg-white"
+                    bgClass="!bg-white"
                   />
                 </div>
               </div>
@@ -832,7 +828,8 @@ export default function App() {
                     type="date"
                     value={editingOrder.receipt_date}
                     onChange={e => setEditingOrder({...editingOrder, receipt_date: e.target.value})}
-                    className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-slate-100"
+                    className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm !bg-slate-100"
+                    style={{ backgroundColor: '#f1f5f9' }}
                   />
                 </div>
                 <div>
@@ -841,7 +838,8 @@ export default function App() {
                     type="time"
                     value={editingOrder.receipt_time}
                     onChange={e => setEditingOrder({...editingOrder, receipt_time: e.target.value})}
-                    className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-slate-100"
+                    className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm !bg-slate-100"
+                    style={{ backgroundColor: '#f1f5f9' }}
                   />
                 </div>
               </div>
@@ -851,7 +849,7 @@ export default function App() {
                 <select
                   value={editingOrder.payment_method}
                   onChange={e => setEditingOrder({...editingOrder, payment_method: e.target.value})}
-                  className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
+                  className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm !bg-white"
                 >
                   {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
                 </select>
@@ -862,7 +860,7 @@ export default function App() {
                 <textarea
                   value={editingOrder.memo}
                   onChange={e => setEditingOrder({...editingOrder, memo: e.target.value})}
-                  className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
+                  className="w-full p-2 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm !bg-white"
                   rows={2}
                 />
               </div>
@@ -877,7 +875,8 @@ export default function App() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-rose-400 text-white rounded-xl font-bold text-xs md:text-sm hover:bg-rose-500 cursor-pointer"
+                  className="flex-1 py-2.5 bg-rose-500 text-white rounded-xl font-bold text-xs md:text-sm hover:bg-rose-600 cursor-pointer"
+                  style={{ backgroundColor: '#f43f5e', color: '#ffffff' }}
                 >
                   수정 완료
                 </button>
