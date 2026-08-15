@@ -352,7 +352,6 @@ export default function App() {
     setMatchedCustomerList(matches);
   };
 
-  // 4번 & 5번 요구사항: 고객 선택 시 가장 최근 주문 정보(메모 포함)를 자동 완성하고 연한 표시 적용
   const selectCustomerForNewOrder = (cust) => {
     let hasAutofilledMemo = false;
 
@@ -363,7 +362,6 @@ export default function App() {
         phone: cust.phone || '010-' 
       };
 
-      // 동일인의 주문 내역 중 가장 최근 주문(ID가 가장 큰 주문) 검색
       const matchingOrders = orders
         .filter(o => o.customer_id === cust.id || o.customers?.name === cust.name)
         .sort((a, b) => b.id - a.id);
@@ -831,7 +829,6 @@ export default function App() {
 
           <form onSubmit={handlePinSubmit} className="space-y-4">
             <div>
-              {/* 3번 요구사항: 모바일 입력 시 숫자 전용 대형 키패드 호출 */}
               <input
                 type="text"
                 inputMode="numeric"
@@ -1055,9 +1052,11 @@ export default function App() {
 
                 <div>
                   <label className="text-[11px] font-bold text-slate-700">메모</label>
+                  {/* 수정사항 3 반영: 포커스 시 전체 선택 */}
                   <textarea
                     value={editingOrder.memo}
                     onChange={e => setEditingOrder({ ...editingOrder, memo: e.target.value })}
+                    onFocus={e => e.target.select()}
                     className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
                     rows={2}
                   />
@@ -1203,7 +1202,6 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  {/* 2번 요구사항: (실시간 HH:mm) 텍스트 제거 */}
                   <label className="text-[11px] md:text-xs font-bold text-slate-700">접수 시간</label>
                   <input
                     type="time"
@@ -1229,15 +1227,16 @@ export default function App() {
 
               <div>
                 <label className="text-[11px] md:text-xs font-bold text-slate-700">고객 요구사항 / 메모</label>
-                {/* 5번 요구사항: 자동완성된 글씨는 연하게(text-slate-400), 직접 수정 시 진한 글씨 적용 */}
+                {/* 수정사항 2, 3 반영: 자동완성시 연한 글씨 적용 및 클릭 시 전체 선택 */}
                 <textarea
                   value={newOrder.memo}
                   onChange={e => {
                     setNewOrder({ ...newOrder, memo: e.target.value });
                     setIsMemoAutofilled(false);
                   }}
-                  className={`w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white font-medium ${
-                    isMemoAutofilled ? 'text-slate-400' : 'text-slate-900'
+                  onFocus={e => e.target.select()}
+                  className={`w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white font-medium transition-colors ${
+                    isMemoAutofilled ? 'text-slate-300' : 'text-slate-900'
                   }`}
                   style={{ backgroundColor: '#ffffff' }}
                   rows={3}
@@ -1326,9 +1325,9 @@ export default function App() {
                     검색 결과: 총 <strong className="text-rose-600">{sortedAndFilteredOrders.length}</strong>건
                   </div>
 
-                  {/* 1번 요구사항: table-layout: fixed 및 각 셀 너비/말줄임(truncate)을 지정하여 모바일 세로모드 시인성 확보 */}
+                  {/* 수정사항 1 반영: table-fixed를 이용해 메모란 및 각 컬럼 너비를 엄격히 유지 */}
                   <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                    <table className="w-full text-left border-collapse table-fixed min-w-[700px]">
+                    <table className="w-full text-left border-collapse table-fixed min-w-[750px]">
                       <thead>
                         <tr className="border-b border-slate-200 text-slate-700 text-xs md:text-sm bg-slate-100 font-bold">
                           <th className="py-2.5 px-2 w-28">픽업일시</th>
@@ -1396,7 +1395,7 @@ export default function App() {
                                     {o.payment_method}
                                   </span>
                                 </td>
-                                {/* 메모란: 한 줄로 깔끔하게 말줄임 표기하여 식물, 입금 등의 열이 쪼개지지 않음 */}
+                                {/* 수정사항 1: 메모 내용이 길어도 한 줄 말줄임(truncate) 처리하여 세로 찌그러짐 차단 */}
                                 <td className={`py-2.5 px-2 truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo}>
                                   {o.memo || '-'}
                                 </td>
