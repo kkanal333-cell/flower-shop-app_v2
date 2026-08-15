@@ -345,7 +345,7 @@ export default function App() {
     }));
   };
 
-  // 3. 선택한 날짜의 주문들을 픽업 시간이 빠른 순(HH:mm)으로 정렬
+  // 픽업 시간 빠른 순 정렬
   const selectedDayOrders = selectedDate
     ? orders
         .filter(o => o.pickup_datetime && o.pickup_datetime.startsWith(selectedDate))
@@ -430,27 +430,27 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100/70 flex flex-col md:flex-row pb-12 md:pb-0">
-      {/* 1. 모바일 달력 간격 20% 더 축소 (32px) & 2. 날짜 선택시 연한 블루 파스텔톤(#e0f2fe) 적용 */}
+      {/* 1. 모바일 주간 간격 30% 추가 축소 (22px 적용) */}
       <style>{`
         .fc .fc-daygrid-body-unbalanced .fc-daygrid-day-events {
-          min-height: 1.0em !important;
+          min-height: 0.8em !important;
         }
         .fc-theme-standard td, .fc-theme-standard th {
           padding: 0px !important;
         }
         .fc .fc-daygrid-day-frame {
-          min-height: 40px !important;
+          min-height: 36px !important;
         }
         @media (max-width: 768px) {
           .fc .fc-daygrid-day-frame {
-            min-height: 32px !important;
+            min-height: 22px !important;
           }
           .fc .fc-toolbar-title {
-            font-size: 1.0rem !important;
+            font-size: 0.95rem !important;
           }
           .fc .fc-button {
-            padding: 0.2rem 0.4rem !important;
-            font-size: 0.75rem !important;
+            padding: 0.15rem 0.35rem !important;
+            font-size: 0.7rem !important;
           }
         }
         ${selectedDate ? `
@@ -460,19 +460,19 @@ export default function App() {
         ` : ''}
       `}</style>
 
-      {/* 4. 모바일 가로모드/데스크톱 메뉴 영역 폭 축소 (w-36 ~ w-40 적용) */}
-      <aside className="bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 w-full md:w-36 lg:w-40 p-1 md:p-3 flex flex-col shrink-0 shadow-xs">
-        <div className="hidden md:flex items-center gap-1 text-rose-400 font-extrabold text-base mb-1">
+      {/* 2. 모바일 가로모드/데스크톱 메뉴 가로 폭 30% 더 축소 (w-24 / md:w-28 적용) */}
+      <aside className="bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 w-full md:w-28 p-1 md:p-2 flex flex-col shrink-0 shadow-xs">
+        <div className="hidden md:flex items-center gap-1 text-rose-400 font-extrabold text-sm mb-1 px-1">
           <span>📌</span>
           <span>메뉴</span>
         </div>
 
-        <nav className="flex md:flex-col justify-between md:justify-start gap-1 md:gap-2 w-full text-xs py-1 md:py-0">
+        <nav className="flex md:flex-col justify-between md:justify-start gap-1 w-full text-xs py-0.5 md:py-0">
           {menuList.map(menu => (
             <label
               key={menu.id}
               onClick={() => handleMenuChange(menu.id)}
-              className={`flex items-center justify-center md:justify-start gap-1 md:gap-2 px-1 md:px-2.5 py-1.5 rounded-lg cursor-pointer whitespace-nowrap transition-all flex-1 md:flex-none text-center ${
+              className={`flex items-center justify-center md:justify-start gap-1 px-1 md:px-2 py-1.5 rounded-lg cursor-pointer whitespace-nowrap transition-all flex-1 md:flex-none text-center ${
                 activeMenu === menu.id
                   ? 'bg-rose-100/70 text-rose-700 font-bold border-b-2 md:border-b-0 md:border-l-4 border-rose-300 shadow-2xs'
                   : 'text-slate-600 hover:bg-slate-200/50'
@@ -483,16 +483,16 @@ export default function App() {
                 name="sidebar-menu"
                 checked={activeMenu === menu.id}
                 onChange={() => {}}
-                className="w-3.5 h-3.5 accent-rose-300 cursor-pointer hidden md:inline"
+                className="w-3 h-3 accent-rose-300 cursor-pointer hidden md:inline"
               />
-              <span className="text-[11px] sm:text-xs">{menu.label}</span>
+              <span className="text-[10px] sm:text-xs">{menu.label}</span>
             </label>
           ))}
         </nav>
       </aside>
 
       {/* 메인 콘텐츠 영역 */}
-      <main className="flex-1 p-2 md:p-6 max-w-6xl mx-auto w-full">
+      <main className="flex-1 p-2 md:p-5 max-w-6xl mx-auto w-full">
         {/* 1. 신규주문 */}
         {activeMenu === 'new' && (
           <div className="max-w-2xl mx-auto bg-white p-3 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
@@ -720,14 +720,13 @@ export default function App() {
               )}
             </div>
 
-            {/* 3. 달력 하단 주문 목록: HH:MM 시간 가장 앞으로 배치 & 빠른 시간 순 정렬 */}
+            {/* 3 & 5. 달력 하단 주문 목록: 수정 버튼 클릭 시에만 수정창 연결 & 세로모드 시 깔끔한 2줄 구성 */}
             {subTab === 'calendar' && selectedDate && (
               <div className="bg-white p-3 md:p-5 rounded-xl border border-slate-200 shadow-sm">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm md:text-lg font-bold text-slate-800 flex items-center gap-2">
                     <span>📅</span> <span className="text-sky-600">{selectedDate}</span> 픽업 주문 ({selectedDayOrders.length}건)
                   </h3>
-                  <span className="text-xs text-slate-400">* 클릭하여 수정 가능</span>
                 </div>
 
                 {selectedDayOrders.length === 0 ? (
@@ -741,54 +740,51 @@ export default function App() {
                       return (
                         <div
                           key={o.id}
-                          onClick={() => startEditOrder(o)}
-                          className="p-2.5 md:p-3 rounded-xl border border-slate-200 bg-white hover:border-sky-300 transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-2 shadow-2xs group"
+                          className="p-2.5 md:p-3 rounded-xl border border-slate-200 bg-white flex flex-col gap-1.5 shadow-2xs"
                         >
-                          <div className="flex flex-wrap items-center gap-2 md:gap-3 flex-1">
-                            {/* 픽업 시간을 맨 앞에 HH:MM 으로 배치 */}
-                            <span className="px-2 py-0.5 bg-sky-100 text-sky-800 font-bold text-xs md:text-sm rounded-md whitespace-nowrap">
+                          {/* 1번째 줄: [시간] + [고객명] + [연락처] */}
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 bg-sky-100 text-sky-800 font-bold text-xs rounded-md whitespace-nowrap">
                               ⏰ {timeOnly}
                             </span>
-
-                            {/* 고객 성명 및 연락처 */}
-                            <div className="flex items-center gap-1.5 whitespace-nowrap">
-                              <span className="font-bold text-slate-900 text-sm md:text-base group-hover:text-sky-600 transition-colors">
-                                {o.customers?.name || '익명'}
-                              </span>
-                              <span className="text-xs text-slate-500">{o.customers?.phone || ''}</span>
-                            </div>
-
-                            {/* 상품명 & 결제수단 */}
-                            <div className="flex items-center gap-1.5 whitespace-nowrap">
-                              <span className="text-xs font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
-                                {o.product_name}
-                              </span>
-                              <span className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-600">
-                                {o.payment_method}
-                              </span>
-                            </div>
-
-                            {o.memo && (
-                              <span className="text-xs text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-100 truncate max-w-xs">
-                                💬 {o.memo}
-                              </span>
-                            )}
+                            <span className="font-bold text-slate-900 text-sm md:text-base">
+                              {o.customers?.name || '익명'}
+                            </span>
+                            <span className="text-xs text-slate-500">
+                              {o.customers?.phone || ''}
+                            </span>
                           </div>
 
-                          <div className="flex items-center justify-between md:justify-end gap-3 pt-1.5 md:pt-0 border-t md:border-t-0 border-slate-100 whitespace-nowrap">
-                            <span className="font-bold text-slate-800 text-sm">{o.amount?.toLocaleString()}원</span>
-                            
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                startEditOrder(o);
-                              }}
-                              className="inline-flex items-center gap-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-normal px-2.5 py-1 rounded-lg border border-slate-300 transition-colors cursor-pointer"
-                            >
-                              <span>✏️</span>
-                              <span>수정</span>
-                            </button>
+                          {/* 2번째 줄: [상품명] + [결제수단] + [메모] + [가격] + [수정버튼] */}
+                          <div className="flex items-center justify-between gap-1 text-xs">
+                            <div className="flex items-center gap-1.5 overflow-hidden flex-1 min-w-0">
+                              <span className="font-semibold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">
+                                {o.product_name}
+                              </span>
+                              <span className="px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded text-slate-600 shrink-0">
+                                {o.payment_method}
+                              </span>
+                              {o.memo && (
+                                <span className="text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 truncate">
+                                  💬 {o.memo}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* 가격 & 수정 버튼 (메모 옆으로 배치) */}
+                            <div className="flex items-center gap-2 shrink-0 ml-1">
+                              <span className="font-bold text-slate-800 text-xs md:text-sm">
+                                {o.amount?.toLocaleString()}원
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => startEditOrder(o)}
+                                className="inline-flex items-center gap-0.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-normal px-2 py-0.5 rounded-lg border border-slate-300 transition-colors cursor-pointer"
+                              >
+                                <span>✏️</span>
+                                <span>수정</span>
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -871,13 +867,13 @@ export default function App() {
         )}
       </main>
 
-      {/* 주문 수정 모달 */}
+      {/* 4. 주문 수정 모달 (진한 테두리 border-2 border-slate-300 및 그림자 적용) */}
       {editingOrder && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white p-6 rounded-2xl max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-bold text-slate-800 flex items-center justify-between">
+          <div className="bg-white p-5 md:p-6 rounded-2xl max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto border-2 border-slate-300 shadow-2xl">
+            <h3 className="text-lg font-bold text-slate-800 flex items-center justify-between pb-2 border-b border-slate-200">
               <span>✏️ 주문 수정하기</span>
-              <button onClick={() => setEditingOrder(null)} className="text-slate-400 hover:text-slate-600 text-sm">✕</button>
+              <button onClick={() => setEditingOrder(null)} className="text-slate-400 hover:text-slate-600 text-sm font-bold p-1">✕</button>
             </h3>
 
             <form onSubmit={handleUpdateOrder} className="space-y-3">
