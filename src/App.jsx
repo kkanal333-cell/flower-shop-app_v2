@@ -321,6 +321,7 @@ export default function App() {
     }
   };
 
+  // [수정1] 새로 추가된 고객 정보 포함 자동완성이 정상 작동하도록 매칭 로직 개선
   const handleCustomerNameChange = (nameInput) => {
     setNewOrder(prev => ({ ...prev, customer_name: nameInput }));
 
@@ -331,6 +332,7 @@ export default function App() {
 
     const cleanInput = nameInput.trim().toLowerCase();
     
+    // 기존 customers 및 orders의 모든 고객명 데이터를 종합하여 자동완성 후보 생성
     const allKnownCustomers = [...customers];
     
     orders.forEach(o => {
@@ -666,6 +668,7 @@ export default function App() {
     }
   };
 
+  // [수정3] 달력 내 날짜별 건수 라벨 색상을 검은색(#000000)으로 변경 및 진하게 설정
   const getCalendarEvents = () => {
     const countsByDate = {};
 
@@ -684,7 +687,7 @@ export default function App() {
       start: date,
       allDay: true,
       backgroundColor: '#fbe7e8',
-      textColor: '#be123c',
+      textColor: '#000000',
       borderColor: '#fda4af'
     }));
   };
@@ -750,12 +753,19 @@ export default function App() {
     { id: 'backup', label: '💾 백업/복원' },
   ];
 
+  // [수정4] 최근 픽업일 구하는 함수: 모든 픽업 내역 중 '가장 최신의 픽업일'을 찾아 반환하도록 개선
   const getCustomerPickupDate = (customerId, customerName) => {
-    const match = orders.find(o => o.customer_id === customerId || o.customers?.name === customerName);
-    if (match && match.pickup_datetime) {
-      return match.pickup_datetime.replace(' ', 'T').split('T')[0];
-    }
-    return '-';
+    const matchedOrders = orders.filter(
+      o => (o.customer_id === customerId || o.customers?.name === customerName) && o.pickup_datetime
+    );
+    if (matchedOrders.length === 0) return '-';
+
+    // 픽업일시 기준 내림차순 정렬하여 가장 최근 날짜 추출
+    matchedOrders.sort((a, b) => {
+      return b.pickup_datetime.localeCompare(a.pickup_datetime);
+    });
+
+    return matchedOrders[0].pickup_datetime.replace(' ', 'T').split('T')[0];
   };
 
   const TimePickerCustom = ({ value, onChange, bgClass = "bg-white" }) => {
@@ -849,6 +859,11 @@ export default function App() {
         }
         .fc .fc-daygrid-day-frame {
           min-height: 36px !important;
+        }
+        /* [수정3 반영] 달력 이벤트 글씨를 굵은 검은색으로 설정 */
+        .fc-event-title {
+          font-weight: bold !important;
+          color: #000000 !important;
         }
         @media (max-width: 768px) {
           .fc .fc-daygrid-day-frame {
@@ -1081,6 +1096,7 @@ export default function App() {
                     required
                   />
 
+                  {/* 입력 시 매칭되는 고객명 자동완성 목록 팝업 */}
                   {matchedCustomerList.length > 0 && (
                     <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-rose-300 rounded-xl shadow-lg z-20 max-h-48 overflow-y-auto p-1">
                       <div className="text-[11px] text-rose-600 font-bold px-2 py-1 bg-rose-50 rounded-t-lg">
@@ -1180,8 +1196,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  {/* [수정2 반영] HH:mm 글씨 제거 */}
-                  <label className="text-[11px] md:text-xs font-bold text-slate-700">접수 시간</label>
+                  <label className="text-[11px] md:text-xs font-bold text-slate-700">접수 시간 (실시간 HH:mm)</label>
                   <input
                     type="time"
                     value={newOrder.receipt_time}
@@ -1297,11 +1312,10 @@ export default function App() {
                     검색 결과: 총 <strong className="text-rose-600">{sortedAndFilteredOrders.length}</strong>건
                   </div>
 
-                  {/* [수정1 반영] 모바일 세로모드에서 시인성이 떨어지지 않도록 각 열의 세로줄바꿈을 방지하고 메모란 레이아웃 조정 */}
                   <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left border-collapse whitespace-nowrap">
                       <thead>
-                        <tr className="border-b border-slate-200 text-slate-700 text-xs md:text-sm bg-slate-100 font-bold whitespace-nowrap">
+                        <tr className="border-b border-slate-200 text-slate-700 text-xs md:text-sm bg-slate-100 font-bold">
                           <th className="py-2.5 px-3">픽업일시</th>
                           <th className="py-2.5 px-3">접수일시</th>
                           <th className="py-2.5 px-3">고객명</th>
@@ -1309,7 +1323,6 @@ export default function App() {
                           <th className="py-2.5 px-3">상품명</th>
                           <th className="py-2.5 px-3">금액</th>
                           <th className="py-2.5 px-3">결제수단</th>
-                          <th className="py-2.5 px-3 max-w-[150px]">메모</th>
                           <th className="py-2.5 px-3 text-center">관리</th>
                           <th className="py-2.5 px-3 text-center">
                             <input
@@ -1324,7 +1337,7 @@ export default function App() {
                       <tbody>
                         {sortedAndFilteredOrders.length === 0 ? (
                           <tr>
-                            <td colSpan={10} className="py-6 text-center text-slate-500 text-xs md:text-sm">
+                            <td colSpan={9} className="py-6 text-center text-slate-500 text-xs md:text-sm">
                               검색 결과가 없습니다.
                             </td>
                           </tr>
@@ -1337,15 +1350,16 @@ export default function App() {
                               <tr 
                                 key={o.id} 
                                 className={`border-b border-slate-100 transition-colors text-xs md:text-sm ${
+                                  /* [수정2 반영] 지난 날짜 리스트 글씨색을 훨씬 더 연하게(text-slate-300 opacity-30) 변경 */
                                   isPast 
-                                    ? 'text-slate-300 opacity-40 bg-slate-100/50 hover:bg-slate-100' 
+                                    ? 'text-slate-300 opacity-30 bg-slate-100/30 hover:bg-slate-100/50' 
                                     : 'text-slate-900 hover:bg-slate-50'
                                 }`}
                               >
-                                <td className={`py-2.5 px-3 font-medium whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-700'}`}>
+                                <td className={`py-2.5 px-3 font-medium ${isPast ? 'text-slate-300' : 'text-slate-700'}`}>
                                   {o.pickup_datetime?.replace('T', ' ').slice(0, 16) || '-'}
                                 </td>
-                                <td className={`py-2.5 px-3 text-xs whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-500'}`}>
+                                <td className={`py-2.5 px-3 text-xs ${isPast ? 'text-slate-300' : 'text-slate-500'}`}>
                                   {o.created_at?.replace('T', ' ').slice(0, 16) || '-'}
                                 </td>
                                 <td className={`py-2.5 px-3 font-bold whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
@@ -1354,37 +1368,32 @@ export default function App() {
                                 <td className={`py-2.5 px-3 font-medium whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-700'}`}>
                                   {o.customers?.phone || '-'}
                                 </td>
-                                <td className={`py-2.5 px-3 font-bold whitespace-nowrap shrink-0 ${isPast ? 'text-slate-300' : 'text-slate-800'}`}>
+                                <td className={`py-2.5 px-3 font-bold whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-800'}`}>
                                   {o.product_name}
                                 </td>
                                 <td className={`py-2.5 px-3 font-extrabold whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-rose-600'}`}>
                                   {o.amount?.toLocaleString()}원
                                 </td>
-                                <td className="py-2.5 px-3 whitespace-nowrap shrink-0">
-                                  <span className={`px-2 py-0.5 border rounded text-xs font-semibold inline-block ${
+                                <td className="py-2.5 px-3">
+                                  <span className={`px-2 py-0.5 border rounded text-xs font-semibold whitespace-nowrap ${
                                     isPast ? 'bg-slate-100 border-slate-200 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-800'
                                   }`}>
                                     {o.payment_method}
                                   </span>
                                 </td>
                                 
-                                {/* 메모란: 최대 너비 제한(max-w-[150px]) 및 넘치는 텍스트 말줄임표(...) 표기 */}
-                                <td className={`py-2.5 px-3 max-w-[150px] truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo || ''}>
-                                  {o.memo || '-'}
-                                </td>
-
-                                <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                                <td className="py-2.5 px-3 text-center">
                                   <button
                                     onClick={() => startEditOrder(o)}
-                                    className={`text-xs bg-white hover:bg-slate-100 border font-bold px-3 py-1 rounded-lg cursor-pointer shadow-2xs ${
-                                      isPast ? 'text-slate-400 border-slate-300' : 'text-slate-900 border-slate-800'
+                                    className={`text-xs bg-white hover:bg-slate-100 border font-bold px-3 py-1 rounded-lg cursor-pointer whitespace-nowrap shadow-2xs ${
+                                      isPast ? 'text-slate-300 border-slate-200' : 'text-slate-900 border-slate-800'
                                     }`}
                                   >
                                     수정하기
                                   </button>
                                 </td>
 
-                                <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                                <td className="py-2.5 px-3 text-center">
                                   <input
                                     type="checkbox"
                                     checked={selectedOrderIds.includes(o.id)}
@@ -1429,37 +1438,37 @@ export default function App() {
                             <span className="px-2 py-0.5 bg-sky-100 text-sky-900 font-extrabold text-xs rounded-md whitespace-nowrap border border-sky-300">
                               ⏰ {timeOnly}
                             </span>
-                            <span className="font-bold text-slate-900 text-sm md:text-base whitespace-nowrap">
+                            <span className="font-bold text-slate-900 text-sm md:text-base">
                               {o.customers?.name || '익명'}
                             </span>
-                            <span className="text-xs text-slate-600 font-medium whitespace-nowrap">
+                            <span className="text-xs text-slate-600 font-medium">
                               {o.customers?.phone || ''}
                             </span>
                           </div>
 
                           <div className="flex items-center justify-between gap-1 text-xs">
                             <div className="flex items-center gap-1.5 overflow-hidden flex-1 min-w-0">
-                              <span className="font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 shrink-0 whitespace-nowrap">
+                              <span className="font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
                                 {o.product_name}
                               </span>
-                              <span className="px-1.5 py-0.5 bg-slate-50 border border-slate-300 rounded text-slate-700 font-semibold shrink-0 whitespace-nowrap">
+                              <span className="px-1.5 py-0.5 bg-slate-50 border border-slate-300 rounded text-slate-700 font-semibold shrink-0">
                                 {o.payment_method}
                               </span>
                               {o.memo && (
-                                <span className="text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 truncate font-medium max-w-[180px]" title={o.memo}>
+                                <span className="text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 truncate font-medium">
                                   💬 {o.memo}
                                 </span>
                               )}
                             </div>
 
                             <div className="flex items-center gap-2 shrink-0 ml-1">
-                              <span className="font-extrabold text-slate-900 text-xs md:text-sm whitespace-nowrap">
+                              <span className="font-extrabold text-slate-900 text-xs md:text-sm">
                                 {o.amount?.toLocaleString()}원
                               </span>
                               
                               <button
                                 onClick={() => startEditOrder(o)}
-                                className="text-xs bg-white hover:bg-slate-100 border border-slate-800 text-slate-900 font-bold px-2 py-0.5 rounded cursor-pointer whitespace-nowrap"
+                                className="text-xs bg-white hover:bg-slate-100 border border-slate-800 text-slate-900 font-bold px-2 py-0.5 rounded cursor-pointer"
                               >
                                 수정
                               </button>
