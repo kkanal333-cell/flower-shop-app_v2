@@ -321,7 +321,7 @@ export default function App() {
     }
   };
 
-  // [수정4 반영] 타이핑 시 무조건 '화사남'이 입력되거나 고정되던 문제 수정
+  // [수정1 반영] 새로 추가된 고객 정보 포함 자동완성이 정상 작동하도록 매칭 로직 개선
   const handleCustomerNameChange = (nameInput) => {
     setNewOrder(prev => ({ ...prev, customer_name: nameInput }));
 
@@ -330,12 +330,23 @@ export default function App() {
       return;
     }
 
-    const cleanInput = nameInput.trim();
-    const matches = customers.filter(c => 
-      c.name === cleanInput || 
-      c.name.replace(/[0-9]/g, '') === cleanInput ||
-      c.name.includes(cleanInput)
-    );
+    const cleanInput = nameInput.trim().toLowerCase();
+    
+    // 기존 customers 및 orders의 모든 고객명 데이터를 종합하여 자동완성 후보 생성
+    const allKnownCustomers = [...customers];
+    
+    orders.forEach(o => {
+      if (o.customers && !allKnownCustomers.some(c => c.id === o.customers.id)) {
+        allKnownCustomers.push(o.customers);
+      }
+    });
+
+    const matches = allKnownCustomers.filter(c => {
+      if (!c || !c.name) return false;
+      const cNameClean = c.name.toLowerCase();
+      const baseNameClean = cNameClean.replace(/[0-9]/g, '');
+      return cNameClean.includes(cleanInput) || baseNameClean.includes(cleanInput);
+    });
 
     setMatchedCustomerList(matches);
   };
@@ -690,7 +701,6 @@ export default function App() {
         })
     : [];
 
-  // [수정3 반영] 오늘 이후(가장 가까운 날이 상단) -> 지난 날짜(맨 아래로) 정렬 로직
   const todayDateStr = getKoreaNowFormatted().date;
 
   const sortedAndFilteredOrders = [...orders]
@@ -712,16 +722,13 @@ export default function App() {
       const isPastA = dateA < todayDateStr;
       const isPastB = dateB < todayDateStr;
 
-      // 둘 중 하나만 지난 날짜일 경우: 지난 날짜를 뒤로
       if (!isPastA && isPastB) return -1;
       if (isPastA && !isPastB) return 1;
 
-      // 둘 다 예정 주문(오늘 포함)이면 오름차순 (가장 가까운 날짜부터)
       if (!isPastA && !isPastB) {
         return (a.pickup_datetime || '').localeCompare(b.pickup_datetime || '');
       }
 
-      // 둘 다 지난 주문이면 최근 지난 날짜가 먼저 오도록 내림차순
       return (b.pickup_datetime || '').localeCompare(a.pickup_datetime || '');
     });
 
@@ -864,7 +871,7 @@ export default function App() {
         ` : ''}
       `}</style>
 
-      {/* 📢 주간 백업 팝업 알림 모달 */}
+      {/* 주간 백업 팝업 알림 모달 */}
       {showBackupAlertModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border-2 border-rose-400 text-center space-y-4">
@@ -1036,7 +1043,6 @@ export default function App() {
                 </div>
 
                 <div className="flex gap-2 pt-2">
-                  {/* [수정1 반영] border-2 -> border 변경 (취소 버튼 굵기와 동일하게 변경) */}
                   <button 
                     type="submit" 
                     className="flex-1 py-2 bg-white hover:bg-slate-100 text-black border border-black font-extrabold rounded-xl text-xs cursor-pointer transition-colors"
@@ -1066,7 +1072,6 @@ export default function App() {
             <form onSubmit={handleCreateOrder} className="space-y-3 md:space-y-4">
               <div className="grid grid-cols-2 gap-2 md:gap-4 relative">
                 <div className="relative">
-                  {/* [수정2 반영] font-bold 복구 */}
                   <label className="text-[11px] md:text-xs font-bold text-slate-700">고객 성명 *</label>
                   <input
                     type="text"
@@ -1074,23 +1079,24 @@ export default function App() {
                     onChange={e => handleCustomerNameChange(e.target.value)}
                     className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
                     style={{ backgroundColor: '#ffffff' }}
-                    placeholder="홍길동 (입력시 동명이인 목록 표시)"
+                    placeholder="홍길동 (입력시 자동완성 목록 표시)"
                     required
                   />
 
-                  {matchedCustomerList.length > 1 && (
+                  {/* [수정1 반영] 입력 시 매칭되는 고객명 자동완성 목록 팝업 */}
+                  {matchedCustomerList.length > 0 && (
                     <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-rose-300 rounded-xl shadow-lg z-20 max-h-48 overflow-y-auto p-1">
                       <div className="text-[11px] text-rose-600 font-bold px-2 py-1 bg-rose-50 rounded-t-lg">
-                        ⚠️ 동명이인이 존재합니다. 아래에서 클릭하세요:
+                        💡 검색된 고객 목록 (선택 시 자동 입력):
                       </div>
                       {matchedCustomerList.map(c => (
                         <div
-                          key={c.id}
+                          key={c.id || c.name}
                           onClick={() => selectCustomerForNewOrder(c)}
                           className="p-2 text-xs hover:bg-rose-50 rounded-lg cursor-pointer flex justify-between items-center"
                         >
                           <span className="font-bold text-slate-900">{c.name}</span>
-                          <span className="text-slate-600 text-[11px]">{c.phone}</span>
+                          <span className="text-slate-600 text-[11px]">{c.phone || '-'}</span>
                         </div>
                       ))}
                     </div>
@@ -1212,7 +1218,6 @@ export default function App() {
                 />
               </div>
 
-              {/* [수정1 반영] border-2 -> border 변경 (취소 버튼 굵기와 동일하게 변경) */}
               <button
                 type="submit"
                 className="w-full py-3 px-4 bg-white hover:bg-slate-100 text-black border border-black font-extrabold rounded-xl shadow-md transition-all text-sm md:text-base mt-4 cursor-pointer text-center block"
@@ -1331,32 +1336,34 @@ export default function App() {
                             return (
                               <tr 
                                 key={o.id} 
-                                className={`border-b border-slate-100 hover:bg-slate-50 transition-colors text-xs md:text-sm ${
-                                  /* [수정3 반영] 지난 날짜 행 연하게 표시 */
-                                  isPast ? 'text-slate-400 opacity-60 bg-slate-50/50' : 'text-slate-900'
+                                className={`border-b border-slate-100 transition-colors text-xs md:text-sm ${
+                                  /* [수정2 반영] 지난 날짜 리스트 글씨색을 훨씬 더 연하게(text-slate-300 opacity-40) 변경 */
+                                  isPast 
+                                    ? 'text-slate-300 opacity-40 bg-slate-100/50 hover:bg-slate-100' 
+                                    : 'text-slate-900 hover:bg-slate-50'
                                 }`}
                               >
-                                <td className={`py-2.5 px-3 font-medium ${isPast ? 'text-slate-400' : 'text-slate-700'}`}>
+                                <td className={`py-2.5 px-3 font-medium ${isPast ? 'text-slate-300' : 'text-slate-700'}`}>
                                   {o.pickup_datetime?.replace('T', ' ').slice(0, 16) || '-'}
                                 </td>
-                                <td className={`py-2.5 px-3 text-xs ${isPast ? 'text-slate-400' : 'text-slate-500'}`}>
+                                <td className={`py-2.5 px-3 text-xs ${isPast ? 'text-slate-300' : 'text-slate-500'}`}>
                                   {o.created_at?.replace('T', ' ').slice(0, 16) || '-'}
                                 </td>
-                                <td className={`py-2.5 px-3 font-bold whitespace-nowrap ${isPast ? 'text-slate-400' : 'text-slate-900'}`}>
+                                <td className={`py-2.5 px-3 font-bold whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
                                   {o.customers?.name || '-'}
                                 </td>
-                                <td className={`py-2.5 px-3 font-medium whitespace-nowrap ${isPast ? 'text-slate-400' : 'text-slate-700'}`}>
+                                <td className={`py-2.5 px-3 font-medium whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-700'}`}>
                                   {o.customers?.phone || '-'}
                                 </td>
-                                <td className={`py-2.5 px-3 font-bold whitespace-nowrap ${isPast ? 'text-slate-400' : 'text-slate-800'}`}>
+                                <td className={`py-2.5 px-3 font-bold whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-800'}`}>
                                   {o.product_name}
                                 </td>
-                                <td className={`py-2.5 px-3 font-extrabold whitespace-nowrap ${isPast ? 'text-slate-400' : 'text-rose-600'}`}>
+                                <td className={`py-2.5 px-3 font-extrabold whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-rose-600'}`}>
                                   {o.amount?.toLocaleString()}원
                                 </td>
                                 <td className="py-2.5 px-3">
                                   <span className={`px-2 py-0.5 border rounded text-xs font-semibold whitespace-nowrap ${
-                                    isPast ? 'bg-slate-50 border-slate-200 text-slate-400' : 'bg-slate-100 border-slate-300 text-slate-800'
+                                    isPast ? 'bg-slate-100 border-slate-200 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-800'
                                   }`}>
                                     {o.payment_method}
                                   </span>
@@ -1365,8 +1372,8 @@ export default function App() {
                                 <td className="py-2.5 px-3 text-center">
                                   <button
                                     onClick={() => startEditOrder(o)}
-                                    className={`text-xs bg-white hover:bg-slate-100 border border-slate-800 font-bold px-3 py-1 rounded-lg cursor-pointer whitespace-nowrap shadow-2xs ${
-                                      isPast ? 'text-slate-500 border-slate-400' : 'text-slate-900'
+                                    className={`text-xs bg-white hover:bg-slate-100 border font-bold px-3 py-1 rounded-lg cursor-pointer whitespace-nowrap shadow-2xs ${
+                                      isPast ? 'text-slate-400 border-slate-300' : 'text-slate-900 border-slate-800'
                                     }`}
                                   >
                                     수정하기
