@@ -66,6 +66,81 @@ const getKoreaNowFormatted = () => {
   return { date: dateStr, time: timeStr };
 };
 
+// CSV 변환 헬퍼 (배열 -> CSV 파일 다운로드)
+const downloadCSV = (headers, rows, filename) => {
+  const escapeCSV = (val) => {
+    if (val === null || val === undefined) return '""';
+    const str = String(val).replace(/"/g, '""');
+    return `"${str}"`;
+  };
+
+  const csvContent = [
+    headers.map(escapeCSV).join(','),
+    ...rows.map(row => row.map(escapeCSV).join(','))
+  ].join('\r\n');
+
+  // 한글 깨짐 방지 BOM 추가 (\uFEFF)
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+// CSV 텍스트 파싱 헬퍼
+const parseCSVText = (text) => {
+  const lines = text.split(/\r\n|\n/);
+  const result = [];
+
+  for (let line of lines) {
+    line = line.trim();
+    if (!line) continue;
+
+    const row = [];
+    let insideQuote = false;
+    let entry = '';
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        if (insideQuote && line[i + 1] === '"') {
+          entry += '"';
+          i++;
+        } else {
+          insideQuote = !insideQuote;
+        }
+      } else if (char === ',' && !insideQuote) {
+        row.push(entry.trim());
+        entry = '';
+      } else {
+        entry += char;
+      }
+    }
+    row.push(entry.trim());
+    result.push(row);
+  }
+
+  if (result.length < 2) return [];
+  const headers = result[0].map(h => h.replace(/^"|"$/g, ''));
+  const rows = result.slice(1);
+
+  return rows.map(r => {
+    const obj = {};
+    headers.forEach((h, idx) => {
+      let val = r[idx] || '';
+      if (val.startsWith('"') && val.endsWith('"')) {
+        val = val.slice(1, -1).replace(/""/g, '"');
+      }
+      obj[h] = val;
+    });
+    return obj;
+  });
+};
+
 export default function App() {
   const [activeMenu, setActiveMenu] = useState('orders');
   const [subTab, setSubTab] = useState('calendar');
@@ -324,6 +399,115 @@ export default function App() {
     fetchData();
   };
 
+  // CSV 데이터 백업 내보내기 (주문정보, 고객정보 2개 파일)
+  const handleExportCSV = () => {
+    try {
+      const today = getKoreaNowFormatted().date;
+
+      // 1. 주문 정보 CSV 내보내기
+      const orderHeaders = ['주문ID', '고객명', '연락처', '상품명', '금액', '픽업일시', '접수일시', '결제수단', '메모'];
+      const orderRows = orders.map(o => [
+        o.id,
+        o.customers?.name || '',
+        o.customers?.phone || '',
+        o.product_name || '',
+        o.amount || 0,
+        o.pickup_datetime || '',
+        o.created_at || '',
+        o.payment_method || '',
+        o.memo || ''
+      ]);
+      downloadCSV(orderHeaders, orderRows, `export_orders_${today}.csv`);
+
+      // 2. 고객 정보 CSV 내보내기 (약간의 지연시간을 두어 두 파일 모두 팝업 차단 없이 다운로드 지원)
+      setTimeout(() => {
+        const custHeaders = ['ID', '이름', '연락처', '등록일'];
+        const custRows = customers.map(c => [
+          c.id,
+          c.name || '',
+          c.phone || '',
+          c.created_at || ''
+        ]);
+        downloadCSV(custHeaders, custRows, `export_customers_${today}.csv`);
+      }, 300);
+
+      alert(`주문정보(export_orders_${today}.csv) 및 고객정보(export_customers_${today}.csv) 파일 다운로드가 시작되었습니다.`);
+    } catch (err) {
+      console.error(err);
+      alert('CSV 백업 중 오류가 발생했습니다.');
+    }
+  };
+
+  // CSV 파일 복원 (다중 선택 가능 - 주문파일, 고객파일 두 개 한꺼번에 선택)
+  const handleImportCSV = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    if (!window.confirm(`선택한 ${files.length}개 CSV 파일 데이터를 Supabase 데이터베이스에 추가 등록하시겠습니까?`)) {
+      e.target.value = '';
+      return;
+    }
+
+    try {
+      let importedCustCount = 0;
+      let importedOrderCount = 0;
+
+      for (const file of files) {
+        const text = await file.text();
+        const parsedRows = parseCSVText(text);
+
+        if (parsedRows.length === 0) continue;
+
+        // 파일 내 컬럼 키값 확인
+        const sampleKeys = Object.keys(parsedRows[0]);
+
+        // 고객 정보 파일인 경우 (키에 '이름' 또는 '연락처'가 있고 '주문ID'가 없는 경우)
+        if (sampleKeys.includes('이름') && sampleKeys.includes('연락처') && !sampleKeys.includes('주문ID')) {
+          for (const row of parsedRows) {
+            if (row['이름'] && row['연락처']) {
+              await supabase.from('customers').upsert([{ name: row['이름'], phone: row['연락처'] }], { onConflict: 'phone' });
+              importedCustCount++;
+            }
+          }
+        } 
+        // 주문 정보 파일인 경우 (키에 '주문ID' 또는 '상품명'이 포함된 경우)
+        else if (sampleKeys.includes('주문ID') || sampleKeys.includes('상품명')) {
+          // 고객 재조회 후 ID 맵핑
+          const { data: updatedCustomers } = await supabase.from('customers').select('*');
+
+          for (const row of parsedRows) {
+            let custId = null;
+            if (row['연락처'] && updatedCustomers) {
+              const matched = updatedCustomers.find(c => c.phone === row['연락처']);
+              if (matched) custId = matched.id;
+            }
+
+            await supabase.from('orders').insert([{
+              customer_id: custId,
+              product_name: row['상품명'] || '꽃다발',
+              product: row['상품명'] || '꽃다발',
+              amount: Number(row['금액']) || 0,
+              pickup_datetime: row['픽업일시'] || null,
+              created_at: row['접수일시'] || null,
+              payment_method: row['결제수단'] || '신용카드',
+              status: row['결제수단'] || '신용카드',
+              memo: row['메모'] || ''
+            }]);
+            importedOrderCount++;
+          }
+        }
+      }
+
+      alert(`복원 완료: 고객 (${importedCustCount}건), 주문 (${importedOrderCount}건)`);
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      alert('CSV 복원 중 오류가 발생했습니다. CSV 형식을 확인해주세요.');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
   const getCalendarEvents = () => {
     const countsByDate = {};
 
@@ -345,7 +529,6 @@ export default function App() {
     }));
   };
 
-  // 픽업 시간 빠른 순 정렬
   const selectedDayOrders = selectedDate
     ? orders
         .filter(o => o.pickup_datetime && o.pickup_datetime.startsWith(selectedDate))
@@ -430,7 +613,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100/70 flex flex-col md:flex-row pb-12 md:pb-0">
-      {/* 1. 모바일 주간 간격 30% 추가 축소 (22px 적용) */}
       <style>{`
         .fc .fc-daygrid-body-unbalanced .fc-daygrid-day-events {
           min-height: 0.8em !important;
@@ -460,7 +642,7 @@ export default function App() {
         ` : ''}
       `}</style>
 
-      {/* 2. 모바일 가로모드/데스크톱 메뉴 가로 폭 30% 더 축소 (w-24 / md:w-28 적용) */}
+      {/* 사이드바 메뉴 */}
       <aside className="bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 w-full md:w-28 p-1 md:p-2 flex flex-col shrink-0 shadow-xs">
         <div className="hidden md:flex items-center gap-1 text-rose-400 font-extrabold text-sm mb-1 px-1">
           <span>📌</span>
@@ -493,6 +675,110 @@ export default function App() {
 
       {/* 메인 콘텐츠 영역 */}
       <main className="flex-1 p-2 md:p-5 max-w-6xl mx-auto w-full">
+        {/* 주문 수정 모달 */}
+        {editingOrder && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 z-50">
+            <div className="bg-white rounded-2xl p-4 md:p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-xl border border-slate-200">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-base md:text-lg font-bold text-slate-800">✏️ 주문 수정</h3>
+                <button onClick={() => setEditingOrder(null)} className="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+              </div>
+
+              <form onSubmit={handleUpdateOrder} className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-medium text-slate-600">고객명</label>
+                    <input
+                      type="text"
+                      value={editingOrder.customer_name}
+                      onChange={e => setEditingOrder({ ...editingOrder, customer_name: e.target.value })}
+                      className="w-full p-2 border rounded-xl text-xs bg-white"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-medium text-slate-600">연락처</label>
+                    <input
+                      type="text"
+                      value={editingOrder.phone}
+                      onChange={e => setEditingOrder({ ...editingOrder, phone: formatPhone(e.target.value) })}
+                      className="w-full p-2 border rounded-xl text-xs bg-white"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-medium text-slate-600">상품종류</label>
+                    <select
+                      value={editingOrder.product_name}
+                      onChange={e => setEditingOrder({ ...editingOrder, product_name: e.target.value })}
+                      className="w-full p-2 border rounded-xl text-xs bg-white"
+                    >
+                      {PRODUCT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-medium text-slate-600">금액 (천원 단위)</label>
+                    <input
+                      type="number"
+                      value={editingOrder.amount_thousands}
+                      onChange={e => setEditingOrder({ ...editingOrder, amount_thousands: e.target.value })}
+                      className="w-full p-2 border rounded-xl text-xs bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-medium text-slate-600">픽업 날짜</label>
+                    <input
+                      type="date"
+                      value={editingOrder.pickup_date}
+                      onChange={e => setEditingOrder({ ...editingOrder, pickup_date: e.target.value })}
+                      className="w-full p-2 border rounded-xl text-xs bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-medium text-slate-600">픽업 시간</label>
+                    <TimePickerCustom
+                      value={editingOrder.pickup_time}
+                      onChange={val => setEditingOrder({ ...editingOrder, pickup_time: val })}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-medium text-slate-600">결제 방식</label>
+                  <select
+                    value={editingOrder.payment_method}
+                    onChange={e => setEditingOrder({ ...editingOrder, payment_method: e.target.value })}
+                    className="w-full p-2 border rounded-xl text-xs bg-white"
+                  >
+                    {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-medium text-slate-600">메모</label>
+                  <textarea
+                    value={editingOrder.memo}
+                    onChange={e => setEditingOrder({ ...editingOrder, memo: e.target.value })}
+                    className="w-full p-2 border rounded-xl text-xs bg-white"
+                    rows={2}
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button type="submit" className="flex-1 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold">저장하기</button>
+                  <button type="button" onClick={() => setEditingOrder(null)} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs">취소</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {/* 1. 신규주문 */}
         {activeMenu === 'new' && (
           <div className="max-w-2xl mx-auto bg-white p-3 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
@@ -720,7 +1006,7 @@ export default function App() {
               )}
             </div>
 
-            {/* 3 & 5. 달력 하단 주문 목록: 수정 버튼 클릭 시에만 수정창 연결 & 세로모드 시 깔끔한 2줄 구성 */}
+            {/* 달력 하단 선택 날짜 상세 주문 목록 */}
             {subTab === 'calendar' && selectedDate && (
               <div className="bg-white p-3 md:p-5 rounded-xl border border-slate-200 shadow-sm">
                 <div className="flex items-center justify-between mb-3">
@@ -742,7 +1028,6 @@ export default function App() {
                           key={o.id}
                           className="p-2.5 md:p-3 rounded-xl border border-slate-200 bg-white flex flex-col gap-1.5 shadow-2xs"
                         >
-                          {/* 1번째 줄: [시간] + [고객명] + [연락처] */}
                           <div className="flex items-center gap-2">
                             <span className="px-2 py-0.5 bg-sky-100 text-sky-800 font-bold text-xs rounded-md whitespace-nowrap">
                               ⏰ {timeOnly}
@@ -755,7 +1040,6 @@ export default function App() {
                             </span>
                           </div>
 
-                          {/* 2번째 줄: [상품명] + [결제수단] + [메모] + [가격] + [수정버튼] */}
                           <div className="flex items-center justify-between gap-1 text-xs">
                             <div className="flex items-center gap-1.5 overflow-hidden flex-1 min-w-0">
                               <span className="font-semibold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">
@@ -771,18 +1055,15 @@ export default function App() {
                               )}
                             </div>
 
-                            {/* 가격 & 수정 버튼 (메모 옆으로 배치) */}
                             <div className="flex items-center gap-2 shrink-0 ml-1">
                               <span className="font-bold text-slate-800 text-xs md:text-sm">
                                 {o.amount?.toLocaleString()}원
                               </span>
                               <button
-                                type="button"
                                 onClick={() => startEditOrder(o)}
-                                className="inline-flex items-center gap-0.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-normal px-2 py-0.5 rounded-lg border border-slate-300 transition-colors cursor-pointer"
+                                className="text-xs bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 px-2 py-0.5 rounded cursor-pointer"
                               >
-                                <span>✏️</span>
-                                <span>수정</span>
+                                수정
                               </button>
                             </div>
                           </div>
@@ -798,50 +1079,36 @@ export default function App() {
 
         {/* 3. 고객 관리 */}
         {activeMenu === 'customers' && (
-          <div className="bg-white p-4 md:p-8 rounded-xl border border-slate-200 shadow-sm space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-              <h2 className="text-lg md:text-xl font-bold text-slate-800 flex items-center gap-2">
-                <span>🎂</span> 고객 목록 ({filteredCustomers.length}명 / 전체 {customers.length}명)
-              </h2>
+          <div className="bg-white p-3 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <h2 className="text-base md:text-xl font-bold text-slate-800 flex items-center gap-2">
+              <span>🎂</span> 고객 목록 및 검색
+            </h2>
 
-              <div className="relative w-full md:w-64">
-                <input
-                  type="text"
-                  value={customerSearch}
-                  onChange={e => handleCustomerSearchChange(e.target.value)}
-                  placeholder="이름 또는 연락처 검색..."
-                  className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-xl text-xs md:text-sm bg-white"
-                  style={{ backgroundColor: '#ffffff' }}
-                  maxLength={13}
-                />
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">🔍</span>
-              </div>
-            </div>
+            <input
+              type="text"
+              value={customerSearch}
+              onChange={e => handleCustomerSearchChange(e.target.value)}
+              placeholder="고객 이름 또는 전화번호 검색"
+              className="w-full p-2.5 md:p-3 border border-slate-200 rounded-xl text-xs md:text-sm bg-white"
+            />
 
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse whitespace-nowrap">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 text-xs md:text-sm bg-slate-50">
-                    <th className="py-2.5 px-3">고객명</th>
+                    <th className="py-2.5 px-3">이름</th>
                     <th className="py-2.5 px-3">연락처</th>
                     <th className="py-2.5 px-3">최근 픽업일</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredCustomers.map(c => (
-                    <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors text-xs md:text-sm">
-                      <td className="py-2.5 px-3 font-bold text-slate-900 whitespace-nowrap">{c.name}</td>
-                      <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">{c.phone || '-'}</td>
-                      <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap">{getCustomerPickupDate(c.id, c.name)}</td>
+                    <tr key={c.id} className="border-b border-slate-100 text-xs md:text-sm hover:bg-slate-50">
+                      <td className="py-2.5 px-3 font-bold text-slate-900">{c.name}</td>
+                      <td className="py-2.5 px-3 text-slate-600">{c.phone || '-'}</td>
+                      <td className="py-2.5 px-3 text-slate-500">{getCustomerPickupDate(c.id, c.name)}</td>
                     </tr>
                   ))}
-                  {filteredCustomers.length === 0 && (
-                    <tr>
-                      <td colSpan={3} className="py-8 text-center text-slate-400 text-xs md:text-sm">
-                        검색 조건에 해당되는 고객이 없습니다.
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
@@ -850,138 +1117,55 @@ export default function App() {
 
         {/* 4. 알림 */}
         {activeMenu === 'notifications' && (
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm text-center py-12">
-            <span className="text-4xl">🔔</span>
-            <h3 className="text-lg font-bold text-slate-800 mt-2">알림 센터</h3>
-            <p className="text-slate-500 text-xs md:text-sm mt-1">예약 알림 및 일정 관리 기능 준비 중입니다.</p>
+          <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <h2 className="text-base md:text-xl font-bold text-slate-800 mb-2">🔔 알림 관리</h2>
+            <p className="text-xs md:text-sm text-slate-500">픽업 알림 및 일정 관리 화면입니다.</p>
           </div>
         )}
 
-        {/* 5. 백업/복원 */}
+        {/* 5. CSV 백업/복원 */}
         {activeMenu === 'backup' && (
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm text-center py-12">
-            <span className="text-4xl">💾</span>
-            <h3 className="text-lg font-bold text-slate-800 mt-2">백업 및 복원</h3>
-            <p className="text-slate-500 text-xs md:text-sm mt-1">데이터 안전 백업 기능 준비 중입니다.</p>
+          <div className="bg-white p-4 md:p-8 rounded-2xl border border-slate-200 shadow-sm max-w-xl mx-auto space-y-6">
+            <div>
+              <h2 className="text-base md:text-xl font-bold text-slate-800 flex items-center gap-2 mb-1">
+                <span>💾</span> CSV 백업 및 복원
+              </h2>
+              <p className="text-xs text-slate-500">
+                주문정보와 고객정보를 2개의 CSV 파일로 내보내거나 가져올 수 있습니다.
+              </p>
+            </div>
+
+            <div className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-3">
+              <h3 className="font-bold text-xs md:text-sm text-slate-700">1. CSV 파일로 내보내기 (Export)</h3>
+              <p className="text-xs text-slate-500">
+                클릭 시 오늘 날짜가 포함된 2개의 파일이 자동으로 다운로드됩니다.<br />
+                - <code className="text-rose-500">export_orders_{getKoreaNowFormatted().date}.csv</code><br />
+                - <code className="text-rose-500">export_customers_{getKoreaNowFormatted().date}.csv</code>
+              </p>
+              <button
+                onClick={handleExportCSV}
+                className="w-full py-2.5 px-4 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-xs md:text-sm shadow-xs transition-colors cursor-pointer"
+              >
+                📥 CSV 백업 파일 2개 다운로드
+              </button>
+            </div>
+
+            <div className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-3">
+              <h3 className="font-bold text-xs md:text-sm text-slate-700">2. CSV 파일 가져오기 (Import)</h3>
+              <p className="text-xs text-slate-500">
+                백업했던 CSV 파일 2개를 <strong>Ctrl 키(또는 Shift 키)를 누른 채 동시에 선택</strong>하여 한번에 올려주세요.
+              </p>
+              <input
+                type="file"
+                accept=".csv"
+                multiple
+                onChange={handleImportCSV}
+                className="w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300 cursor-pointer"
+              />
+            </div>
           </div>
         )}
       </main>
-
-      {/* 4. 주문 수정 모달 (진한 테두리 border-2 border-slate-300 및 그림자 적용) */}
-      {editingOrder && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white p-5 md:p-6 rounded-2xl max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto border-2 border-slate-300 shadow-2xl">
-            <h3 className="text-lg font-bold text-slate-800 flex items-center justify-between pb-2 border-b border-slate-200">
-              <span>✏️ 주문 수정하기</span>
-              <button onClick={() => setEditingOrder(null)} className="text-slate-400 hover:text-slate-600 text-sm font-bold p-1">✕</button>
-            </h3>
-
-            <form onSubmit={handleUpdateOrder} className="space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs text-slate-600 font-medium">고객 성명</label>
-                  <input
-                    type="text"
-                    value={editingOrder.customer_name}
-                    onChange={e => setEditingOrder({...editingOrder, customer_name: e.target.value})}
-                    className="w-full p-2 border border-slate-200 rounded-xl text-xs md:text-sm mt-1"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-600 font-medium">연락처</label>
-                  <input
-                    type="text"
-                    value={editingOrder.phone}
-                    onChange={e => setEditingOrder({...editingOrder, phone: formatPhone(e.target.value)})}
-                    className="w-full p-2 border border-slate-200 rounded-xl text-xs md:text-sm mt-1"
-                    maxLength={13}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs text-slate-600 font-medium">상품종류</label>
-                  <select
-                    value={editingOrder.product_name}
-                    onChange={e => setEditingOrder({...editingOrder, product_name: e.target.value})}
-                    className="w-full p-2 border border-slate-200 rounded-xl text-xs md:text-sm mt-1 bg-white"
-                  >
-                    {PRODUCT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-slate-600 font-medium">금액 (천원 단위)</label>
-                  <input
-                    type="number"
-                    value={editingOrder.amount_thousands}
-                    onChange={e => setEditingOrder({...editingOrder, amount_thousands: e.target.value})}
-                    className="w-full p-2 border border-slate-200 rounded-xl text-xs md:text-sm mt-1"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs text-slate-600 font-medium">픽업 날짜</label>
-                  <input
-                    type="date"
-                    value={editingOrder.pickup_date}
-                    onChange={e => setEditingOrder({...editingOrder, pickup_date: e.target.value})}
-                    className="w-full p-2 border border-slate-200 rounded-xl text-xs md:text-sm mt-1"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-600 font-medium">픽업 시간</label>
-                  <TimePickerCustom
-                    value={editingOrder.pickup_time}
-                    onChange={val => setEditingOrder({...editingOrder, pickup_time: val})}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs text-slate-600 font-medium">결제 방식</label>
-                <select
-                  value={editingOrder.payment_method}
-                  onChange={e => setEditingOrder({...editingOrder, payment_method: e.target.value})}
-                  className="w-full p-2 border border-slate-200 rounded-xl text-xs md:text-sm mt-1 bg-white"
-                >
-                  {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs text-slate-600 font-medium">메모</label>
-                <textarea
-                  value={editingOrder.memo}
-                  onChange={e => setEditingOrder({...editingOrder, memo: e.target.value})}
-                  className="w-full p-2 border border-slate-200 rounded-xl text-xs md:text-sm mt-1"
-                  rows={2}
-                />
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingOrder(null)}
-                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-normal border border-slate-300 rounded-xl text-xs md:text-sm cursor-pointer"
-                >
-                  취소
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-normal border border-slate-300 rounded-xl text-xs md:text-sm cursor-pointer"
-                >
-                  저장하기
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
