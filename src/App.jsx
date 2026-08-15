@@ -9,8 +9,8 @@ const SUPABASE_URL = 'https://zthuqzzholyjolteuvty.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_xkg9ULmNiqKrCcESytGbmw_u1Z12_gG';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// 기본 비밀번호 (저장된 비밀번호가 없을 경우 사용)
-const DEFAULT_APP_PASSWORD = "1234"; 
+// 기본 비밀번호 (8005로 설정)
+const DEFAULT_APP_PASSWORD = "8005"; 
 
 // 옵션 목록
 const PAYMENT_OPTIONS = ["신용카드", "현금", "계좌이체", "전화예약입금", "네이버", "인스타", "미결제"];
@@ -147,10 +147,8 @@ const parseCSVText = (text) => {
 };
 
 export default function App() {
-  // 비밀번호 상태 관리 (localStorage에 저장)
-  const [appPassword, setAppPassword] = useState(() => {
-    return localStorage.getItem('app_password') || DEFAULT_APP_PASSWORD;
-  });
+  // 비밀번호 상태 관리 (항상 8005)
+  const appPassword = DEFAULT_APP_PASSWORD;
 
   // 비밀번호 인증 상태 (세션 스토리지 기억)
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -158,11 +156,6 @@ export default function App() {
   });
   const [inputPin, setInputPin] = useState('');
   const [pinError, setPinError] = useState(false);
-
-  // 비밀번호 변경 모달 상태
-  const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
 
   const [activeMenu, setActiveMenu] = useState('orders');
   const [subTab, setSubTab] = useState('calendar');
@@ -176,7 +169,7 @@ export default function App() {
   const [selectedOrderIds, setSelectedOrderIds] = useState([]);
   const [selectedCustomerIds, setSelectedCustomerIds] = useState([]);
 
-  // 검색 키워드 state (주문 목록 검색 & 고객 목록 검색)
+  // 검색 키워드 state
   const [orderSearch, setOrderSearch] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
   const [matchedCustomerList, setMatchedCustomerList] = useState([]);
@@ -197,22 +190,9 @@ export default function App() {
     }
   };
 
-  // 비밀번호 변경 핸들러
-  const handlePasswordChange = (e) => {
-    e.preventDefault();
-    if (newPassword.length !== 4) {
-      return alert('비밀번호는 숫자 4자리여야 합니다.');
-    }
-    if (newPassword !== confirmPassword) {
-      return alert('새 비밀번호와 비밀번호 확인이 일치하지 않습니다.');
-    }
-
-    localStorage.setItem('app_password', newPassword);
-    setAppPassword(newPassword);
-    alert('🔑 비밀번호가 성공적으로 변경되었습니다!');
-    setShowPasswordChangeModal(false);
-    setNewPassword('');
-    setConfirmPassword('');
+  const handleLogout = () => {
+    sessionStorage.removeItem('app_authenticated');
+    setIsAuthenticated(false);
   };
 
   const parseDateTime = (datetimeStr, fallbackDate = '', fallbackTime = '14:00') => {
@@ -540,7 +520,7 @@ export default function App() {
   };
 
   const handleDeleteSelectedOrders = async () => {
-    if (selectedOrderIds.length === 0) return alert('삭제할 주문을 선택해주세요.');
+    if (selectedOrderIds.length === 0) return;
     if (!window.confirm(`선택한 ${selectedOrderIds.length}개의 주문을 삭제하시겠습니까?`)) return;
 
     const { error } = await supabase.from('orders').delete().in('id', selectedOrderIds);
@@ -569,7 +549,7 @@ export default function App() {
   };
 
   const handleDeleteSelectedCustomers = async () => {
-    if (selectedCustomerIds.length === 0) return alert('삭제할 고객을 선택해주세요.');
+    if (selectedCustomerIds.length === 0) return;
     if (!window.confirm(`선택한 ${selectedCustomerIds.length}명의 고객 정보를 삭제하시겠습니까?\n(관련 주문 내역의 고객정보도 함께 초기화될 수 있습니다)`)) return;
 
     const { error } = await supabase.from('customers').delete().in('id', selectedCustomerIds);
@@ -801,7 +781,7 @@ export default function App() {
     );
   };
 
-  // 1. 비밀번호 접속 화면 (버튼 색상/테두리 완벽 개선)
+  // 비밀번호 접속 화면
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-800 flex items-center justify-center p-4">
@@ -826,7 +806,6 @@ export default function App() {
               )}
             </div>
 
-            {/* 비밀번호 확인 버튼: 흰색 배경, 검정 글자, 또렷한 테두리 */}
             <button
               type="submit"
               className="w-full py-3 bg-white hover:bg-slate-100 text-slate-900 font-extrabold rounded-xl border-2 border-slate-900 shadow-md transition-all text-sm cursor-pointer"
@@ -870,60 +849,6 @@ export default function App() {
         ` : ''}
       `}</style>
 
-      {/* 3. 비밀번호 변경 모달 */}
-      {showPasswordChangeModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border-2 border-slate-800 text-center space-y-4">
-            <h3 className="text-lg font-bold text-slate-900">🔑 비밀번호 변경</h3>
-            <p className="text-xs text-slate-600">접속할 새 숫자 4자리를 입력해주세요.</p>
-            
-            <form onSubmit={handlePasswordChange} className="space-y-3 text-left">
-              <div>
-                <label className="text-xs font-bold text-slate-700">새 비밀번호 (숫자 4자리)</label>
-                <input
-                  type="password"
-                  maxLength={4}
-                  value={newPassword}
-                  onChange={e => setNewPassword(e.target.value.replace(/[^0-9]/g, ''))}
-                  placeholder="예: 5678"
-                  className="w-full p-2.5 border-2 border-slate-300 rounded-xl mt-1 text-center text-lg font-bold text-slate-900"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700">비밀번호 확인</label>
-                <input
-                  type="password"
-                  maxLength={4}
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value.replace(/[^0-9]/g, ''))}
-                  placeholder="다시 한번 입력"
-                  className="w-full p-2.5 border-2 border-slate-300 rounded-xl mt-1 text-center text-lg font-bold text-slate-900"
-                  required
-                />
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold cursor-pointer"
-                >
-                  변경 저장
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordChangeModal(false)}
-                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold border border-slate-300 cursor-pointer"
-                >
-                  취소
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* 📢 주간 백업 팝업 알림 모달 */}
       {showBackupAlertModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
@@ -952,21 +877,21 @@ export default function App() {
         </div>
       )}
 
-      {/* 사이드바 메뉴 */}
+      {/* 사이드바 / 상단 메뉴 (모바일 간격 축소 & 진한 선택 테두리 적용) */}
       <aside className="bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 w-full md:w-28 p-1 md:p-2 flex flex-col shrink-0 shadow-xs">
         <div className="hidden md:flex items-center justify-between text-rose-500 font-extrabold text-sm mb-1 px-1">
           <span className="flex items-center gap-1">📌 메뉴</span>
         </div>
 
-        <nav className="flex md:flex-col justify-between md:justify-start gap-1 w-full text-xs py-0.5 md:py-0">
+        <nav className="flex md:flex-col items-center md:items-stretch justify-between md:justify-start gap-0.5 md:gap-1 w-full text-xs py-0.5 md:py-0">
           {menuList.map(menu => (
             <label
               key={menu.id}
               onClick={() => handleMenuChange(menu.id)}
-              className={`flex items-center justify-center md:justify-start gap-1 px-1 md:px-2 py-1.5 rounded-lg cursor-pointer whitespace-nowrap transition-all flex-1 md:flex-none text-center ${
+              className={`flex items-center justify-center md:justify-start gap-0.5 md:gap-1 px-1 md:px-2 py-1 md:py-1.5 rounded-lg cursor-pointer whitespace-nowrap transition-all flex-1 md:flex-none text-center ${
                 activeMenu === menu.id
-                  ? 'bg-rose-100/70 text-rose-800 font-bold border-b-2 md:border-b-0 md:border-l-4 border-rose-400 shadow-2xs'
-                  : 'text-slate-700 hover:bg-slate-200/50'
+                  ? 'bg-rose-100 text-rose-900 font-extrabold border-2 border-rose-600 shadow-xs'
+                  : 'text-slate-700 hover:bg-slate-200/50 border border-transparent'
               }`}
             >
               <input
@@ -976,24 +901,23 @@ export default function App() {
                 onChange={() => {}}
                 className="w-3 h-3 accent-rose-500 cursor-pointer hidden md:inline"
               />
-              <span className="text-[10px] sm:text-xs font-semibold">{menu.label}</span>
+              <span className="text-[10px] sm:text-xs font-bold">{menu.label}</span>
             </label>
           ))}
+
+          {/* 모바일 화면용 잠금 버튼 (메뉴 맨 우측에 상시 표시) */}
+          <button
+            onClick={handleLogout}
+            className="md:hidden py-1 px-1.5 bg-slate-200 hover:bg-slate-300 text-slate-900 rounded-lg text-[10px] font-extrabold border border-slate-400 text-center cursor-pointer whitespace-nowrap shrink-0"
+          >
+            🔒 잠금
+          </button>
         </nav>
 
-        {/* 사이드바 하단 암호 변경 & 잠금 버튼 */}
+        {/* PC 화면 하단 잠금 버튼 */}
         <div className="hidden md:flex flex-col gap-1 mt-auto pt-2 border-t border-slate-200">
           <button
-            onClick={() => setShowPasswordChangeModal(true)}
-            className="py-1.5 px-2 bg-white hover:bg-slate-100 text-slate-900 rounded-lg text-[11px] font-bold border border-slate-400 text-center cursor-pointer"
-          >
-            🔑 암호 변경
-          </button>
-          <button
-            onClick={() => {
-              sessionStorage.removeItem('app_authenticated');
-              setIsAuthenticated(false);
-            }}
+            onClick={handleLogout}
             className="py-1.5 px-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg text-[11px] font-bold border border-slate-300 text-center cursor-pointer"
           >
             🔒 잠금
@@ -1326,15 +1250,18 @@ export default function App() {
                       className="flex-1 p-2.5 border border-slate-300 rounded-xl text-xs md:text-sm bg-white text-slate-900 focus:outline-none focus:border-rose-500"
                     />
 
-                    {/* 2. 삭제 버튼: 또렷한 검정 글씨, 빨간 테두리 및 명확한 시각적 지정 */}
-                    {selectedOrderIds.length > 0 && (
-                      <button
-                        onClick={handleDeleteSelectedOrders}
-                        className="px-3 py-2 bg-white hover:bg-rose-50 text-slate-900 font-extrabold rounded-xl text-xs border-2 border-rose-600 transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1"
-                      >
-                        🗑️ 선택 항목 ({selectedOrderIds.length}개) 삭제
-                      </button>
-                    )}
+                    {/* 상시 노출되는 주문 삭제 버튼 (미선택 시 비활성화 스타일) */}
+                    <button
+                      onClick={handleDeleteSelectedOrders}
+                      disabled={selectedOrderIds.length === 0}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold border-2 transition-all flex items-center justify-center gap-1 ${
+                        selectedOrderIds.length > 0
+                          ? 'bg-white hover:bg-rose-50 text-slate-900 border-rose-600 cursor-pointer shadow-xs font-extrabold'
+                          : 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed opacity-60'
+                      }`}
+                    >
+                      🗑️ 선택 항목 ({selectedOrderIds.length}개) 삭제
+                    </button>
                   </div>
 
                   <div className="text-xs text-slate-600 font-medium">
@@ -1488,15 +1415,18 @@ export default function App() {
                 <span>🎂</span> 고객 목록 (총 <span className="text-rose-600">{filteredCustomers.length}</span>명)
               </h2>
               
-              {/* 고객 삭제 버튼도 검정 글자 + 선명한 테두리로 수정 */}
-              {selectedCustomerIds.length > 0 && (
-                <button
-                  onClick={handleDeleteSelectedCustomers}
-                  className="px-3 py-1.5 bg-white hover:bg-rose-50 text-slate-900 font-extrabold rounded-xl text-xs border-2 border-rose-600 transition-colors cursor-pointer shadow-xs"
-                >
-                  🗑️ 선택 고객 ({selectedCustomerIds.length}명) 삭제
-                </button>
-              )}
+              {/* 상시 노출되는 고객 삭제 버튼 (미선택 시 비활성화 스타일) */}
+              <button
+                onClick={handleDeleteSelectedCustomers}
+                disabled={selectedCustomerIds.length === 0}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold border-2 transition-all ${
+                  selectedCustomerIds.length > 0
+                    ? 'bg-white hover:bg-rose-50 text-slate-900 border-rose-600 cursor-pointer shadow-xs font-extrabold'
+                    : 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed opacity-60'
+                }`}
+              >
+                🗑️ 선택 고객 ({selectedCustomerIds.length}명) 삭제
+              </button>
             </div>
 
             <input
