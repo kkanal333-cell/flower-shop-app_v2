@@ -3,21 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>꽃집 주문/예약 관리</title>
+    <title>화사한하루 - 꽃집 주문/예약 관리</title>
 
-    <!-- 👇 [여기 추가] 앱 설치(PWA)를 위한 메타 태그 -->
+    <!-- PWA 및 모바일 앱 설정 -->
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#ffffff" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="화사한하루" />
+    
+    <!-- 앱 아이콘 연결 -->
+    <link rel="icon" type="image/png" href="/icon-512.png" />
     <link rel="apple-touch-icon" href="/icon-512.png" />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
 
-    <!-- 👇 [여기 추가] 서비스 워커 등록 스크립트 -->
+    <!-- PWA 서비스 워커 등록 -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
