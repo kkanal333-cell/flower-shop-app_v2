@@ -9,10 +9,8 @@ const SUPABASE_URL = 'https://zthuqzzholyjolteuvty.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_xkg9ULmNiqKrCcESytGbmw_u1Z12_gG';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// 기본 비밀번호 (DB 저장이 없거나 초기에 사용)
-const DEFAULT_APP_PASSWORD = "1234"; 
+const DEFAULT_APP_PASSWORD = "1234";
 
-// 옵션 목록
 const PAYMENT_OPTIONS = ["신용카드", "현금", "계좌이체", "전화예약입금", "네이버", "인스타", "미결제"];
 const PRODUCT_OPTIONS = ["꽃다발", "꽃바구니", "햇살콘플라워", "꽃묶음", "식물", "용품", "시즌한정", "기타"];
 
@@ -20,7 +18,6 @@ const AMPM_OPTIONS = ["오전", "오후"];
 const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
 const MINUTE_OPTIONS = ["00", "15", "30", "45"];
 
-// 15분 단위 픽업 시간 파싱 함수
 const parseTimeToParts = (timeStr) => {
   if (!timeStr) return { ampm: "오후", hour: "02", minute: "00" };
   const [hStr, mStr] = timeStr.split(':');
@@ -51,7 +48,6 @@ const formatPartsToTime = (ampm, hour, minute) => {
   return `${String(h).padStart(2, '0')}:${minute}`;
 };
 
-// KST 실시간 일시 구하기
 const getKoreaNowFormatted = () => {
   const now = new Date();
   const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
@@ -66,13 +62,12 @@ const getKoreaNowFormatted = () => {
   const minutes = String(kst.getMinutes()).padStart(2, '0');
   const timeStr = `${hours}:${minutes}`;
 
-  const dayOfWeek = kst.getDay(); // 0:일, 1:월, ...
+  const dayOfWeek = kst.getDay();
   const currentHour = kst.getHours();
 
   return { date: dateStr, time: timeStr, dayOfWeek, currentHour };
 };
 
-// CSV 변환 헬퍼
 const downloadCSV = (headers, rows, filename) => {
   const escapeCSV = (val) => {
     if (val === null || val === undefined) return '""';
@@ -96,7 +91,6 @@ const downloadCSV = (headers, rows, filename) => {
   URL.revokeObjectURL(url);
 };
 
-// CSV 텍스트 파싱 헬퍼
 const parseCSVText = (text) => {
   const lines = text.split(/\r\n|\n/);
   const result = [];
@@ -147,16 +141,14 @@ const parseCSVText = (text) => {
 };
 
 export default function App() {
-  // 공통 비밀번호 상태 관리 (Supabase + localStorage 교체 지원)
-  const [appPassword, setAppPassword] = useState(() => {
-    return localStorage.getItem('app_password') || DEFAULT_APP_PASSWORD;
-  });
+  // 앱 중앙 비밀번호 상태
+  const [appPassword, setAppPassword] = useState(DEFAULT_APP_PASSWORD);
 
-  // Supabase DB에서 최신 공통 비밀번호 불러오기
+  // 1. Supabase 실시간 동기화로 중앙 DB에서 암호 로드 & 실시간 변경 감지
   useEffect(() => {
     const fetchRemotePassword = async () => {
       try {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from('app_settings')
           .select('value')
           .eq('key', 'app_password')
@@ -164,23 +156,39 @@ export default function App() {
 
         if (data && data.value) {
           setAppPassword(data.value);
-          localStorage.setItem('app_password', data.value);
         }
       } catch (err) {
-        console.log("Remote password fetch fallback to local storage");
+        console.error("비밀번호 로드 실패:", err);
       }
     };
+
     fetchRemotePassword();
+
+    // 비밀번호 실시간 변경 구독 (어느 기기에서 변경하든 즉시 모든 모바일/PC 반영)
+    const channel = supabase
+      .channel('public:app_settings')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'app_settings', filter: 'key=eq.app_password' },
+        (payload) => {
+          if (payload.new && payload.new.value) {
+            setAppPassword(payload.new.value);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
-  // 비밀번호 인증 상태
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return sessionStorage.getItem('app_authenticated') === 'true';
   });
   const [inputPin, setInputPin] = useState('');
   const [pinError, setPinError] = useState(false);
 
-  // 비밀번호 변경 모달 상태 (접속 전/후 공용)
   const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
   const [currentCheckPin, setCurrentCheckPin] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -194,19 +202,15 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState(getKoreaNowFormatted().date);
   const [editingOrder, setEditingOrder] = useState(null);
 
-  // 선택 삭제용 state
   const [selectedOrderIds, setSelectedOrderIds] = useState([]);
   const [selectedCustomerIds, setSelectedCustomerIds] = useState([]);
 
-  // 검색 키워드 state
   const [orderSearch, setOrderSearch] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
   const [matchedCustomerList, setMatchedCustomerList] = useState([]);
 
-  // 백업 알림 팝업 상태
   const [showBackupAlertModal, setShowBackupAlertModal] = useState(false);
 
-  // 비밀번호 확인 제출
   const handlePinSubmit = (e) => {
     e.preventDefault();
     if (inputPin === appPassword) {
@@ -219,11 +223,10 @@ export default function App() {
     }
   };
 
-  // 비밀번호 동기화 변경 처리 (Supabase + LocalStorage)
+  // 모든 기기에 일괄 동기화되도록 DB에 암호 업데이트
   const handlePasswordChange = async (e) => {
     e.preventDefault();
     
-    // 접속 전 변경시 현재 암호 확인
     if (!isAuthenticated && currentCheckPin !== appPassword) {
       return alert('현재 비밀번호가 일치하지 않습니다.');
     }
@@ -235,24 +238,22 @@ export default function App() {
       return alert('새 비밀번호와 비밀번호 확인이 일치하지 않습니다.');
     }
 
-    // 1. 로컬 저장
-    localStorage.setItem('app_password', newPassword);
-    setAppPassword(newPassword);
-
-    // 2. Supabase 서버 동기화 저장 (PC & 모바일 일괄 적용)
     try {
-      await supabase
+      const { error } = await supabase
         .from('app_settings')
         .upsert({ key: 'app_password', value: newPassword }, { onConflict: 'key' });
-    } catch (err) {
-      console.error("Supabase password update fallback:", err);
-    }
 
-    alert('🔑 비밀번호가 성공적으로 변경되었습니다!\nPC와 모바일 기기에 일괄 적용됩니다.');
-    setShowPasswordChangeModal(false);
-    setCurrentCheckPin('');
-    setNewPassword('');
-    setConfirmPassword('');
+      if (error) throw error;
+
+      setAppPassword(newPassword);
+      alert('🔑 비밀번호가 정상 변경되었습니다!\nPC와 모바일 모든 디바이스에 즉시 동기화 적용됩니다.');
+      setShowPasswordChangeModal(false);
+      setCurrentCheckPin('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err) {
+      alert('비밀번호 변경 실패 (DB 오류): ' + err.message);
+    }
   };
 
   const parseDateTime = (datetimeStr, fallbackDate = '', fallbackTime = '14:00') => {
@@ -563,7 +564,6 @@ export default function App() {
     fetchData();
   };
 
-  // --- 주문 삭제 선택 관련 ---
   const handleToggleSelectAllOrders = (e) => {
     if (e.target.checked) {
       setSelectedOrderIds(filteredOrders.map(o => o.id));
@@ -592,7 +592,6 @@ export default function App() {
     }
   };
 
-  // --- 고객 삭제 선택 관련 ---
   const handleToggleSelectAllCustomers = (e) => {
     if (e.target.checked) {
       setSelectedCustomerIds(filteredCustomers.map(c => c.id));
@@ -621,7 +620,6 @@ export default function App() {
     }
   };
 
-  // CSV 백업 내보내기
   const handleExportCSV = () => {
     try {
       const today = getKoreaNowFormatted().date;
@@ -659,7 +657,6 @@ export default function App() {
     }
   };
 
-  // CSV 파일 복원
   const handleImportCSV = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -819,7 +816,7 @@ export default function App() {
     );
   };
 
-  // --- 1. 암호 입력 잠금 화면 ---
+  // --- 접속 로그인 화면 ---
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-800 flex items-center justify-center p-4">
@@ -852,7 +849,6 @@ export default function App() {
             </button>
           </form>
 
-          {/* 3번 반영: 암호변경 버튼을 암호 입력 화면 하단에 추가 */}
           <div className="mt-6 pt-4 border-t border-slate-200">
             <button
               onClick={() => setShowPasswordChangeModal(true)}
@@ -868,7 +864,7 @@ export default function App() {
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border-2 border-slate-800 text-center space-y-4">
               <h3 className="text-lg font-bold text-slate-900">🔑 비밀번호 변경 (공통)</h3>
-              <p className="text-xs text-slate-600">변경시 PC와 모바일 기기에 일괄 적용됩니다.</p>
+              <p className="text-xs text-slate-600">변경시 모든 PC/모바일 기기에 실시간 적용됩니다.</p>
 
               <form onSubmit={handlePasswordChange} className="space-y-3 text-left">
                 {!isAuthenticated && (
@@ -936,7 +932,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100/70 flex flex-col md:flex-row pb-12 md:pb-0">
+    <div className="min-h-screen bg-slate-100/70 flex flex-col md:flex-row">
       <style>{`
         .fc .fc-daygrid-body-unbalanced .fc-daygrid-day-events {
           min-height: 0.8em !important;
@@ -966,7 +962,7 @@ export default function App() {
         ` : ''}
       `}</style>
 
-      {/* 주간 백업 알림 모달 */}
+      {/* 백업 알림 모달 */}
       {showBackupAlertModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border-2 border-rose-400 text-center space-y-4">
@@ -994,59 +990,38 @@ export default function App() {
         </div>
       )}
 
-      {/* 4번 반영: 모바일 가로모드/세모모드 간격 밀착 및 선명한 테두리 강화 */}
-      <aside className="bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 w-full md:w-28 p-1 md:p-2 flex flex-col shrink-0 shadow-xs">
-        <div className="hidden md:flex items-center justify-between text-rose-500 font-extrabold text-sm mb-1 px-1">
-          <span className="flex items-center gap-1">📌 메뉴</span>
+      {/* 2번 반영: 좌측 사이드바 및 모바일 수평 메뉴 정렬 완전히 복원 */}
+      <aside className="bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 w-full md:w-36 p-2 md:p-3 flex flex-col shrink-0 shadow-xs">
+        <div className="hidden md:flex items-center justify-between text-rose-500 font-extrabold text-sm mb-3 px-1">
+          <span>📌 메뉴</span>
         </div>
 
-        {/* gap-0.5 및 flex-nowrap 조정을 통해 가로모드 시 버튼 간격 최대로 줄임 */}
-        <nav className="flex md:flex-col items-center justify-between gap-0.5 md:gap-1 w-full text-xs py-0.5 md:py-0 overflow-x-auto">
+        {/* 정렬 상태 개선: flex-wrap + gap-1.5 로 깨짐 없이 깔끔하게 배치 */}
+        <nav className="flex md:flex-col items-center gap-1.5 w-full text-xs overflow-x-auto py-1 md:py-0">
           {menuList.map(menu => (
-            <label
+            <button
               key={menu.id}
               onClick={() => handleMenuChange(menu.id)}
-              className={`flex items-center justify-center md:justify-start gap-0.5 md:gap-1 px-1 md:px-2 py-1.5 rounded-lg cursor-pointer whitespace-nowrap transition-all flex-1 shrink-0 text-center ${
+              className={`flex items-center justify-center md:justify-start gap-1.5 px-2.5 py-2 rounded-xl font-bold cursor-pointer transition-all flex-1 md:flex-none md:w-full text-center md:text-left whitespace-nowrap shrink-0 ${
                 activeMenu === menu.id
-                  ? 'bg-rose-100/90 text-slate-900 font-black border-2 border-slate-900 shadow-sm' 
-                  : 'text-slate-700 hover:bg-slate-200/50 border border-transparent'
+                  ? 'bg-rose-500 text-white shadow-sm border-2 border-rose-600' 
+                  : 'bg-white md:bg-transparent text-slate-700 hover:bg-slate-200/70 border border-slate-200 md:border-transparent'
               }`}
             >
-              <input
-                type="radio"
-                name="sidebar-menu"
-                checked={activeMenu === menu.id}
-                onChange={() => {}}
-                className="w-3 h-3 accent-rose-500 cursor-pointer hidden md:inline"
-              />
-              <span className="text-[10px] sm:text-xs font-bold">{menu.label}</span>
-            </label>
+              <span className="text-xs md:text-sm">{menu.label}</span>
+            </button>
           ))}
 
-          {/* 모바일 화면/가로모드일 때 가장 우측에 배치되는 잠금 버튼 */}
           <button
             onClick={() => {
               sessionStorage.removeItem('app_authenticated');
               setIsAuthenticated(false);
             }}
-            className="md:hidden py-1.5 px-2 bg-slate-200 hover:bg-slate-300 text-slate-900 font-bold rounded-lg text-[10px] sm:text-xs border border-slate-400 shrink-0 ml-auto cursor-pointer"
+            className="px-2.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-xs border border-slate-300 whitespace-nowrap shrink-0 md:w-full md:mt-auto cursor-pointer"
           >
             🔒 잠금
           </button>
         </nav>
-
-        {/* PC 화면 전용 사이드바 하단 잠금 버튼 */}
-        <div className="hidden md:flex flex-col gap-1 mt-auto pt-2 border-t border-slate-200">
-          <button
-            onClick={() => {
-              sessionStorage.removeItem('app_authenticated');
-              setIsAuthenticated(false);
-            }}
-            className="py-1.5 px-2 bg-slate-200 hover:bg-slate-300 text-slate-900 rounded-lg text-[11px] font-bold border border-slate-400 text-center cursor-pointer"
-          >
-            🔒 잠금
-          </button>
-        </div>
       </aside>
 
       {/* 메인 콘텐츠 영역 */}
@@ -1365,7 +1340,6 @@ export default function App() {
                       className="flex-1 p-2.5 border border-slate-300 rounded-xl text-xs md:text-sm bg-white text-slate-900 focus:outline-none focus:border-rose-500"
                     />
 
-                    {/* 2번 반영: 기본 노출되며 체크 미선택 시 연한 회색 글씨로 비활성화 */}
                     <button
                       onClick={handleDeleteSelectedOrders}
                       disabled={selectedOrderIds.length === 0}
@@ -1450,7 +1424,6 @@ export default function App() {
               )}
             </div>
 
-            {/* 달력 하단 선택 날짜 상세 목록 */}
             {subTab === 'calendar' && selectedDate && (
               <div className="bg-white p-3 md:p-5 rounded-xl border border-slate-200 shadow-sm">
                 <div className="flex items-center justify-between mb-3">
@@ -1530,7 +1503,6 @@ export default function App() {
                 <span>🎂</span> 고객 목록 (총 <span className="text-rose-600">{filteredCustomers.length}</span>명)
               </h2>
               
-              {/* 2번 반영: 고객 삭제 버튼 상시 노출 및 비활성화 상태 표현 */}
               <button
                 onClick={handleDeleteSelectedCustomers}
                 disabled={selectedCustomerIds.length === 0}
