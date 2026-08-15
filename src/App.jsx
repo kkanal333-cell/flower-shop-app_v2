@@ -678,7 +678,7 @@ export default function App() {
     } catch (err) {
       console.error(err);
       alert('CSV 복원 중 오류가 발생했습니다. CSV 형식을 확인해주세요.');
-    } fontally {
+    } finally {
       e.target.value = '';
     }
   };
@@ -1323,9 +1323,8 @@ export default function App() {
                     검색 결과: 총 <strong className="text-rose-600">{sortedAndFilteredOrders.length}</strong>건
                   </div>
 
-                  {/* table-fixed와 max-w-[112px] truncate로 세로 깨짐 완벽 조치 */}
                   <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                    <table className="w-full text-left border-collapse table-fixed min-w-[720px]">
+                    <table className="w-full text-left border-collapse table-fixed min-w-[750px]">
                       <thead>
                         <tr className="border-b border-slate-200 text-slate-700 text-xs md:text-sm bg-slate-100 font-bold">
                           <th className="py-2.5 px-2 w-28">픽업일시</th>
@@ -1335,8 +1334,8 @@ export default function App() {
                           <th className="py-2.5 px-2 w-20">상품명</th>
                           <th className="py-2.5 px-2 w-20">금액</th>
                           <th className="py-2.5 px-2 w-20">결제수단</th>
-                          <th className="py-2.5 px-2 w-28">메모</th>
-                          <th className="py-2.5 px-2 w-16 text-center">관리</th>
+                          <th className="py-2.5 px-2 w-36">메모</th>
+                          <th className="py-2.5 px-2 w-20 text-center">관리</th>
                           <th className="py-2.5 px-2 w-12 text-center">
                             <input
                               type="checkbox"
@@ -1393,7 +1392,7 @@ export default function App() {
                                     {o.payment_method}
                                   </span>
                                 </td>
-                                <td className={`py-2.5 px-2 max-w-[112px] truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo}>
+                                <td className={`py-2.5 px-2 truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo}>
                                   {o.memo || '-'}
                                 </td>
                                 
@@ -1450,7 +1449,7 @@ export default function App() {
                           className="p-2.5 md:p-3 rounded-xl border border-slate-200 bg-white flex flex-col gap-1.5 shadow-2xs"
                         >
                           <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 bg-sky-100 text-sky-900 font-extrabold text-xs rounded-md whitespace-nowrap border border-sky-300">
+                            <span className="px-2 py-0.5 bg-sky-100 text-sky-900 font-extrabold text-xs rounded-md whitespace-nowrap border border-sky-300 shrink-0">
                               ⏰ {timeOnly}
                             </span>
                             <span className="font-bold text-slate-900 text-sm md:text-base">
@@ -1461,29 +1460,33 @@ export default function App() {
                             </span>
                           </div>
 
+                          {/* 요청 반영: 가로 정렬 고정 및 메모 축소(말줄임) 레이아웃 */}
                           <div className="flex items-center justify-between gap-1 text-xs">
                             <div className="flex items-center gap-1.5 overflow-hidden flex-1 min-w-0">
-                              <span className="font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
+                              <span className="font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 shrink-0 whitespace-nowrap">
                                 {o.product_name}
                               </span>
-                              <span className="px-1.5 py-0.5 bg-slate-50 border border-slate-300 rounded text-slate-700 font-semibold shrink-0">
+                              <span className="px-1.5 py-0.5 bg-slate-50 border border-slate-300 rounded text-slate-700 font-semibold shrink-0 whitespace-nowrap">
                                 {o.payment_method}
                               </span>
                               {o.memo && (
-                                <span className="text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 truncate font-medium">
+                                <span 
+                                  className="text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 truncate font-medium max-w-[150px] md:max-w-[200px] whitespace-nowrap"
+                                  title={o.memo}
+                                >
                                   💬 {o.memo}
                                 </span>
                               )}
                             </div>
 
                             <div className="flex items-center gap-2 shrink-0 ml-1">
-                              <span className="font-extrabold text-slate-900 text-xs md:text-sm">
+                              <span className="font-extrabold text-slate-900 text-xs md:text-sm whitespace-nowrap">
                                 {o.amount?.toLocaleString()}원
                               </span>
                               
                               <button
                                 onClick={() => startEditOrder(o)}
-                                className="text-xs bg-white hover:bg-slate-100 border border-slate-800 text-slate-900 font-bold px-2 py-0.5 rounded cursor-pointer"
+                                className="text-xs bg-white hover:bg-slate-100 border border-slate-800 text-slate-900 font-bold px-2 py-0.5 rounded cursor-pointer whitespace-nowrap"
                               >
                                 수정
                               </button>
