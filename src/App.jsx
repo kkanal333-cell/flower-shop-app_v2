@@ -959,183 +959,312 @@ export default function App() {
         </div>
 
         <nav className="flex md:flex-col justify-between md:justify-start gap-1 w-full text-xs py-0.5 md:py-0">
-          {menuList.map(item => (
-            <button
-              key={item.id}
-              onClick={() => handleMenuChange(item.id)}
-              className={`flex-1 md:flex-none px-2 py-2 rounded-xl text-center md:text-left transition-all font-semibold ${
-                activeMenu === item.id
-                  ? 'bg-rose-500 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-200/60'
+          {menuList.map(menu => (
+            <label
+              key={menu.id}
+              onClick={() => handleMenuChange(menu.id)}
+              className={`flex items-center justify-center md:justify-start gap-1 px-1 md:px-2 py-1.5 rounded-lg cursor-pointer whitespace-nowrap transition-all flex-1 md:flex-none text-center ${
+                activeMenu === menu.id
+                  ? 'bg-rose-100/70 text-rose-800 font-bold border-b-2 md:border-b-0 md:border-l-4 border-rose-400 shadow-2xs'
+                  : 'text-slate-700 hover:bg-slate-200/50'
               }`}
             >
-              {item.label}
-            </button>
+              <input
+                type="radio"
+                name="sidebar-menu"
+                checked={activeMenu === menu.id}
+                onChange={() => {}}
+                className="w-3 h-3 accent-rose-500 cursor-pointer hidden md:inline"
+              />
+              <span className="text-[10px] sm:text-xs font-semibold">{menu.label}</span>
+            </label>
           ))}
         </nav>
 
-        <div className="hidden md:block mt-auto pt-4 border-t border-slate-200">
+        {/* 사이드바 하단 암호 변경 & 잠금 버튼 */}
+        <div className="hidden md:flex flex-col gap-1 mt-auto pt-2 border-t border-slate-200">
           <button
             onClick={() => setShowPasswordChangeModal(true)}
-            className="w-full py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-[11px] font-bold transition-all text-center cursor-pointer"
+            className="py-1.5 px-2 bg-white hover:bg-slate-100 text-slate-900 rounded-lg text-[11px] font-bold border border-slate-400 text-center cursor-pointer"
           >
             🔑 암호 변경
+          </button>
+          <button
+            onClick={() => {
+              sessionStorage.removeItem('app_authenticated');
+              setIsAuthenticated(false);
+            }}
+            className="py-1.5 px-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg text-[11px] font-bold border border-slate-300 text-center cursor-pointer"
+          >
+            🔒 잠금
           </button>
         </div>
       </aside>
 
       {/* 메인 콘텐츠 영역 */}
-      <main className="flex-1 p-2 md:p-4 max-w-6xl mx-auto w-full overflow-y-auto">
-        {/* 모바일 화면 상단 암호 변경 버튼 */}
-        <div className="md:hidden flex justify-end mb-2">
-          <button
-            onClick={() => setShowPasswordChangeModal(true)}
-            className="px-3 py-1 bg-slate-200 text-slate-700 rounded-lg text-xs font-bold"
-          >
-            🔑 암호 변경
-          </button>
-        </div>
+      <main className="flex-1 p-2 md:p-5 max-w-6xl mx-auto w-full">
+        {/* 주문 수정 모달 */}
+        {editingOrder && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 z-50">
+            <div className="bg-white rounded-2xl p-4 md:p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-xl border border-slate-200">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-base md:text-lg font-bold text-slate-900">✏️ 주문 수정</h3>
+                <button onClick={() => setEditingOrder(null)} className="text-slate-400 hover:text-slate-600 text-lg font-bold">✕</button>
+              </div>
 
-        {/* 1. 신규 주문 입력 메뉴 */}
-        {activeMenu === 'new' && (
-          <div className="bg-white p-4 md:p-6 rounded-2xl shadow-xs border border-slate-200 max-w-xl mx-auto space-y-4">
-            <h2 className="text-base md:text-lg font-bold text-slate-900 border-b pb-2 flex items-center justify-between">
-              <span>📝 신규 주문 등록</span>
-            </h2>
-
-            <form onSubmit={handleCreateOrder} className="space-y-4 text-xs md:text-sm">
-              <div className="relative">
-                <label className="block text-slate-700 font-bold mb-1">고객 성명 *</label>
-                <input
-                  type="text"
-                  value={newOrder.customer_name}
-                  onChange={e => handleCustomerNameChange(e.target.value)}
-                  placeholder="예: 홍길동"
-                  className="w-full p-2.5 md:p-3 border rounded-xl border-slate-300 focus:border-rose-500 focus:outline-none bg-slate-50 text-slate-900 font-medium"
-                  required
-                />
-                
-                {/* 매칭된 고객 선택 옵션 드롭다운 */}
-                {matchedCustomerList.length > 0 && (
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-20 max-h-40 overflow-y-auto">
-                    <div className="p-2 text-[11px] text-slate-400 font-bold bg-slate-50 border-b">
-                      🔍 기존 동일 이름 고객 선택:
-                    </div>
-                    {matchedCustomerList.map(c => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => selectCustomerForNewOrder(c)}
-                        className="w-full text-left p-2 hover:bg-rose-50 transition-colors flex justify-between items-center text-xs border-b last:border-b-0"
-                      >
-                        <span className="font-bold text-slate-800">{c.name}</span>
-                        <span className="text-slate-500">{c.phone}</span>
-                      </button>
-                    ))}
+              <form onSubmit={handleUpdateOrder} className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-700">고객명</label>
+                    <input
+                      type="text"
+                      value={editingOrder.customer_name}
+                      onChange={e => setEditingOrder({ ...editingOrder, customer_name: e.target.value })}
+                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                      required
+                    />
                   </div>
-                )}
-              </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-700">연락처</label>
+                    <input
+                      type="text"
+                      value={editingOrder.phone}
+                      onChange={e => setEditingOrder({ ...editingOrder, phone: formatPhone(e.target.value) })}
+                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                      required
+                    />
+                  </div>
+                </div>
 
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">연락처 *</label>
-                <input
-                  type="tel"
-                  value={newOrder.phone}
-                  onChange={e => setNewOrder(prev => ({ ...prev, phone: formatPhone(e.target.value) }))}
-                  placeholder="010-0000-0000"
-                  className="w-full p-2.5 md:p-3 border rounded-xl border-slate-300 focus:border-rose-500 focus:outline-none bg-slate-50 text-slate-900 font-medium"
-                  required
-                />
-              </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-700">상품종류</label>
+                    <select
+                      value={editingOrder.product_name}
+                      onChange={e => setEditingOrder({ ...editingOrder, product_name: e.target.value })}
+                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                    >
+                      {PRODUCT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-700">금액 (천원 단위)</label>
+                    <input
+                      type="number"
+                      value={editingOrder.amount_thousands}
+                      onChange={e => setEditingOrder({ ...editingOrder, amount_thousands: e.target.value })}
+                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                    />
+                  </div>
+                </div>
 
-              <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-700">픽업 날짜</label>
+                    <input
+                      type="date"
+                      value={editingOrder.pickup_date}
+                      onChange={e => setEditingOrder({ ...editingOrder, pickup_date: e.target.value })}
+                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-700">픽업 시간</label>
+                    <TimePickerCustom
+                      value={editingOrder.pickup_time}
+                      onChange={val => setEditingOrder({ ...editingOrder, pickup_time: val })}
+                    />
+                  </div>
+                </div>
+
                 <div>
-                  <label className="block text-slate-700 font-bold mb-1">상품 구분</label>
+                  <label className="text-[11px] font-semibold text-slate-700">결제 방식</label>
                   <select
-                    value={newOrder.product_name}
-                    onChange={e => setNewOrder(prev => ({ ...prev, product_name: e.target.value }))}
-                    className="w-full p-2.5 md:p-3 border rounded-xl border-slate-300 focus:border-rose-500 focus:outline-none bg-slate-50 text-slate-900 font-medium"
+                    value={editingOrder.payment_method}
+                    onChange={e => setEditingOrder({ ...editingOrder, payment_method: e.target.value })}
+                    className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
                   >
-                    {PRODUCT_OPTIONS.map(opt => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
+                    {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-slate-700 font-bold mb-1">금액 (천원 단위)</label>
-                  <div className="flex items-center gap-1">
+                  <label className="text-[11px] font-semibold text-slate-700">메모</label>
+                  <textarea
+                    value={editingOrder.memo}
+                    onChange={e => setEditingOrder({ ...editingOrder, memo: e.target.value })}
+                    className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                    rows={2}
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button type="submit" className="flex-1 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold cursor-pointer">저장하기</button>
+                  <button type="button" onClick={() => setEditingOrder(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs border border-slate-300 font-bold cursor-pointer">취소</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* 1. 신규주문 */}
+        {activeMenu === 'new' && (
+          <div className="max-w-2xl mx-auto bg-white p-3 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
+            <h2 className="text-base md:text-xl font-bold text-slate-900 mb-4 md:mb-6 flex items-center gap-2">
+              <span>📝</span> 신규 주문 및 고객 등록
+            </h2>
+
+            <form onSubmit={handleCreateOrder} className="space-y-3 md:space-y-4">
+              <div className="grid grid-cols-2 gap-2 md:gap-4 relative">
+                <div className="relative">
+                  <label className="text-[11px] md:text-xs font-semibold text-slate-700">고객 성명 *</label>
+                  <input
+                    type="text"
+                    value={newOrder.customer_name}
+                    onChange={e => handleCustomerNameChange(e.target.value)}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
+                    style={{ backgroundColor: '#ffffff' }}
+                    placeholder="홍길동 (입력시 동명이인 목록 표시)"
+                    required
+                  />
+
+                  {matchedCustomerList.length > 1 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-rose-300 rounded-xl shadow-lg z-20 max-h-48 overflow-y-auto p-1">
+                      <div className="text-[11px] text-rose-600 font-bold px-2 py-1 bg-rose-50 rounded-t-lg">
+                        ⚠️ 동명이인이 존재합니다. 아래에서 클릭하세요:
+                      </div>
+                      {matchedCustomerList.map(c => (
+                        <div
+                          key={c.id}
+                          onClick={() => selectCustomerForNewOrder(c)}
+                          className="p-2 text-xs hover:bg-rose-50 rounded-lg cursor-pointer flex justify-between items-center"
+                        >
+                          <span className="font-bold text-slate-900">{c.name}</span>
+                          <span className="text-slate-600 text-[11px]">{c.phone}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-[11px] md:text-xs font-semibold text-slate-700">휴대폰 번호 *</label>
+                  <input
+                    type="text"
+                    value={newOrder.phone}
+                    onChange={e => setNewOrder({...newOrder, phone: formatPhone(e.target.value)})}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
+                    style={{ backgroundColor: '#ffffff' }}
+                    placeholder="010-0000-0000"
+                    maxLength={13}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 md:gap-4">
+                <div>
+                  <label className="text-[11px] md:text-xs font-semibold text-slate-700">상품종류 *</label>
+                  <select
+                    value={newOrder.product_name}
+                    onChange={e => setNewOrder({...newOrder, product_name: e.target.value})}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
+                    style={{ backgroundColor: '#ffffff' }}
+                  >
+                    {PRODUCT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] md:text-xs font-semibold text-slate-700">
+                    결제 금액 (천원 단위)
+                  </label>
+                  <div className="relative mt-1">
                     <input
                       type="number"
                       value={newOrder.amount_thousands}
-                      onChange={e => setNewOrder(prev => ({ ...prev, amount_thousands: e.target.value }))}
-                      placeholder="55"
-                      className="w-full p-2.5 md:p-3 border rounded-xl border-slate-300 focus:border-rose-500 focus:outline-none bg-slate-50 text-slate-900 font-medium text-right"
+                      onChange={e => setNewOrder({...newOrder, amount_thousands: e.target.value})}
+                      className="w-full p-2 md:p-3 border border-slate-300 rounded-xl text-xs md:text-sm bg-white text-slate-900 font-medium pr-16"
+                      style={{ backgroundColor: '#ffffff' }}
+                      placeholder="예: 55"
                     />
-                    <span className="text-xs md:text-sm font-bold text-slate-600 shrink-0">천원</span>
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-rose-600 pointer-events-none">
+                      = {((Number(newOrder.amount_thousands) || 0) * 1000).toLocaleString()}원
+                    </span>
                   </div>
                 </div>
               </div>
 
-              <div className="p-3 bg-rose-50/50 rounded-xl border border-rose-100 space-y-3">
-                <label className="block text-rose-900 font-bold">🗓️ 픽업 예약 일시</label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 md:gap-4">
+                <div>
+                  <label className="text-[11px] md:text-xs font-semibold text-slate-700">픽업 날짜 *</label>
                   <input
                     type="date"
                     value={newOrder.pickup_date}
-                    onChange={e => setNewOrder(prev => ({ ...prev, pickup_date: e.target.value }))}
-                    className="w-full p-2.5 md:p-3 border rounded-xl border-slate-300 focus:border-rose-500 focus:outline-none bg-white text-slate-900 font-medium"
+                    onChange={e => setNewOrder({...newOrder, pickup_date: e.target.value})}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
+                    style={{ backgroundColor: '#ffffff' }}
                   />
+                </div>
+                <div>
+                  <label className="text-[11px] md:text-xs font-semibold text-slate-700">픽업 시간 * (15분 단위)</label>
                   <TimePickerCustom
                     value={newOrder.pickup_time}
-                    onChange={val => setNewOrder(prev => ({ ...prev, pickup_time: val }))}
+                    onChange={val => setNewOrder({...newOrder, pickup_time: val})}
+                    bgClass="bg-white"
                   />
                 </div>
               </div>
 
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                <label className="block text-slate-700 font-bold">📝 접수 일시</label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 md:gap-4">
+                <div>
+                  <label className="text-[11px] md:text-xs font-semibold text-slate-700">접수 날짜 (현재 시각)</label>
                   <input
                     type="date"
                     value={newOrder.receipt_date}
-                    onChange={e => setNewOrder(prev => ({ ...prev, receipt_date: e.target.value }))}
-                    className="w-full p-2.5 md:p-3 border rounded-xl border-slate-300 focus:border-rose-500 focus:outline-none bg-white text-slate-900 font-medium"
+                    onChange={e => setNewOrder({...newOrder, receipt_date: e.target.value})}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm text-slate-800 font-medium"
+                    style={{ backgroundColor: '#f1f5f9' }}
                   />
-                  <TimePickerCustom
+                </div>
+                <div>
+                  <label className="text-[11px] md:text-xs font-semibold text-slate-700">접수 시간 (실시간 HH:mm)</label>
+                  <input
+                    type="time"
                     value={newOrder.receipt_time}
-                    onChange={val => setNewOrder(prev => ({ ...prev, receipt_time: val }))}
+                    onChange={e => setNewOrder({...newOrder, receipt_time: e.target.value})}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm text-slate-800 font-medium"
+                    style={{ backgroundColor: '#f1f5f9' }}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-slate-700 font-bold mb-1">결제 수단</label>
+                <label className="text-[11px] md:text-xs font-semibold text-slate-700">결제 방식 *</label>
                 <select
                   value={newOrder.payment_method}
-                  onChange={e => setNewOrder(prev => ({ ...prev, payment_method: e.target.value }))}
-                  className="w-full p-2.5 md:p-3 border rounded-xl border-slate-300 focus:border-rose-500 focus:outline-none bg-slate-50 text-slate-900 font-medium"
+                  onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
+                  className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
+                  style={{ backgroundColor: '#ffffff' }}
                 >
-                  {PAYMENT_OPTIONS.map(opt => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
+                  {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
                 </select>
               </div>
 
               <div>
-                <label className="block text-slate-700 font-bold mb-1">요청 사항 및 메모</label>
+                <label className="text-[11px] md:text-xs font-semibold text-slate-700">고객 요구사항 / 메모</label>
                 <textarea
-                  rows={3}
                   value={newOrder.memo}
-                  onChange={e => setNewOrder(prev => ({ ...prev, memo: e.target.value }))}
-                  placeholder="특이사항이나 요청사항을 입력하세요."
-                  className="w-full p-2.5 md:p-3 border rounded-xl border-slate-300 focus:border-rose-500 focus:outline-none bg-slate-50 text-slate-900 font-medium"
+                  onChange={e => setNewOrder({...newOrder, memo: e.target.value})}
+                  className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
+                  style={{ backgroundColor: '#ffffff' }}
+                  rows={3}
+                  placeholder="요청사항이나 특이사항을 적어주세요."
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3 md:py-3.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl shadow-md transition-all text-sm cursor-pointer"
+                className="w-full py-3 px-4 bg-slate-900 hover:bg-black text-white font-bold rounded-xl shadow-md transition-all text-sm md:text-base mt-4 cursor-pointer text-center block"
               >
                 주문 저장하기
               </button>
@@ -1143,274 +1272,280 @@ export default function App() {
           </div>
         )}
 
-        {/* 2. 주문/달력 메뉴 */}
+        {/* 2. 주문 & 달력 */}
         {activeMenu === 'orders' && (
-          <div className="space-y-4">
-            {/* 서브 탭 스위처 */}
-            <div className="flex bg-slate-200/80 p-1 rounded-xl max-w-xs text-xs md:text-sm font-bold">
-              <button
-                onClick={() => setSubTab('calendar')}
-                className={`flex-1 py-1.5 rounded-lg text-center transition-all ${
-                  subTab === 'calendar' ? 'bg-white text-rose-600 shadow-xs' : 'text-slate-600'
-                }`}
-              >
-                📅 달력 보기
-              </button>
-              <button
-                onClick={() => setSubTab('list')}
-                className={`flex-1 py-1.5 rounded-lg text-center transition-all ${
-                  subTab === 'list' ? 'bg-white text-rose-600 shadow-xs' : 'text-slate-600'
-                }`}
-              >
-                📋 목록 보기
-              </button>
-            </div>
+          <div className="space-y-3 md:space-y-6">
+            <div className="bg-white p-2 sm:p-3 md:p-5 rounded-xl border border-slate-200 shadow-sm">
+              <div className="flex border-b border-slate-200 mb-2 md:mb-4 gap-6">
+                <button
+                  onClick={() => setSubTab('calendar')}
+                  className={`pb-2 text-xs md:text-sm font-bold flex items-center gap-1.5 relative transition-colors ${
+                    subTab === 'calendar' ? 'text-rose-600' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <span>📅</span> 픽업 달력
+                  {subTab === 'calendar' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-500 rounded-full" />}
+                </button>
 
-            {/* 서브탭 1: 달력 뷰 */}
-            {subTab === 'calendar' && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="lg:col-span-2 bg-white p-3 md:p-4 rounded-2xl shadow-xs border border-slate-200">
+                <button
+                  onClick={() => setSubTab('list')}
+                  className={`pb-2 text-xs md:text-sm font-bold flex items-center gap-1.5 relative transition-colors ${
+                    subTab === 'list' ? 'text-rose-600' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <span>📊</span> 전체 주문 목록
+                  {subTab === 'list' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-500 rounded-full" />}
+                </button>
+              </div>
+
+              {subTab === 'calendar' && (
+                <div className="calendar-compact">
                   <FullCalendar
                     plugins={[dayGridPlugin, interactionPlugin]}
                     initialView="dayGridMonth"
                     locale="ko"
-                    headerToolbar={{
-                      left: 'prev,next today',
-                      center: 'title',
-                      right: ''
-                    }}
+                    aspectRatio={1.8}
+                    fixedWeekCount={false}
+                    dayMaxEventRows={true}
+                    contentHeight="auto"
                     events={getCalendarEvents()}
                     dateClick={(info) => setSelectedDate(info.dateStr)}
-                    height="auto"
+                    eventClick={(info) => setSelectedDate(info.event.startStr)}
                   />
                 </div>
+              )}
 
-                <div className="bg-white p-4 rounded-2xl shadow-xs border border-slate-200 flex flex-col h-full">
-                  <h3 className="text-sm font-bold text-slate-800 border-b pb-2 mb-3 flex items-center justify-between">
-                    <span>📌 {selectedDate || '날짜선택'} 픽업 건</span>
-                    <span className="text-xs bg-rose-100 text-rose-600 px-2 py-0.5 rounded-full">
-                      총 {selectedDayOrders.length}건
-                    </span>
+              {subTab === 'list' && (
+                <div className="space-y-3">
+                  <div className="flex flex-col md:flex-row gap-2 justify-between items-stretch md:items-center">
+                    <input
+                      type="text"
+                      value={orderSearch}
+                      onChange={e => handleOrderSearchChange(e.target.value)}
+                      placeholder="🔍 주문 검색 (고객 이름 또는 전화번호)"
+                      className="flex-1 p-2.5 border border-slate-300 rounded-xl text-xs md:text-sm bg-white text-slate-900 focus:outline-none focus:border-rose-500"
+                    />
+
+                    {/* 2. 삭제 버튼: 또렷한 검정 글씨, 빨간 테두리 및 명확한 시각적 지정 */}
+                    {selectedOrderIds.length > 0 && (
+                      <button
+                        onClick={handleDeleteSelectedOrders}
+                        className="px-3 py-2 bg-white hover:bg-rose-50 text-slate-900 font-extrabold rounded-xl text-xs border-2 border-rose-600 transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1"
+                      >
+                        🗑️ 선택 항목 ({selectedOrderIds.length}개) 삭제
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="text-xs text-slate-600 font-medium">
+                    검색 결과: 총 <strong className="text-rose-600">{filteredOrders.length}</strong>건
+                  </div>
+
+                  <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                    <table className="w-full text-left border-collapse whitespace-nowrap">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-slate-700 text-xs md:text-sm bg-slate-100 font-bold">
+                          <th className="py-2.5 px-3">픽업일시</th>
+                          <th className="py-2.5 px-3">접수일시</th>
+                          <th className="py-2.5 px-3">고객명</th>
+                          <th className="py-2.5 px-3">연락처</th>
+                          <th className="py-2.5 px-3">상품명</th>
+                          <th className="py-2.5 px-3">금액</th>
+                          <th className="py-2.5 px-3">결제수단</th>
+                          <th className="py-2.5 px-3 text-center">관리</th>
+                          <th className="py-2.5 px-3 text-center">
+                            <input
+                              type="checkbox"
+                              onChange={handleToggleSelectAllOrders}
+                              checked={filteredOrders.length > 0 && selectedOrderIds.length === filteredOrders.length}
+                              className="accent-rose-600 cursor-pointer w-4 h-4"
+                            />
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredOrders.length === 0 ? (
+                          <tr>
+                            <td colSpan={9} className="py-6 text-center text-slate-500 text-xs md:text-sm">
+                              검색 결과가 없습니다.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredOrders.map(o => (
+                            <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors text-xs md:text-sm">
+                              <td className="py-2.5 px-3 text-slate-700 font-medium">{o.pickup_datetime?.replace('T', ' ').slice(0, 16) || '-'}</td>
+                              <td className="py-2.5 px-3 text-xs text-slate-500">{o.created_at?.replace('T', ' ').slice(0, 16) || '-'}</td>
+                              <td className="py-2.5 px-3 font-bold text-slate-900 whitespace-nowrap">{o.customers?.name || '-'}</td>
+                              <td className="py-2.5 px-3 text-slate-700 font-medium whitespace-nowrap">{o.customers?.phone || '-'}</td>
+                              <td className="py-2.5 px-3 font-bold text-slate-800 whitespace-nowrap">{o.product_name}</td>
+                              <td className="py-2.5 px-3 font-extrabold text-rose-600 whitespace-nowrap">{o.amount?.toLocaleString()}원</td>
+                              <td className="py-2.5 px-3"><span className="px-2 py-0.5 bg-slate-100 border border-slate-300 rounded text-xs font-semibold text-slate-800 whitespace-nowrap">{o.payment_method}</span></td>
+                              
+                              <td className="py-2.5 px-3 text-center">
+                                <button
+                                  onClick={() => startEditOrder(o)}
+                                  className="text-xs bg-white hover:bg-slate-100 border-2 border-slate-800 text-slate-900 font-bold px-3 py-1 rounded-lg cursor-pointer whitespace-nowrap shadow-2xs"
+                                >
+                                  수정하기
+                                </button>
+                              </td>
+
+                              <td className="py-2.5 px-3 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedOrderIds.includes(o.id)}
+                                  onChange={() => handleToggleSelectOrder(o.id)}
+                                  className="accent-rose-600 cursor-pointer w-4 h-4"
+                                />
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 달력 하단 선택 날짜 상세 주문 목록 */}
+            {subTab === 'calendar' && selectedDate && (
+              <div className="bg-white p-3 md:p-5 rounded-xl border border-slate-200 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm md:text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <span>📅</span> <span className="text-sky-600">{selectedDate}</span> 픽업 주문 ({selectedDayOrders.length}건)
                   </h3>
+                </div>
 
-                  {selectedDayOrders.length === 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center py-8 text-slate-400 text-xs">
-                      <span>🍃 선택한 날짜에 픽업예약이 없습니다.</span>
-                    </div>
-                  ) : (
-                    <div className="space-y-2.5 overflow-y-auto max-h-[500px] pr-1">
-                      {selectedDayOrders.map(order => {
-                        const { time } = parseDateTime(order.pickup_datetime);
-                        return (
-                          <div
-                            key={order.id}
-                            className="p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-rose-300 transition-all text-xs space-y-1 relative"
-                          >
-                            <div className="flex justify-between items-start">
-                              <span className="font-bold text-slate-900 text-sm">
-                                {order.customers?.name || '익명'}
+                {selectedDayOrders.length === 0 ? (
+                  <div className="bg-slate-50 text-slate-500 p-3 rounded-xl text-xs md:text-sm text-center border border-slate-200">
+                    해당 날짜에 예정된 픽업 주문이 없습니다.
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {selectedDayOrders.map(o => {
+                      const timeOnly = o.pickup_datetime ? o.pickup_datetime.split('T')[1]?.slice(0, 5) : '--:--';
+                      return (
+                        <div
+                          key={o.id}
+                          className="p-2.5 md:p-3 rounded-xl border border-slate-200 bg-white flex flex-col gap-1.5 shadow-2xs"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 bg-sky-100 text-sky-900 font-extrabold text-xs rounded-md whitespace-nowrap border border-sky-300">
+                              ⏰ {timeOnly}
+                            </span>
+                            <span className="font-bold text-slate-900 text-sm md:text-base">
+                              {o.customers?.name || '익명'}
+                            </span>
+                            <span className="text-xs text-slate-600 font-medium">
+                              {o.customers?.phone || ''}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-1 text-xs">
+                            <div className="flex items-center gap-1.5 overflow-hidden flex-1 min-w-0">
+                              <span className="font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
+                                {o.product_name}
                               </span>
-                              <span className="font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
-                                ⏰ {time}
+                              <span className="px-1.5 py-0.5 bg-slate-50 border border-slate-300 rounded text-slate-700 font-semibold shrink-0">
+                                {o.payment_method}
                               </span>
+                              {o.memo && (
+                                <span className="text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 truncate font-medium">
+                                  💬 {o.memo}
+                                </span>
+                              )}
                             </div>
 
-                            <div className="text-slate-600 flex justify-between pt-1">
-                              <span>{order.product_name}</span>
-                              <span className="font-semibold">{((order.amount || 0) / 1000).toLocaleString()}천원</span>
-                            </div>
-
-                            <div className="text-[11px] text-slate-500">
-                              📞 {order.customers?.phone || '-'}
-                            </div>
-
-                            {order.memo && (
-                              <div className="mt-1 pt-1 border-t border-slate-200/60 text-[11px] text-slate-500 italic">
-                                💡 {order.memo}
-                              </div>
-                            )}
-
-                            <div className="pt-1 flex justify-end gap-1">
+                            <div className="flex items-center gap-2 shrink-0 ml-1">
+                              <span className="font-extrabold text-slate-900 text-xs md:text-sm">
+                                {o.amount?.toLocaleString()}원
+                              </span>
+                              
                               <button
-                                onClick={() => startEditOrder(order)}
-                                className="px-2 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-[11px] font-bold cursor-pointer"
+                                onClick={() => startEditOrder(o)}
+                                className="text-xs bg-white hover:bg-slate-100 border-2 border-slate-800 text-slate-900 font-bold px-2 py-0.5 rounded cursor-pointer"
                               >
                                 수정
                               </button>
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* 서브탭 2: 전체 목록 뷰 */}
-            {subTab === 'list' && (
-              <div className="bg-white p-4 rounded-2xl shadow-xs border border-slate-200 space-y-3">
-                <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-2">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={orderSearch}
-                      onChange={e => handleOrderSearchChange(e.target.value)}
-                      placeholder="🔍 고객명 또는 연락처 검색..."
-                      className="p-2 border border-slate-300 rounded-xl text-xs md:text-sm focus:outline-none focus:border-rose-500 w-full md:w-64"
-                    />
+                        </div>
+                      );
+                    })}
                   </div>
-
-                  {selectedOrderIds.length > 0 && (
-                    <button
-                      onClick={handleDeleteSelectedOrders}
-                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
-                    >
-                      🗑️ 선택한 {selectedOrderIds.length}개 주문 삭제
-                    </button>
-                  )}
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs md:text-sm">
-                    <thead>
-                      <tr className="bg-slate-100 border-b border-slate-200 text-slate-700">
-                        <th className="p-2.5 text-center w-8">
-                          <input
-                            type="checkbox"
-                            onChange={handleToggleSelectAllOrders}
-                            checked={filteredOrders.length > 0 && selectedOrderIds.length === filteredOrders.length}
-                          />
-                        </th>
-                        <th className="p-2.5">고객명</th>
-                        <th className="p-2.5">연락처</th>
-                        <th className="p-2.5">상품명</th>
-                        <th className="p-2.5">금액</th>
-                        <th className="p-2.5">픽업일시</th>
-                        <th className="p-2.5">결제수단</th>
-                        <th className="p-2.5 text-center">관리</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {filteredOrders.length === 0 ? (
-                        <tr>
-                          <td colSpan={8} className="text-center py-8 text-slate-400">
-                            주문 내역이 없습니다.
-                          </td>
-                        </tr>
-                      ) : (
-                        filteredOrders.map(order => {
-                          const { date, time } = parseDateTime(order.pickup_datetime);
-                          return (
-                            <tr key={order.id} className="hover:bg-slate-50/80">
-                              <td className="p-2.5 text-center">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedOrderIds.includes(order.id)}
-                                  onChange={() => handleToggleSelectOrder(order.id)}
-                                />
-                              </td>
-                              <td className="p-2.5 font-bold text-slate-900">
-                                {order.customers?.name || '익명'}
-                              </td>
-                              <td className="p-2.5 text-slate-600">{order.customers?.phone || '-'}</td>
-                              <td className="p-2.5 font-medium">{order.product_name}</td>
-                              <td className="p-2.5 font-semibold text-rose-600">
-                                {((order.amount || 0) / 1000).toLocaleString()}천원
-                              </td>
-                              <td className="p-2.5 text-slate-700">{date} {time}</td>
-                              <td className="p-2.5">
-                                <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md text-xs font-semibold">
-                                  {order.payment_method || '신용카드'}
-                                </span>
-                              </td>
-                              <td className="p-2.5 text-center">
-                                <button
-                                  onClick={() => startEditOrder(order)}
-                                  className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-lg text-xs font-bold cursor-pointer"
-                                >
-                                  수정
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                )}
               </div>
             )}
           </div>
         )}
 
-        {/* 3. 고객 관리 메뉴 */}
+        {/* 3. 고객 관리 */}
         {activeMenu === 'customers' && (
-          <div className="bg-white p-4 md:p-6 rounded-2xl shadow-xs border border-slate-200 space-y-4">
-            <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-2 border-b pb-3">
-              <h2 className="text-base md:text-lg font-bold text-slate-900">🎂 고객 목록 관리</h2>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={customerSearch}
-                  onChange={e => handleCustomerSearchChange(e.target.value)}
-                  placeholder="🔍 이름 또는 전화번호 검색..."
-                  className="p-2 border border-slate-300 rounded-xl text-xs md:text-sm focus:outline-none focus:border-rose-500 w-full md:w-64"
-                />
-
-                {selectedCustomerIds.length > 0 && (
-                  <button
-                    onClick={handleDeleteSelectedCustomers}
-                    className="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer"
-                  >
-                    🗑️ 선택 삭제 ({selectedCustomerIds.length})
-                  </button>
-                )}
-              </div>
+          <div className="bg-white p-3 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-base md:text-xl font-bold text-slate-900 flex items-center gap-2">
+                <span>🎂</span> 고객 목록 (총 <span className="text-rose-600">{filteredCustomers.length}</span>명)
+              </h2>
+              
+              {/* 고객 삭제 버튼도 검정 글자 + 선명한 테두리로 수정 */}
+              {selectedCustomerIds.length > 0 && (
+                <button
+                  onClick={handleDeleteSelectedCustomers}
+                  className="px-3 py-1.5 bg-white hover:bg-rose-50 text-slate-900 font-extrabold rounded-xl text-xs border-2 border-rose-600 transition-colors cursor-pointer shadow-xs"
+                >
+                  🗑️ 선택 고객 ({selectedCustomerIds.length}명) 삭제
+                </button>
+              )}
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs md:text-sm">
+            <input
+              type="text"
+              value={customerSearch}
+              onChange={e => handleCustomerSearchChange(e.target.value)}
+              placeholder="🔍 고객 이름 또는 전화번호 검색"
+              className="w-full p-2.5 md:p-3 border border-slate-300 rounded-xl text-xs md:text-sm bg-white text-slate-900 focus:outline-none focus:border-rose-500"
+            />
+
+            <div className="overflow-x-auto border border-slate-200 rounded-xl">
+              <table className="w-full text-left border-collapse whitespace-nowrap">
                 <thead>
-                  <tr className="bg-slate-100 border-b border-slate-200 text-slate-700">
-                    <th className="p-2.5 text-center w-8">
+                  <tr className="border-b border-slate-200 text-slate-700 text-xs md:text-sm bg-slate-100 font-bold">
+                    <th className="py-2.5 px-3 w-16 text-center">No.</th>
+                    <th className="py-2.5 px-3">이름</th>
+                    <th className="py-2.5 px-3">연락처</th>
+                    <th className="py-2.5 px-3">최근 픽업일</th>
+                    <th className="py-2.5 px-3 text-center">
                       <input
                         type="checkbox"
                         onChange={handleToggleSelectAllCustomers}
                         checked={filteredCustomers.length > 0 && selectedCustomerIds.length === filteredCustomers.length}
+                        className="accent-rose-600 cursor-pointer w-4 h-4"
                       />
                     </th>
-                    <th className="p-2.5">고객명</th>
-                    <th className="p-2.5">연락처</th>
-                    <th className="p-2.5">최근 픽업일</th>
-                    <th className="p-2.5">등록일</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {filteredCustomers.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="text-center py-8 text-slate-400">
-                        등록된 고객이 없습니다.
+                      <td colSpan={5} className="py-6 text-center text-slate-500 text-xs md:text-sm">
+                        검색 결과가 없습니다.
                       </td>
                     </tr>
                   ) : (
-                    filteredCustomers.map(cust => (
-                      <tr key={cust.id} className="hover:bg-slate-50/80">
-                        <td className="p-2.5 text-center">
+                    filteredCustomers.map((c, idx) => (
+                      <tr key={c.id} className="border-b border-slate-100 text-xs md:text-sm hover:bg-slate-50">
+                        <td className="py-2.5 px-3 text-center text-slate-500 font-bold">{filteredCustomers.length - idx}</td>
+                        <td className="py-2.5 px-3 font-bold text-slate-900">{c.name}</td>
+                        <td className="py-2.5 px-3 text-slate-700 font-medium">{c.phone || '-'}</td>
+                        <td className="py-2.5 px-3 text-slate-600 font-medium">{getCustomerPickupDate(c.id, c.name)}</td>
+                        <td className="py-2.5 px-3 text-center">
                           <input
                             type="checkbox"
-                            checked={selectedCustomerIds.includes(cust.id)}
-                            onChange={() => handleToggleSelectCustomer(cust.id)}
+                            checked={selectedCustomerIds.includes(c.id)}
+                            onChange={() => handleToggleSelectCustomer(c.id)}
+                            className="accent-rose-600 cursor-pointer w-4 h-4"
                           />
-                        </td>
-                        <td className="p-2.5 font-bold text-slate-900">{cust.name}</td>
-                        <td className="p-2.5 text-slate-600">{cust.phone || '-'}</td>
-                        <td className="p-2.5 text-slate-700 font-medium">
-                          {getCustomerPickupDate(cust.id, cust.name)}
-                        </td>
-                        <td className="p-2.5 text-slate-400 text-xs">
-                          {cust.created_at ? cust.created_at.split('T')[0] : '-'}
                         </td>
                       </tr>
                     ))
@@ -1421,175 +1556,58 @@ export default function App() {
           </div>
         )}
 
-        {/* 4. 알림 메뉴 */}
+        {/* 4. 알림 */}
         {activeMenu === 'notifications' && (
-          <div className="bg-white p-4 md:p-6 rounded-2xl shadow-xs border border-slate-200 max-w-xl mx-auto space-y-4">
-            <h2 className="text-base md:text-lg font-bold text-slate-900 border-b pb-2">🔔 시스템 알림 설정</h2>
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs md:text-sm text-slate-700 space-y-2">
-              <p className="font-bold text-slate-900">📌 자동 정기 백업 알림 안내</p>
-              <p className="leading-relaxed text-slate-600">
-                매주 <strong>월요일 정오(12:00 PM)</strong>에 접속 시 백업 다운로드 팝업 알림이 활성화됩니다.
+          <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <h2 className="text-base md:text-xl font-bold text-slate-900">🔔 알림 및 주간 백업 관리</h2>
+            <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl space-y-2">
+              <h3 className="font-bold text-sm text-rose-800">📅 주간 백업 자동 안내 시스템</h3>
+              <p className="text-xs text-rose-700 leading-relaxed">
+                매주 월요일 낮 12시 이후 앱에 접속하시거나 화면을 켜두시면 백업 팝업 알림창이 자동으로 작동합니다.
               </p>
             </div>
           </div>
         )}
 
-        {/* 5. 백업 / 복원 메뉴 */}
+        {/* 5. CSV 백업/복원 */}
         {activeMenu === 'backup' && (
-          <div className="bg-white p-4 md:p-6 rounded-2xl shadow-xs border border-slate-200 max-w-xl mx-auto space-y-6">
-            <h2 className="text-base md:text-lg font-bold text-slate-900 border-b pb-2">💾 데이터 백업 및 복원</h2>
-
-            <div className="space-y-3">
-              <h3 className="font-bold text-slate-800 text-xs md:text-sm">📥 데이터 백업 (내보내기)</h3>
+          <div className="bg-white p-4 md:p-8 rounded-2xl border border-slate-200 shadow-sm max-w-xl mx-auto space-y-6">
+            <div>
+              <h2 className="text-base md:text-xl font-bold text-slate-900 flex items-center gap-2 mb-1">
+                <span>💾</span> CSV 백업 및 복원
+              </h2>
               <p className="text-xs text-slate-500">
-                현재 데이터베이스에 저장된 주문 내역과 고객 정보를 CSV 파일로 다운로드합니다.
+                주문정보와 고객정보를 2개의 CSV 파일로 내보내거나 가져올 수 있습니다.
+              </p>
+            </div>
+
+            <div className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-3">
+              <h3 className="font-bold text-xs md:text-sm text-slate-800">1. CSV 파일로 내보내기 (Export)</h3>
+              <p className="text-xs text-slate-500">
+                클릭 시 오늘 날짜가 포함된 2개의 파일이 자동으로 다운로드됩니다.<br />
+                - <code className="text-rose-600 font-bold">export_orders_{getKoreaNowFormatted().date}.csv</code><br />
+                - <code className="text-rose-600 font-bold">export_customers_{getKoreaNowFormatted().date}.csv</code>
               </p>
               <button
                 onClick={handleExportCSV}
-                className="w-full py-3 bg-slate-900 hover:bg-black text-white font-bold rounded-xl text-xs md:text-sm transition-all cursor-pointer shadow-md"
+                className="w-full py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs md:text-sm shadow-xs transition-colors cursor-pointer border border-rose-800"
               >
-                💾 CSV 데이터 백업 다운로드
+                📥 CSV 백업 파일 2개 다운로드
               </button>
             </div>
 
-            <hr className="border-slate-200" />
-
-            <div className="space-y-3">
-              <h3 className="font-bold text-slate-800 text-xs md:text-sm">📤 데이터 복원 (가져오기)</h3>
+            <div className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-3">
+              <h3 className="font-bold text-xs md:text-sm text-slate-800">2. CSV 파일 가져오기 (Import)</h3>
               <p className="text-xs text-slate-500">
-                백업한 CSV 파일을 선택하여 데이터베이스에 복원 및 업로드합니다.
+                백업했던 CSV 파일 2개를 <strong>Ctrl 키(또는 Shift 키)를 누른 채 동시에 선택</strong>하여 한번에 올려주세요.
               </p>
-              <label className="block w-full py-3 bg-white hover:bg-slate-50 text-slate-800 border-2 border-dashed border-slate-300 rounded-xl text-center font-bold text-xs md:text-sm cursor-pointer transition-all">
-                📁 CSV 파일 선택 및 복원
-                <input
-                  type="file"
-                  accept=".csv"
-                  multiple
-                  onChange={handleImportCSV}
-                  className="hidden"
-                />
-              </label>
-            </div>
-          </div>
-        )}
-
-        {/* 주문 수정 모달 */}
-        {editingOrder && (
-          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-            <div className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl border border-slate-300 my-8 space-y-4">
-              <div className="flex justify-between items-center border-b pb-2">
-                <h3 className="text-base md:text-lg font-bold text-slate-900">✏️ 주문 정보 수정</h3>
-                <button
-                  onClick={() => setEditingOrder(null)}
-                  className="text-slate-400 hover:text-slate-600 font-bold text-lg"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <form onSubmit={handleUpdateOrder} className="space-y-3 text-xs md:text-sm">
-                <div>
-                  <label className="block text-slate-700 font-bold mb-1">고객 성명</label>
-                  <input
-                    type="text"
-                    value={editingOrder.customer_name}
-                    onChange={e => setEditingOrder(prev => ({ ...prev, customer_name: e.target.value }))}
-                    className="w-full p-2.5 border rounded-xl border-slate-300 bg-slate-50 font-medium"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-bold mb-1">연락처</label>
-                  <input
-                    type="tel"
-                    value={editingOrder.phone}
-                    onChange={e => setEditingOrder(prev => ({ ...prev, phone: formatPhone(e.target.value) }))}
-                    className="w-full p-2.5 border rounded-xl border-slate-300 bg-slate-50 font-medium"
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-slate-700 font-bold mb-1">상품 구분</label>
-                    <select
-                      value={editingOrder.product_name}
-                      onChange={e => setEditingOrder(prev => ({ ...prev, product_name: e.target.value }))}
-                      className="w-full p-2.5 border rounded-xl border-slate-300 bg-slate-50 font-medium"
-                    >
-                      {PRODUCT_OPTIONS.map(opt => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 font-bold mb-1">금액 (천원 단위)</label>
-                    <input
-                      type="number"
-                      value={editingOrder.amount_thousands}
-                      onChange={e => setEditingOrder(prev => ({ ...prev, amount_thousands: e.target.value }))}
-                      className="w-full p-2.5 border rounded-xl border-slate-300 bg-slate-50 font-medium text-right"
-                    />
-                  </div>
-                </div>
-
-                <div className="p-3 bg-rose-50/50 rounded-xl border border-rose-100 space-y-2">
-                  <label className="block text-rose-900 font-bold">🗓️ 픽업 예약 일시</label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <input
-                      type="date"
-                      value={editingOrder.pickup_date}
-                      onChange={e => setEditingOrder(prev => ({ ...prev, pickup_date: e.target.value }))}
-                      className="w-full p-2.5 border rounded-xl border-slate-300 bg-white font-medium"
-                    />
-                    <TimePickerCustom
-                      value={editingOrder.pickup_time}
-                      onChange={val => setEditingOrder(prev => ({ ...prev, pickup_time: val }))}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-bold mb-1">결제 수단</label>
-                  <select
-                    value={editingOrder.payment_method}
-                    onChange={e => setEditingOrder(prev => ({ ...prev, payment_method: e.target.value }))}
-                    className="w-full p-2.5 border rounded-xl border-slate-300 bg-slate-50 font-medium"
-                  >
-                    {PAYMENT_OPTIONS.map(opt => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-bold mb-1">요청 사항 및 메모</label>
-                  <textarea
-                    rows={3}
-                    value={editingOrder.memo}
-                    onChange={e => setEditingOrder(prev => ({ ...prev, memo: e.target.value }))}
-                    className="w-full p-2.5 border rounded-xl border-slate-300 bg-slate-50 font-medium"
-                  />
-                </div>
-
-                <div className="flex gap-2 pt-2">
-                  <button
-                    type="submit"
-                    className="flex-1 py-3 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl shadow-md cursor-pointer"
-                  >
-                    수정사항 저장
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditingOrder(null)}
-                    className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl border border-slate-300 cursor-pointer"
-                  >
-                    취소
-                  </button>
-                </div>
-              </form>
+              <input
+                type="file"
+                accept=".csv"
+                multiple
+                onChange={handleImportCSV}
+                className="w-full text-xs text-slate-700 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border file:border-slate-300 file:text-xs file:font-bold file:bg-white file:text-slate-800 hover:file:bg-slate-100 cursor-pointer"
+              />
             </div>
           </div>
         )}
