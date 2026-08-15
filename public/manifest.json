@@ -1,7 +1,7 @@
 {
-  "name": "꽃집 주문 관리",
-  "short_name": "꽃집예약",
-  "description": "꽃집 주문 및 픽업 예약 관리",
+  "name": "화사한하루 - 꽃집 주문/예약 관리",
+  "short_name": "화사한하루",
+  "description": "화사한하루 꽃집 주문 및 픽업 예약 관리 앱",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
@@ -10,12 +10,14 @@
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
