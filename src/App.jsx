@@ -147,10 +147,8 @@ const parseCSVText = (text) => {
 };
 
 export default function App() {
-  // 비밀번호 상태 관리 (항상 8005)
   const appPassword = DEFAULT_APP_PASSWORD;
 
-  // 비밀번호 인증 상태 (세션 스토리지 기억)
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return sessionStorage.getItem('app_authenticated') === 'true';
   });
@@ -165,19 +163,15 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState(getKoreaNowFormatted().date);
   const [editingOrder, setEditingOrder] = useState(null);
 
-  // 선택 삭제용 state
   const [selectedOrderIds, setSelectedOrderIds] = useState([]);
   const [selectedCustomerIds, setSelectedCustomerIds] = useState([]);
 
-  // 검색 키워드 state
   const [orderSearch, setOrderSearch] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
   const [matchedCustomerList, setMatchedCustomerList] = useState([]);
 
-  // 주간 백업 알림 팝업 모달 상태
   const [showBackupAlertModal, setShowBackupAlertModal] = useState(false);
 
-  // 비밀번호 확인 핸들러
   const handlePinSubmit = (e) => {
     e.preventDefault();
     if (inputPin === appPassword) {
@@ -221,7 +215,6 @@ export default function App() {
     memo: ''
   });
 
-  // 월요일 12시 백업 알림 체크 로직
   useEffect(() => {
     const checkBackupSchedule = () => {
       const nowInfo = getKoreaNowFormatted();
@@ -504,7 +497,6 @@ export default function App() {
     fetchData();
   };
 
-  // --- 주문 삭제 핸들러 ---
   const handleToggleSelectAllOrders = (e) => {
     if (e.target.checked) {
       setSelectedOrderIds(filteredOrders.map(o => o.id));
@@ -533,7 +525,6 @@ export default function App() {
     }
   };
 
-  // --- 고객 삭제 핸들러 ---
   const handleToggleSelectAllCustomers = (e) => {
     if (e.target.checked) {
       setSelectedCustomerIds(filteredCustomers.map(c => c.id));
@@ -562,7 +553,6 @@ export default function App() {
     }
   };
 
-  // CSV 데이터 백업 내보내기
   const handleExportCSV = () => {
     try {
       const today = getKoreaNowFormatted().date;
@@ -600,7 +590,6 @@ export default function App() {
     }
   };
 
-  // CSV 파일 복원
   const handleImportCSV = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -666,13 +655,17 @@ export default function App() {
     }
   };
 
+  // [수정3 & 수정4 반영] 날짜별 주문 건수를 항상 단일 카운트로 집계하여 분리 표시 방지
   const getCalendarEvents = () => {
     const countsByDate = {};
 
     orders.forEach(o => {
       if (o.pickup_datetime) {
-        const dateStr = o.pickup_datetime.split('T')[0];
-        countsByDate[dateStr] = (countsByDate[dateStr] || 0) + 1;
+        // 날짜 추출 (YYYY-MM-DD)
+        const dateStr = o.pickup_datetime.replace(' ', 'T').split('T')[0];
+        if (dateStr) {
+          countsByDate[dateStr] = (countsByDate[dateStr] || 0) + 1;
+        }
       }
     });
 
@@ -689,10 +682,10 @@ export default function App() {
 
   const selectedDayOrders = selectedDate
     ? orders
-        .filter(o => o.pickup_datetime && o.pickup_datetime.startsWith(selectedDate))
+        .filter(o => o.pickup_datetime && o.pickup_datetime.replace(' ', 'T').startsWith(selectedDate))
         .sort((a, b) => {
-          const timeA = a.pickup_datetime?.split('T')[1] || '00:00';
-          const timeB = b.pickup_datetime?.split('T')[1] || '00:00';
+          const timeA = a.pickup_datetime?.replace(' ', 'T').split('T')[1] || '00:00';
+          const timeB = b.pickup_datetime?.replace(' ', 'T').split('T')[1] || '00:00';
           return timeA.localeCompare(timeB);
         })
     : [];
@@ -732,7 +725,7 @@ export default function App() {
   const getCustomerPickupDate = (customerId, customerName) => {
     const match = orders.find(o => o.customer_id === customerId || o.customers?.name === customerName);
     if (match && match.pickup_datetime) {
-      return match.pickup_datetime.split('T')[0];
+      return match.pickup_datetime.replace(' ', 'T').split('T')[0];
     }
     return '-';
   };
@@ -877,7 +870,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 사이드바 / 상단 메뉴 (모바일 간격 축소 & 진한 선택 테두리 적용) */}
+      {/* 사이드바 / 상단 메뉴 */}
       <aside className="bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 w-full md:w-28 p-1 md:p-2 flex flex-col shrink-0 shadow-xs">
         <div className="hidden md:flex items-center justify-between text-rose-500 font-extrabold text-sm mb-1 px-1">
           <span className="flex items-center gap-1">📌 메뉴</span>
@@ -905,7 +898,6 @@ export default function App() {
             </label>
           ))}
 
-          {/* 모바일 화면용 잠금 버튼 (메뉴 맨 우측에 상시 표시) */}
           <button
             onClick={handleLogout}
             className="md:hidden py-1 px-1.5 bg-slate-200 hover:bg-slate-300 text-slate-900 rounded-lg text-[10px] font-extrabold border border-slate-400 text-center cursor-pointer whitespace-nowrap shrink-0"
@@ -914,7 +906,6 @@ export default function App() {
           </button>
         </nav>
 
-        {/* PC 화면 하단 잠금 버튼 */}
         <div className="hidden md:flex flex-col gap-1 mt-auto pt-2 border-t border-slate-200">
           <button
             onClick={handleLogout}
@@ -933,13 +924,14 @@ export default function App() {
             <div className="bg-white rounded-2xl p-4 md:p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-xl border border-slate-200">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-base md:text-lg font-bold text-slate-900">✏️ 주문 수정</h3>
-                <button onClick={() => setEditingOrder(null)} className="text-slate-400 hover:text-slate-600 text-lg font-bold">✕</button>
+                <button onClick={() => setEditingOrder(null)} className="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer">✕</button>
               </div>
 
               <form onSubmit={handleUpdateOrder} className="space-y-3">
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-700">고객명</label>
+                    {/* [수정2 반영] font-normal로 볼드 제거 */}
+                    <label className="text-[11px] font-normal text-slate-700">고객명</label>
                     <input
                       type="text"
                       value={editingOrder.customer_name}
@@ -949,7 +941,7 @@ export default function App() {
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-700">연락처</label>
+                    <label className="text-[11px] font-normal text-slate-700">연락처</label>
                     <input
                       type="text"
                       value={editingOrder.phone}
@@ -962,7 +954,7 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-700">상품종류</label>
+                    <label className="text-[11px] font-normal text-slate-700">상품종류</label>
                     <select
                       value={editingOrder.product_name}
                       onChange={e => setEditingOrder({ ...editingOrder, product_name: e.target.value })}
@@ -972,7 +964,7 @@ export default function App() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-700">금액 (천원 단위)</label>
+                    <label className="text-[11px] font-normal text-slate-700">금액 (천원 단위)</label>
                     <input
                       type="number"
                       value={editingOrder.amount_thousands}
@@ -984,7 +976,7 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-700">픽업 날짜</label>
+                    <label className="text-[11px] font-normal text-slate-700">픽업 날짜</label>
                     <input
                       type="date"
                       value={editingOrder.pickup_date}
@@ -993,7 +985,7 @@ export default function App() {
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-700">픽업 시간</label>
+                    <label className="text-[11px] font-normal text-slate-700">픽업 시간</label>
                     <TimePickerCustom
                       value={editingOrder.pickup_time}
                       onChange={val => setEditingOrder({ ...editingOrder, pickup_time: val })}
@@ -1002,7 +994,7 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-700">결제 방식</label>
+                  <label className="text-[11px] font-normal text-slate-700">결제 방식</label>
                   <select
                     value={editingOrder.payment_method}
                     onChange={e => setEditingOrder({ ...editingOrder, payment_method: e.target.value })}
@@ -1013,7 +1005,7 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-700">메모</label>
+                  <label className="text-[11px] font-normal text-slate-700">메모</label>
                   <textarea
                     value={editingOrder.memo}
                     onChange={e => setEditingOrder({ ...editingOrder, memo: e.target.value })}
@@ -1023,8 +1015,20 @@ export default function App() {
                 </div>
 
                 <div className="flex gap-2 pt-2">
-                  <button type="submit" className="flex-1 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold cursor-pointer">저장하기</button>
-                  <button type="button" onClick={() => setEditingOrder(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs border border-slate-300 font-bold cursor-pointer">취소</button>
+                  {/* [수정1 반영] 수정 저장 버튼: 테두리 표시 및 검은색 글씨 적용 */}
+                  <button 
+                    type="submit" 
+                    className="flex-1 py-2 bg-white hover:bg-slate-100 text-black border-2 border-black font-extrabold rounded-xl text-xs cursor-pointer transition-colors"
+                  >
+                    저장하기
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => setEditingOrder(null)} 
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs border border-slate-300 font-bold cursor-pointer"
+                  >
+                    취소
+                  </button>
                 </div>
               </form>
             </div>
@@ -1041,7 +1045,8 @@ export default function App() {
             <form onSubmit={handleCreateOrder} className="space-y-3 md:space-y-4">
               <div className="grid grid-cols-2 gap-2 md:gap-4 relative">
                 <div className="relative">
-                  <label className="text-[11px] md:text-xs font-semibold text-slate-700">고객 성명 *</label>
+                  {/* [수정2 반영] font-normal로 볼드 제거 */}
+                  <label className="text-[11px] md:text-xs font-normal text-slate-700">고객 성명 *</label>
                   <input
                     type="text"
                     value={newOrder.customer_name}
@@ -1072,7 +1077,7 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label className="text-[11px] md:text-xs font-semibold text-slate-700">휴대폰 번호 *</label>
+                  <label className="text-[11px] md:text-xs font-normal text-slate-700">휴대폰 번호 *</label>
                   <input
                     type="text"
                     value={newOrder.phone}
@@ -1088,7 +1093,7 @@ export default function App() {
 
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
-                  <label className="text-[11px] md:text-xs font-semibold text-slate-700">상품종류 *</label>
+                  <label className="text-[11px] md:text-xs font-normal text-slate-700">상품종류 *</label>
                   <select
                     value={newOrder.product_name}
                     onChange={e => setNewOrder({...newOrder, product_name: e.target.value})}
@@ -1099,7 +1104,7 @@ export default function App() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[11px] md:text-xs font-semibold text-slate-700">
+                  <label className="text-[11px] md:text-xs font-normal text-slate-700">
                     결제 금액 (천원 단위)
                   </label>
                   <div className="relative mt-1">
@@ -1120,7 +1125,7 @@ export default function App() {
 
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
-                  <label className="text-[11px] md:text-xs font-semibold text-slate-700">픽업 날짜 *</label>
+                  <label className="text-[11px] md:text-xs font-normal text-slate-700">픽업 날짜 *</label>
                   <input
                     type="date"
                     value={newOrder.pickup_date}
@@ -1130,7 +1135,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] md:text-xs font-semibold text-slate-700">픽업 시간 * (15분 단위)</label>
+                  <label className="text-[11px] md:text-xs font-normal text-slate-700">픽업 시간 * (15분 단위)</label>
                   <TimePickerCustom
                     value={newOrder.pickup_time}
                     onChange={val => setNewOrder({...newOrder, pickup_time: val})}
@@ -1141,7 +1146,7 @@ export default function App() {
 
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
-                  <label className="text-[11px] md:text-xs font-semibold text-slate-700">접수 날짜 (현재 시각)</label>
+                  <label className="text-[11px] md:text-xs font-normal text-slate-700">접수 날짜 (현재 시각)</label>
                   <input
                     type="date"
                     value={newOrder.receipt_date}
@@ -1151,7 +1156,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] md:text-xs font-semibold text-slate-700">접수 시간 (실시간 HH:mm)</label>
+                  <label className="text-[11px] md:text-xs font-normal text-slate-700">접수 시간 (실시간 HH:mm)</label>
                   <input
                     type="time"
                     value={newOrder.receipt_time}
@@ -1163,7 +1168,7 @@ export default function App() {
               </div>
 
               <div>
-                <label className="text-[11px] md:text-xs font-semibold text-slate-700">결제 방식 *</label>
+                <label className="text-[11px] md:text-xs font-normal text-slate-700">결제 방식 *</label>
                 <select
                   value={newOrder.payment_method}
                   onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
@@ -1175,7 +1180,7 @@ export default function App() {
               </div>
 
               <div>
-                <label className="text-[11px] md:text-xs font-semibold text-slate-700">고객 요구사항 / 메모</label>
+                <label className="text-[11px] md:text-xs font-normal text-slate-700">고객 요구사항 / 메모</label>
                 <textarea
                   value={newOrder.memo}
                   onChange={e => setNewOrder({...newOrder, memo: e.target.value})}
@@ -1186,9 +1191,10 @@ export default function App() {
                 />
               </div>
 
+              {/* [수정1 반영] 신규 저장 버튼: 테두리 표시 및 검은색 글씨 적용 */}
               <button
                 type="submit"
-                className="w-full py-3 px-4 bg-slate-900 hover:bg-black text-white font-bold rounded-xl shadow-md transition-all text-sm md:text-base mt-4 cursor-pointer text-center block"
+                className="w-full py-3 px-4 bg-white hover:bg-slate-100 text-black border-2 border-black font-extrabold rounded-xl shadow-md transition-all text-sm md:text-base mt-4 cursor-pointer text-center block"
               >
                 주문 저장하기
               </button>
@@ -1250,7 +1256,6 @@ export default function App() {
                       className="flex-1 p-2.5 border border-slate-300 rounded-xl text-xs md:text-sm bg-white text-slate-900 focus:outline-none focus:border-rose-500"
                     />
 
-                    {/* 상시 노출되는 주문 삭제 버튼 (미선택 시 비활성화 스타일) */}
                     <button
                       onClick={handleDeleteSelectedOrders}
                       disabled={selectedOrderIds.length === 0}
@@ -1351,7 +1356,7 @@ export default function App() {
                 ) : (
                   <div className="flex flex-col gap-2">
                     {selectedDayOrders.map(o => {
-                      const timeOnly = o.pickup_datetime ? o.pickup_datetime.split('T')[1]?.slice(0, 5) : '--:--';
+                      const timeOnly = o.pickup_datetime ? o.pickup_datetime.replace(' ', 'T').split('T')[1]?.slice(0, 5) : '--:--';
                       return (
                         <div
                           key={o.id}
@@ -1415,7 +1420,6 @@ export default function App() {
                 <span>🎂</span> 고객 목록 (총 <span className="text-rose-600">{filteredCustomers.length}</span>명)
               </h2>
               
-              {/* 상시 노출되는 고객 삭제 버튼 (미선택 시 비활성화 스타일) */}
               <button
                 onClick={handleDeleteSelectedCustomers}
                 disabled={selectedCustomerIds.length === 0}
