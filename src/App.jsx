@@ -87,7 +87,33 @@ const getKoreaNowFormatted = () => {
   const dayOfWeek = kst.getDay(); // 0:일, 1:월, ...
   const currentHour = kst.getHours();
 
-  return { date: dateStr, time: timeStr, dayOfWeek, currentHour };
+  return { date: dateStr, time: timeStr, dayOfWeek, currentHour, kstDateObj: kst };
+};
+
+// 수정사항 1: 현재 시간 직후의 가장 가까운 15분 단위 픽업 일시 계산 함수
+const getNextQuarterHourDateTime = () => {
+  const now = new Date();
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const kst = new Date(utc + (9 * 60 * 60 * 1000));
+
+  // 현재 분을 올림하여 다음 15분 단위로 설정 (+1분 여유를 주어 정각일 때 바로 다음 15분이 되도록)
+  const totalMinutes = kst.getHours() * 60 + kst.getMinutes() + 1;
+  const remainder = totalMinutes % 15;
+  const roundedMinutes = totalMinutes + (15 - remainder);
+
+  const targetDate = new Date(kst.getTime());
+  targetDate.setHours(Math.floor(roundedMinutes / 60), roundedMinutes % 60, 0, 0);
+
+  const year = targetDate.getFullYear();
+  const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+  const day = String(targetDate.getDate()).padStart(2, '0');
+  const dateStr = `${year}-${month}-${day}`;
+
+  const hours = String(targetDate.getHours()).padStart(2, '0');
+  const minutes = String(targetDate.getMinutes()).padStart(2, '0');
+  const timeStr = `${hours}:${minutes}`;
+
+  return { date: dateStr, time: timeStr };
 };
 
 // CSV 변환 헬퍼 (배열 -> CSV 파일 다운로드)
@@ -193,6 +219,30 @@ export default function App() {
   // 메모 자동완성 여부 상태
   const [isMemoAutofilled, setIsMemoAutofilled] = useState(false);
 
+  // 수정사항 3: 모바일 뒤로가기 버튼 팝업 가로채기 처리
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    // 히스토리 스택에 더미 상태 추가
+    window.history.pushState({ page: 'main' }, '', window.location.href);
+
+    const handlePopState = (event) => {
+      const confirmExit = window.confirm("정말 앱을 종료하시겠습니까?");
+      if (confirmExit) {
+        // 확인 시 실제 뒤로가기(종료) 허용
+        window.history.back();
+      } else {
+        // 취소 시 다시 더미 상태를 푸시하여 뒤로가기 방지 유지
+        window.history.pushState({ page: 'main' }, '', window.location.href);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [isAuthenticated]);
+
   const handlePinSubmit = (e) => {
     e.preventDefault();
     if (inputPin === appPassword) {
@@ -223,13 +273,15 @@ export default function App() {
   };
 
   const initialKst = getKoreaNowFormatted();
+  const nextQuarter = getNextQuarterHourDateTime();
+
   const [newOrder, setNewOrder] = useState({
     customer_name: '',
     phone: '010-',
     product_name: '꽃다발',
     amount_thousands: '55',
-    pickup_date: initialKst.date,
-    pickup_time: '14:00',
+    pickup_date: nextQuarter.date,
+    pickup_time: nextQuarter.time,
     receipt_date: initialKst.date,
     receipt_time: initialKst.time,
     payment_method: '신용카드',
@@ -258,17 +310,18 @@ export default function App() {
     setShowBackupAlertModal(false);
   };
 
-  const handleMenuChange = (menuId) => {
+  const handleMenuChange = (menuId, overridePickupDate = null) => {
     setActiveMenu(menuId);
     if (menuId === 'new') {
       const kstNow = getKoreaNowFormatted();
+      const nextQ = getNextQuarterHourDateTime();
       setNewOrder({
         customer_name: '',
         phone: '010-',
         product_name: '꽃다발',
         amount_thousands: '55',
-        pickup_date: kstNow.date,
-        pickup_time: '14:00',
+        pickup_date: overridePickupDate || nextQ.date,
+        pickup_time: overridePickupDate ? '14:00' : nextQ.time,
         receipt_date: kstNow.date,
         receipt_time: kstNow.time,
         payment_method: '신용카드',
@@ -469,13 +522,14 @@ export default function App() {
     alert(`주문이 성공적으로 등록되었습니다! (고객명: ${finalCustomerName})`);
     
     const kstNow = getKoreaNowFormatted();
+    const nextQ = getNextQuarterHourDateTime();
     setNewOrder({
       customer_name: '',
       phone: '010-',
       product_name: '꽃다발',
       amount_thousands: '55',
-      pickup_date: kstNow.date,
-      pickup_time: '14:00',
+      pickup_date: nextQ.date,
+      pickup_time: nextQ.time,
       receipt_date: kstNow.date,
       receipt_time: kstNow.time,
       payment_method: '신용카드',
@@ -541,6 +595,62 @@ export default function App() {
     alert('✅ 모든 수정사항이 저장되었습니다!');
     setEditingOrder(null);
     fetchData();
+  };
+
+  // 수정사항 5: 개별 주문 영수증 인쇄 함수
+  const handlePrintSingleOrder = (o) => {
+    const printWindow = window.open('', '_blank', 'width=450,height=600');
+    if (!printWindow) {
+      alert('팝업 차단이 설정되어 있어 인쇄 창을 열 수 없습니다. 팝업 차단을 해제해주세요.');
+      return;
+    }
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>주문서 영수증 - #${o.id}</title>
+        <style>
+          body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; color: #111; font-size: 14px; }
+          .receipt-box { border: 2px solid #333; padding: 20px; border-radius: 10px; max-width: 380px; margin: 0 auto; background: #fff; }
+          h2 { text-align: center; margin-bottom: 20px; font-size: 18px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+          .row { display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px dashed #ddd; padding-bottom: 6px; }
+          .label { font-weight: bold; color: #555; }
+          .value { text-align: right; font-weight: bold; }
+          .memo-section { margin-top: 15px; background: #f9f9f9; padding: 10px; border-radius: 6px; border: 1px solid #eee; }
+          .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #777; }
+          @media print {
+            body { padding: 0; }
+            button { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="receipt-box">
+          <h2>🌸 꽃집 예약 주문서</h2>
+          <div class="row"><span class="label">주문 번호</span><span class="value">#${o.id}</span></div>
+          <div class="row"><span class="label">고객 성명</span><span class="value">${o.customers?.name || '-'}</span></div>
+          <div class="row"><span class="label">연락처</span><span class="value">${o.customers?.phone || '-'}</span></div>
+          <div class="row"><span class="label">상품 종류</span><span class="value">${o.product_name || '-'}</span></div>
+          <div class="row"><span class="label">결제 금액</span><span class="value">${o.amount?.toLocaleString()}원</span></div>
+          <div class="row"><span class="label">결제 방식</span><span class="value">${o.payment_method || '-'}</span></div>
+          <div class="row"><span class="label">픽업 일시</span><span class="value">${formatShortDateTime(o.pickup_datetime)}</span></div>
+          <div class="row"><span class="label">접수 일시</span><span class="value">${formatShortDateTime(o.created_at)}</span></div>
+          <div class="memo-section">
+            <span class="label" style="display:block; margin-bottom:4px;">💬 요청사항 / 메모</span>
+            <div style="font-weight: normal; word-break: break-all;">${o.memo || '없음'}</div>
+          </div>
+          <div class="footer">감사합니다. 정성을 다해 준비하겠습니다!</div>
+          <div style="text-align: center; margin-top: 20px;">
+            <button onclick="window.print()" style="padding: 10px 20px; background: #333; color: #fff; border: none; border-radius: 5px; font-weight: bold; cursor: pointer;">🖨️ 인쇄하기</button>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   const handleToggleSelectAllOrders = (e) => {
@@ -1341,9 +1451,8 @@ export default function App() {
                     검색 결과: 총 <strong className="text-rose-600">{sortedAndFilteredOrders.length}</strong>건
                   </div>
 
-                  {/* 요청사항 반영: 접수일시 위치를 메모 뒤로 보냄 & YY-MM-DD HH:MM 포맷 적용 */}
                   <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                    <table className="w-full text-left border-collapse table-fixed min-w-[780px]">
+                    <table className="w-full text-left border-collapse table-fixed min-w-[840px]">
                       <thead>
                         <tr className="border-b border-slate-200 text-slate-700 text-xs md:text-sm bg-slate-100 font-bold">
                           <th className="py-2.5 px-2 w-28">픽업일시</th>
@@ -1352,9 +1461,9 @@ export default function App() {
                           <th className="py-2.5 px-2 w-20">상품명</th>
                           <th className="py-2.5 px-2 w-20">금액</th>
                           <th className="py-2.5 px-2 w-20">결제수단</th>
-                          <th className="py-2.5 px-2 w-32">메모</th>
-                          <th className="py-2.5 px-2 w-28">접수일시</th>
-                          <th className="py-2.5 px-2 w-16 text-center">관리</th>
+                          <th className="py-2.5 px-2 w-28">메모</th>
+                          <th className="py-2.5 px-2 w-24">접수일시</th>
+                          <th className="py-2.5 px-2 w-24 text-center">관리 / 출력</th>
                           <th className="py-2.5 px-2 w-12 text-center">
                             <input
                               type="checkbox"
@@ -1386,7 +1495,6 @@ export default function App() {
                                     : 'text-slate-900 hover:bg-slate-50'
                                 }`}
                               >
-                                {/* 픽업일시: YY-MM-DD HH:MM 표기 */}
                                 <td className={`py-2.5 px-2 font-bold whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
                                   {formatShortDateTime(o.pickup_datetime)}
                                 </td>
@@ -1412,20 +1520,28 @@ export default function App() {
                                 <td className={`py-2.5 px-2 truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo}>
                                   {o.memo || '-'}
                                 </td>
-                                {/* 접수일시 (메모 뒤 배치): YY-MM-DD HH:MM 표기 */}
                                 <td className={`py-2.5 px-2 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-500'}`}>
                                   {formatShortDateTime(o.created_at)}
                                 </td>
                                 
                                 <td className="py-2.5 px-2 text-center">
-                                  <button
-                                    onClick={() => startEditOrder(o)}
-                                    className={`text-xs bg-white hover:bg-slate-100 border font-bold px-2 py-1 rounded-lg cursor-pointer shadow-2xs ${
-                                      isPast ? 'text-slate-400 border-slate-300' : 'text-slate-900 border-slate-800'
-                                    }`}
-                                  >
-                                    수정
-                                  </button>
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button
+                                      onClick={() => startEditOrder(o)}
+                                      className={`text-[11px] bg-white hover:bg-slate-100 border font-bold px-1.5 py-0.5 rounded cursor-pointer shadow-2xs ${
+                                        isPast ? 'text-slate-400 border-slate-300' : 'text-slate-900 border-slate-800'
+                                      }`}
+                                    >
+                                      수정
+                                    </button>
+                                    <button
+                                      onClick={() => handlePrintSingleOrder(o)}
+                                      className="text-[11px] bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 font-bold px-1.5 py-0.5 rounded cursor-pointer shadow-2xs"
+                                      title="주문서 출력"
+                                    >
+                                      🖨️출력
+                                    </button>
+                                  </div>
                                 </td>
 
                                 <td className="py-2.5 px-2 text-center">
@@ -1447,18 +1563,25 @@ export default function App() {
               )}
             </div>
 
-            {/* 달력 하단 선택 날짜 상세 주문 목록 */}
+            {/* 달력 하단 선택 날짜 상세 주문 목록 & 신규 주문 입력 버튼 추가 (수정사항 2) */}
             {subTab === 'calendar' && selectedDate && (
-              <div className="bg-white p-3 md:p-5 rounded-xl border border-slate-200 shadow-sm">
-                <div className="flex items-center justify-between mb-3">
+              <div className="bg-white p-3 md:p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-2">
                   <h3 className="text-sm md:text-lg font-bold text-slate-900 flex items-center gap-2">
                     <span>📅</span> <span className="text-sky-600">{selectedDate}</span> 픽업 주문 ({selectedDayOrders.length}건)
                   </h3>
+
+                  <button
+                    onClick={() => handleMenuChange('new', selectedDate)}
+                    className="px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                  >
+                    <span>➕</span> {selectedDate} 신규 주문 입력
+                  </button>
                 </div>
 
                 {selectedDayOrders.length === 0 ? (
-                  <div className="bg-slate-50 text-slate-500 p-3 rounded-xl text-xs md:text-sm text-center border border-slate-200">
-                    해당 날짜에 예정된 픽업 주문이 없습니다.
+                  <div className="bg-slate-50 text-slate-500 p-4 rounded-xl text-xs md:text-sm text-center border border-slate-200 flex flex-col items-center justify-center gap-2">
+                    <p>해당 날짜에 예정된 픽업 주문이 없습니다.</p>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">
@@ -1509,6 +1632,12 @@ export default function App() {
                                 className="text-xs bg-white hover:bg-slate-100 border border-slate-800 text-slate-900 font-bold px-2 py-0.5 rounded cursor-pointer whitespace-nowrap"
                               >
                                 수정
+                              </button>
+                              <button
+                                onClick={() => handlePrintSingleOrder(o)}
+                                className="text-xs bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 font-bold px-2 py-0.5 rounded cursor-pointer whitespace-nowrap"
+                              >
+                                🖨️ 출력
                               </button>
                             </div>
                           </div>
@@ -1632,9 +1761,10 @@ export default function App() {
                 - <code className="text-rose-600 font-bold">export_orders_{getKoreaNowFormatted().date}.csv</code><br />
                 - <code className="text-rose-600 font-bold">export_customers_{getKoreaNowFormatted().date}.csv</code>
               </p>
+              {/* 수정사항 4: 내보내기 버튼 글자색 명확한 검은색으로 변경 */}
               <button
                 onClick={handleExportCSV}
-                className="w-full py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs md:text-sm shadow-xs transition-colors cursor-pointer border border-rose-800"
+                className="w-full py-2.5 px-4 bg-rose-200 hover:bg-rose-300 text-slate-900 font-extrabold rounded-xl text-xs md:text-sm shadow-xs transition-colors cursor-pointer border border-rose-400"
               >
                 📥 CSV 백업 파일 2개 다운로드
               </button>
