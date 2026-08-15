@@ -9,7 +9,7 @@ const SUPABASE_URL = 'https://zthuqzzholyjolteuvty.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_xkg9ULmNiqKrCcESytGbmw_u1Z12_gG';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// 기본 비밀번호 (저장된 비밀번호가 없을 경우 사용)
+// 기본 비밀번호 (DB 저장이 없거나 초기에 사용)
 const DEFAULT_APP_PASSWORD = "1234"; 
 
 // 옵션 목록
@@ -72,7 +72,7 @@ const getKoreaNowFormatted = () => {
   return { date: dateStr, time: timeStr, dayOfWeek, currentHour };
 };
 
-// CSV 변환 헬퍼 (배열 -> CSV 파일 다운로드)
+// CSV 변환 헬퍼
 const downloadCSV = (headers, rows, filename) => {
   const escapeCSV = (val) => {
     if (val === null || val === undefined) return '""';
@@ -147,20 +147,42 @@ const parseCSVText = (text) => {
 };
 
 export default function App() {
-  // 비밀번호 상태 관리 (localStorage에 저장)
+  // 공통 비밀번호 상태 관리 (Supabase + localStorage 교체 지원)
   const [appPassword, setAppPassword] = useState(() => {
     return localStorage.getItem('app_password') || DEFAULT_APP_PASSWORD;
   });
 
-  // 비밀번호 인증 상태 (세션 스토리지 기억)
+  // Supabase DB에서 최신 공통 비밀번호 불러오기
+  useEffect(() => {
+    const fetchRemotePassword = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('key', 'app_password')
+          .maybeSingle();
+
+        if (data && data.value) {
+          setAppPassword(data.value);
+          localStorage.setItem('app_password', data.value);
+        }
+      } catch (err) {
+        console.log("Remote password fetch fallback to local storage");
+      }
+    };
+    fetchRemotePassword();
+  }, []);
+
+  // 비밀번호 인증 상태
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return sessionStorage.getItem('app_authenticated') === 'true';
   });
   const [inputPin, setInputPin] = useState('');
   const [pinError, setPinError] = useState(false);
 
-  // 비밀번호 변경 모달 상태
+  // 비밀번호 변경 모달 상태 (접속 전/후 공용)
   const [showPasswordChangeModal, setShowPasswordChangeModal] = useState(false);
+  const [currentCheckPin, setCurrentCheckPin] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -176,15 +198,15 @@ export default function App() {
   const [selectedOrderIds, setSelectedOrderIds] = useState([]);
   const [selectedCustomerIds, setSelectedCustomerIds] = useState([]);
 
-  // 검색 키워드 state (주문 목록 검색 & 고객 목록 검색)
+  // 검색 키워드 state
   const [orderSearch, setOrderSearch] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
   const [matchedCustomerList, setMatchedCustomerList] = useState([]);
 
-  // 주간 백업 알림 팝업 모달 상태
+  // 백업 알림 팝업 상태
   const [showBackupAlertModal, setShowBackupAlertModal] = useState(false);
 
-  // 비밀번호 확인 핸들러
+  // 비밀번호 확인 제출
   const handlePinSubmit = (e) => {
     e.preventDefault();
     if (inputPin === appPassword) {
@@ -197,9 +219,15 @@ export default function App() {
     }
   };
 
-  // 비밀번호 변경 핸들러
-  const handlePasswordChange = (e) => {
+  // 비밀번호 동기화 변경 처리 (Supabase + LocalStorage)
+  const handlePasswordChange = async (e) => {
     e.preventDefault();
+    
+    // 접속 전 변경시 현재 암호 확인
+    if (!isAuthenticated && currentCheckPin !== appPassword) {
+      return alert('현재 비밀번호가 일치하지 않습니다.');
+    }
+
     if (newPassword.length !== 4) {
       return alert('비밀번호는 숫자 4자리여야 합니다.');
     }
@@ -207,10 +235,22 @@ export default function App() {
       return alert('새 비밀번호와 비밀번호 확인이 일치하지 않습니다.');
     }
 
+    // 1. 로컬 저장
     localStorage.setItem('app_password', newPassword);
     setAppPassword(newPassword);
-    alert('🔑 비밀번호가 성공적으로 변경되었습니다!');
+
+    // 2. Supabase 서버 동기화 저장 (PC & 모바일 일괄 적용)
+    try {
+      await supabase
+        .from('app_settings')
+        .upsert({ key: 'app_password', value: newPassword }, { onConflict: 'key' });
+    } catch (err) {
+      console.error("Supabase password update fallback:", err);
+    }
+
+    alert('🔑 비밀번호가 성공적으로 변경되었습니다!\nPC와 모바일 기기에 일괄 적용됩니다.');
     setShowPasswordChangeModal(false);
+    setCurrentCheckPin('');
     setNewPassword('');
     setConfirmPassword('');
   };
@@ -241,7 +281,6 @@ export default function App() {
     memo: ''
   });
 
-  // 월요일 12시 백업 알림 체크 로직
   useEffect(() => {
     const checkBackupSchedule = () => {
       const nowInfo = getKoreaNowFormatted();
@@ -524,7 +563,7 @@ export default function App() {
     fetchData();
   };
 
-  // --- 주문 삭제 핸들러 ---
+  // --- 주문 삭제 선택 관련 ---
   const handleToggleSelectAllOrders = (e) => {
     if (e.target.checked) {
       setSelectedOrderIds(filteredOrders.map(o => o.id));
@@ -553,7 +592,7 @@ export default function App() {
     }
   };
 
-  // --- 고객 삭제 핸들러 ---
+  // --- 고객 삭제 선택 관련 ---
   const handleToggleSelectAllCustomers = (e) => {
     if (e.target.checked) {
       setSelectedCustomerIds(filteredCustomers.map(c => c.id));
@@ -570,7 +609,7 @@ export default function App() {
 
   const handleDeleteSelectedCustomers = async () => {
     if (selectedCustomerIds.length === 0) return alert('삭제할 고객을 선택해주세요.');
-    if (!window.confirm(`선택한 ${selectedCustomerIds.length}명의 고객 정보를 삭제하시겠습니까?\n(관련 주문 내역의 고객정보도 함께 초기화될 수 있습니다)`)) return;
+    if (!window.confirm(`선택한 ${selectedCustomerIds.length}명의 고객 정보를 삭제하시겠습니까?`)) return;
 
     const { error } = await supabase.from('customers').delete().in('id', selectedCustomerIds);
     if (error) {
@@ -582,7 +621,7 @@ export default function App() {
     }
   };
 
-  // CSV 데이터 백업 내보내기
+  // CSV 백업 내보내기
   const handleExportCSV = () => {
     try {
       const today = getKoreaNowFormatted().date;
@@ -625,7 +664,7 @@ export default function App() {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
-    if (!window.confirm(`선택한 ${files.length}개 CSV 파일 데이터를 Supabase 데이터베이스에 추가 등록하시겠습니까?`)) {
+    if (!window.confirm(`선택한 ${files.length}개 CSV 파일 데이터를 추가 등록하시겠습니까?`)) {
       e.target.value = '';
       return;
     }
@@ -680,7 +719,7 @@ export default function App() {
       fetchData();
     } catch (err) {
       console.error(err);
-      alert('CSV 복원 중 오류가 발생했습니다. CSV 형식을 확인해주세요.');
+      alert('CSV 복원 중 오류가 발생했습니다.');
     } finally {
       e.target.value = '';
     }
@@ -760,48 +799,27 @@ export default function App() {
   const TimePickerCustom = ({ value, onChange, bgClass = "bg-white" }) => {
     const { ampm, hour, minute } = parseTimeToParts(value);
 
-    const handleAmpmChange = (e) => {
-      onChange(formatPartsToTime(e.target.value, hour, minute));
-    };
-    const handleHourChange = (e) => {
-      onChange(formatPartsToTime(ampm, e.target.value, minute));
-    };
-    const handleMinuteChange = (e) => {
-      onChange(formatPartsToTime(ampm, hour, e.target.value));
-    };
+    const handleAmpmChange = (e) => onChange(formatPartsToTime(e.target.value, hour, minute));
+    const handleHourChange = (e) => onChange(formatPartsToTime(ampm, e.target.value, minute));
+    const handleMinuteChange = (e) => onChange(formatPartsToTime(ampm, hour, e.target.value));
 
     return (
       <div className={`flex items-center gap-1 p-2 md:p-3 border rounded-xl mt-1 ${bgClass} border-slate-200`} style={{ backgroundColor: '#ffffff' }}>
-        <select
-          value={ampm}
-          onChange={handleAmpmChange}
-          className="bg-white text-xs md:text-sm font-semibold focus:outline-none cursor-pointer text-slate-900"
-          style={{ backgroundColor: '#ffffff' }}
-        >
+        <select value={ampm} onChange={handleAmpmChange} className="bg-white text-xs md:text-sm font-semibold focus:outline-none cursor-pointer text-slate-900">
           {AMPM_OPTIONS.map(a => <option key={a} value={a}>{a}</option>)}
         </select>
-        <select
-          value={hour}
-          onChange={handleHourChange}
-          className="bg-white text-xs md:text-sm font-semibold focus:outline-none cursor-pointer flex-1 text-center text-slate-900"
-          style={{ backgroundColor: '#ffffff' }}
-        >
+        <select value={hour} onChange={handleHourChange} className="bg-white text-xs md:text-sm font-semibold focus:outline-none cursor-pointer flex-1 text-center text-slate-900">
           {HOUR_OPTIONS.map(h => <option key={h} value={h}>{h}시</option>)}
         </select>
         <span className="text-xs text-slate-400 font-bold">:</span>
-        <select
-          value={minute}
-          onChange={handleMinuteChange}
-          className="bg-white text-xs md:text-sm font-semibold focus:outline-none cursor-pointer flex-1 text-center text-slate-900"
-          style={{ backgroundColor: '#ffffff' }}
-        >
+        <select value={minute} onChange={handleMinuteChange} className="bg-white text-xs md:text-sm font-semibold focus:outline-none cursor-pointer flex-1 text-center text-slate-900">
           {MINUTE_OPTIONS.map(m => <option key={m} value={m}>{m}분</option>)}
         </select>
       </div>
     );
   };
 
-  // 1. 비밀번호 접속 화면 (버튼 색상/테두리 완벽 개선)
+  // --- 1. 암호 입력 잠금 화면 ---
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-800 flex items-center justify-center p-4">
@@ -826,7 +844,6 @@ export default function App() {
               )}
             </div>
 
-            {/* 비밀번호 확인 버튼: 흰색 배경, 검정 글자, 또렷한 테두리 */}
             <button
               type="submit"
               className="w-full py-3 bg-white hover:bg-slate-100 text-slate-900 font-extrabold rounded-xl border-2 border-slate-900 shadow-md transition-all text-sm cursor-pointer"
@@ -834,7 +851,86 @@ export default function App() {
               확인 및 접속
             </button>
           </form>
+
+          {/* 3번 반영: 암호변경 버튼을 암호 입력 화면 하단에 추가 */}
+          <div className="mt-6 pt-4 border-t border-slate-200">
+            <button
+              onClick={() => setShowPasswordChangeModal(true)}
+              className="text-xs text-slate-600 hover:text-slate-900 font-bold underline flex items-center justify-center gap-1 mx-auto cursor-pointer"
+            >
+              🔑 비밀번호 변경하기
+            </button>
+          </div>
         </div>
+
+        {/* 비밀번호 변경 모달 */}
+        {showPasswordChangeModal && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border-2 border-slate-800 text-center space-y-4">
+              <h3 className="text-lg font-bold text-slate-900">🔑 비밀번호 변경 (공통)</h3>
+              <p className="text-xs text-slate-600">변경시 PC와 모바일 기기에 일괄 적용됩니다.</p>
+
+              <form onSubmit={handlePasswordChange} className="space-y-3 text-left">
+                {!isAuthenticated && (
+                  <div>
+                    <label className="text-xs font-bold text-slate-700">현재 비밀번호</label>
+                    <input
+                      type="password"
+                      maxLength={4}
+                      value={currentCheckPin}
+                      onChange={e => setCurrentCheckPin(e.target.value.replace(/[^0-9]/g, ''))}
+                      placeholder="현재 4자리 입력"
+                      className="w-full p-2.5 border-2 border-slate-300 rounded-xl mt-1 text-center text-lg font-bold text-slate-900"
+                      required
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700">새 비밀번호 (숫자 4자리)</label>
+                  <input
+                    type="password"
+                    maxLength={4}
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="예: 5678"
+                    className="w-full p-2.5 border-2 border-slate-300 rounded-xl mt-1 text-center text-lg font-bold text-slate-900"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700">새 비밀번호 확인</label>
+                  <input
+                    type="password"
+                    maxLength={4}
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="다시 한번 입력"
+                    className="w-full p-2.5 border-2 border-slate-300 rounded-xl mt-1 text-center text-lg font-bold text-slate-900"
+                    required
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold cursor-pointer"
+                  >
+                    변경 저장
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordChangeModal(false)}
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold border border-slate-300 cursor-pointer"
+                  >
+                    취소
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -870,61 +966,7 @@ export default function App() {
         ` : ''}
       `}</style>
 
-      {/* 3. 비밀번호 변경 모달 */}
-      {showPasswordChangeModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border-2 border-slate-800 text-center space-y-4">
-            <h3 className="text-lg font-bold text-slate-900">🔑 비밀번호 변경</h3>
-            <p className="text-xs text-slate-600">접속할 새 숫자 4자리를 입력해주세요.</p>
-            
-            <form onSubmit={handlePasswordChange} className="space-y-3 text-left">
-              <div>
-                <label className="text-xs font-bold text-slate-700">새 비밀번호 (숫자 4자리)</label>
-                <input
-                  type="password"
-                  maxLength={4}
-                  value={newPassword}
-                  onChange={e => setNewPassword(e.target.value.replace(/[^0-9]/g, ''))}
-                  placeholder="예: 5678"
-                  className="w-full p-2.5 border-2 border-slate-300 rounded-xl mt-1 text-center text-lg font-bold text-slate-900"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700">비밀번호 확인</label>
-                <input
-                  type="password"
-                  maxLength={4}
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value.replace(/[^0-9]/g, ''))}
-                  placeholder="다시 한번 입력"
-                  className="w-full p-2.5 border-2 border-slate-300 rounded-xl mt-1 text-center text-lg font-bold text-slate-900"
-                  required
-                />
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold cursor-pointer"
-                >
-                  변경 저장
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordChangeModal(false)}
-                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold border border-slate-300 cursor-pointer"
-                >
-                  취소
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 📢 주간 백업 팝업 알림 모달 */}
+      {/* 주간 백업 알림 모달 */}
       {showBackupAlertModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border-2 border-rose-400 text-center space-y-4">
@@ -952,21 +994,22 @@ export default function App() {
         </div>
       )}
 
-      {/* 사이드바 메뉴 */}
+      {/* 4번 반영: 모바일 가로모드/세모모드 간격 밀착 및 선명한 테두리 강화 */}
       <aside className="bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 w-full md:w-28 p-1 md:p-2 flex flex-col shrink-0 shadow-xs">
         <div className="hidden md:flex items-center justify-between text-rose-500 font-extrabold text-sm mb-1 px-1">
           <span className="flex items-center gap-1">📌 메뉴</span>
         </div>
 
-        <nav className="flex md:flex-col justify-between md:justify-start gap-1 w-full text-xs py-0.5 md:py-0">
+        {/* gap-0.5 및 flex-nowrap 조정을 통해 가로모드 시 버튼 간격 최대로 줄임 */}
+        <nav className="flex md:flex-col items-center justify-between gap-0.5 md:gap-1 w-full text-xs py-0.5 md:py-0 overflow-x-auto">
           {menuList.map(menu => (
             <label
               key={menu.id}
               onClick={() => handleMenuChange(menu.id)}
-              className={`flex items-center justify-center md:justify-start gap-1 px-1 md:px-2 py-1.5 rounded-lg cursor-pointer whitespace-nowrap transition-all flex-1 md:flex-none text-center ${
+              className={`flex items-center justify-center md:justify-start gap-0.5 md:gap-1 px-1 md:px-2 py-1.5 rounded-lg cursor-pointer whitespace-nowrap transition-all flex-1 shrink-0 text-center ${
                 activeMenu === menu.id
-                  ? 'bg-rose-100/70 text-rose-800 font-bold border-b-2 md:border-b-0 md:border-l-4 border-rose-400 shadow-2xs'
-                  : 'text-slate-700 hover:bg-slate-200/50'
+                  ? 'bg-rose-100/90 text-slate-900 font-black border-2 border-slate-900 shadow-sm' 
+                  : 'text-slate-700 hover:bg-slate-200/50 border border-transparent'
               }`}
             >
               <input
@@ -976,25 +1019,30 @@ export default function App() {
                 onChange={() => {}}
                 className="w-3 h-3 accent-rose-500 cursor-pointer hidden md:inline"
               />
-              <span className="text-[10px] sm:text-xs font-semibold">{menu.label}</span>
+              <span className="text-[10px] sm:text-xs font-bold">{menu.label}</span>
             </label>
           ))}
-        </nav>
 
-        {/* 사이드바 하단 암호 변경 & 잠금 버튼 */}
-        <div className="hidden md:flex flex-col gap-1 mt-auto pt-2 border-t border-slate-200">
-          <button
-            onClick={() => setShowPasswordChangeModal(true)}
-            className="py-1.5 px-2 bg-white hover:bg-slate-100 text-slate-900 rounded-lg text-[11px] font-bold border border-slate-400 text-center cursor-pointer"
-          >
-            🔑 암호 변경
-          </button>
+          {/* 모바일 화면/가로모드일 때 가장 우측에 배치되는 잠금 버튼 */}
           <button
             onClick={() => {
               sessionStorage.removeItem('app_authenticated');
               setIsAuthenticated(false);
             }}
-            className="py-1.5 px-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg text-[11px] font-bold border border-slate-300 text-center cursor-pointer"
+            className="md:hidden py-1.5 px-2 bg-slate-200 hover:bg-slate-300 text-slate-900 font-bold rounded-lg text-[10px] sm:text-xs border border-slate-400 shrink-0 ml-auto cursor-pointer"
+          >
+            🔒 잠금
+          </button>
+        </nav>
+
+        {/* PC 화면 전용 사이드바 하단 잠금 버튼 */}
+        <div className="hidden md:flex flex-col gap-1 mt-auto pt-2 border-t border-slate-200">
+          <button
+            onClick={() => {
+              sessionStorage.removeItem('app_authenticated');
+              setIsAuthenticated(false);
+            }}
+            className="py-1.5 px-2 bg-slate-200 hover:bg-slate-300 text-slate-900 rounded-lg text-[11px] font-bold border border-slate-400 text-center cursor-pointer"
           >
             🔒 잠금
           </button>
@@ -1123,7 +1171,6 @@ export default function App() {
                     value={newOrder.customer_name}
                     onChange={e => handleCustomerNameChange(e.target.value)}
                     className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
-                    style={{ backgroundColor: '#ffffff' }}
                     placeholder="홍길동 (입력시 동명이인 목록 표시)"
                     required
                   />
@@ -1154,7 +1201,6 @@ export default function App() {
                     value={newOrder.phone}
                     onChange={e => setNewOrder({...newOrder, phone: formatPhone(e.target.value)})}
                     className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
-                    style={{ backgroundColor: '#ffffff' }}
                     placeholder="010-0000-0000"
                     maxLength={13}
                     required
@@ -1169,7 +1215,6 @@ export default function App() {
                     value={newOrder.product_name}
                     onChange={e => setNewOrder({...newOrder, product_name: e.target.value})}
                     className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
-                    style={{ backgroundColor: '#ffffff' }}
                   >
                     {PRODUCT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
@@ -1184,7 +1229,6 @@ export default function App() {
                       value={newOrder.amount_thousands}
                       onChange={e => setNewOrder({...newOrder, amount_thousands: e.target.value})}
                       className="w-full p-2 md:p-3 border border-slate-300 rounded-xl text-xs md:text-sm bg-white text-slate-900 font-medium pr-16"
-                      style={{ backgroundColor: '#ffffff' }}
                       placeholder="예: 55"
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-rose-600 pointer-events-none">
@@ -1202,7 +1246,6 @@ export default function App() {
                     value={newOrder.pickup_date}
                     onChange={e => setNewOrder({...newOrder, pickup_date: e.target.value})}
                     className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
-                    style={{ backgroundColor: '#ffffff' }}
                   />
                 </div>
                 <div>
@@ -1222,8 +1265,7 @@ export default function App() {
                     type="date"
                     value={newOrder.receipt_date}
                     onChange={e => setNewOrder({...newOrder, receipt_date: e.target.value})}
-                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm text-slate-800 font-medium"
-                    style={{ backgroundColor: '#f1f5f9' }}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm text-slate-800 font-medium bg-slate-100"
                   />
                 </div>
                 <div>
@@ -1232,8 +1274,7 @@ export default function App() {
                     type="time"
                     value={newOrder.receipt_time}
                     onChange={e => setNewOrder({...newOrder, receipt_time: e.target.value})}
-                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm text-slate-800 font-medium"
-                    style={{ backgroundColor: '#f1f5f9' }}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm text-slate-800 font-medium bg-slate-100"
                   />
                 </div>
               </div>
@@ -1244,7 +1285,6 @@ export default function App() {
                   value={newOrder.payment_method}
                   onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
                   className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
-                  style={{ backgroundColor: '#ffffff' }}
                 >
                   {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
                 </select>
@@ -1256,7 +1296,6 @@ export default function App() {
                   value={newOrder.memo}
                   onChange={e => setNewOrder({...newOrder, memo: e.target.value})}
                   className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
-                  style={{ backgroundColor: '#ffffff' }}
                   rows={3}
                   placeholder="요청사항이나 특이사항을 적어주세요."
                 />
@@ -1326,15 +1365,18 @@ export default function App() {
                       className="flex-1 p-2.5 border border-slate-300 rounded-xl text-xs md:text-sm bg-white text-slate-900 focus:outline-none focus:border-rose-500"
                     />
 
-                    {/* 2. 삭제 버튼: 또렷한 검정 글씨, 빨간 테두리 및 명확한 시각적 지정 */}
-                    {selectedOrderIds.length > 0 && (
-                      <button
-                        onClick={handleDeleteSelectedOrders}
-                        className="px-3 py-2 bg-white hover:bg-rose-50 text-slate-900 font-extrabold rounded-xl text-xs border-2 border-rose-600 transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1"
-                      >
-                        🗑️ 선택 항목 ({selectedOrderIds.length}개) 삭제
-                      </button>
-                    )}
+                    {/* 2번 반영: 기본 노출되며 체크 미선택 시 연한 회색 글씨로 비활성화 */}
+                    <button
+                      onClick={handleDeleteSelectedOrders}
+                      disabled={selectedOrderIds.length === 0}
+                      className={`px-3 py-2 font-extrabold rounded-xl text-xs border-2 transition-all flex items-center justify-center gap-1 ${
+                        selectedOrderIds.length > 0
+                          ? 'bg-white hover:bg-rose-50 text-slate-900 border-rose-600 cursor-pointer shadow-xs'
+                          : 'bg-slate-100 text-slate-400 border-slate-300 cursor-not-allowed opacity-70'
+                      }`}
+                    >
+                      🗑️ 선택 항목 ({selectedOrderIds.length}개) 삭제
+                    </button>
                   </div>
 
                   <div className="text-xs text-slate-600 font-medium">
@@ -1408,7 +1450,7 @@ export default function App() {
               )}
             </div>
 
-            {/* 달력 하단 선택 날짜 상세 주문 목록 */}
+            {/* 달력 하단 선택 날짜 상세 목록 */}
             {subTab === 'calendar' && selectedDate && (
               <div className="bg-white p-3 md:p-5 rounded-xl border border-slate-200 shadow-sm">
                 <div className="flex items-center justify-between mb-3">
@@ -1488,15 +1530,18 @@ export default function App() {
                 <span>🎂</span> 고객 목록 (총 <span className="text-rose-600">{filteredCustomers.length}</span>명)
               </h2>
               
-              {/* 고객 삭제 버튼도 검정 글자 + 선명한 테두리로 수정 */}
-              {selectedCustomerIds.length > 0 && (
-                <button
-                  onClick={handleDeleteSelectedCustomers}
-                  className="px-3 py-1.5 bg-white hover:bg-rose-50 text-slate-900 font-extrabold rounded-xl text-xs border-2 border-rose-600 transition-colors cursor-pointer shadow-xs"
-                >
-                  🗑️ 선택 고객 ({selectedCustomerIds.length}명) 삭제
-                </button>
-              )}
+              {/* 2번 반영: 고객 삭제 버튼 상시 노출 및 비활성화 상태 표현 */}
+              <button
+                onClick={handleDeleteSelectedCustomers}
+                disabled={selectedCustomerIds.length === 0}
+                className={`px-3 py-1.5 font-extrabold rounded-xl text-xs border-2 transition-all ${
+                  selectedCustomerIds.length > 0
+                    ? 'bg-white hover:bg-rose-50 text-slate-900 border-rose-600 cursor-pointer shadow-xs'
+                    : 'bg-slate-100 text-slate-400 border-slate-300 cursor-not-allowed opacity-70'
+                }`}
+              >
+                🗑️ 선택 고객 ({selectedCustomerIds.length}명) 삭제
+              </button>
             </div>
 
             <input
