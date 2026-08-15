@@ -79,7 +79,6 @@ const downloadCSV = (headers, rows, filename) => {
     ...rows.map(row => row.map(escapeCSV).join(','))
   ].join('\r\n');
 
-  // 한글 깨짐 방지 BOM 추가 (\uFEFF)
   const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -150,8 +149,13 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState(getKoreaNowFormatted().date);
   const [editingOrder, setEditingOrder] = useState(null);
 
-  // 고객 검색 키워드
+  // 선택 삭제용 state
+  const [selectedOrderIds, setSelectedOrderIds] = useState([]);
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState([]);
+
+  // 고객 검색 키워드 및 신규주문 시 고객 매칭 관련 state
   const [customerSearch, setCustomerSearch] = useState('');
+  const [matchedCustomerList, setMatchedCustomerList] = useState([]);
 
   const parseDateTime = (datetimeStr, fallbackDate = '', fallbackTime = '14:00') => {
     if (!datetimeStr) return { date: fallbackDate, time: fallbackTime };
@@ -190,6 +194,7 @@ export default function App() {
         receipt_date: kstNow.date,
         receipt_time: kstNow.time
       }));
+      setMatchedCustomerList([]);
     }
   };
 
@@ -246,28 +251,49 @@ export default function App() {
     }
   };
 
+  // 신규 주문시 고객명 입력 반응 함수 (동명이인 리스트 추출)
   const handleCustomerNameChange = (nameInput) => {
+    setNewOrder(prev => ({ ...prev, customer_name: nameInput }));
+
+    if (!nameInput.trim()) {
+      setMatchedCustomerList([]);
+      return;
+    }
+
+    const cleanInput = nameInput.trim();
+    // 이름 시작 부분이 일치하거나 숫자 구분값이 붙은 동명이인 목록 찾기
+    const matches = customers.filter(c => 
+      c.name === cleanInput || 
+      c.name.replace(/[0-9]/g, '') === cleanInput ||
+      c.name.includes(cleanInput)
+    );
+
+    setMatchedCustomerList(matches);
+
+    // 단일 매칭일 경우 즉시 자동완성 처리
+    if (matches.length === 1) {
+      selectCustomerForNewOrder(matches[0]);
+    }
+  };
+
+  // 자동완성용 고객 선택 함수
+  const selectCustomerForNewOrder = (cust) => {
     setNewOrder(prev => {
-      const updated = { ...prev, customer_name: nameInput };
-      
-      if (!nameInput.trim()) return updated;
+      const updated = { 
+        ...prev, 
+        customer_name: cust.name,
+        phone: cust.phone || '010-' 
+      };
 
-      const matchedCustomer = customers.find(c => c.name === nameInput.trim());
-      if (matchedCustomer) {
-        if (matchedCustomer.phone) {
-          updated.phone = matchedCustomer.phone;
-        }
-
-        const recentOrder = orders.find(o => o.customer_id === matchedCustomer.id || o.customers?.name === nameInput.trim());
-        if (recentOrder) {
-          if (recentOrder.product_name) updated.product_name = recentOrder.product_name;
-          if (recentOrder.amount) updated.amount_thousands = String(Math.floor(recentOrder.amount / 1000));
-          if (recentOrder.payment_method) updated.payment_method = recentOrder.payment_method;
-        }
+      const recentOrder = orders.find(o => o.customer_id === cust.id || o.customers?.name === cust.name);
+      if (recentOrder) {
+        if (recentOrder.product_name) updated.product_name = recentOrder.product_name;
+        if (recentOrder.amount) updated.amount_thousands = String(Math.floor(recentOrder.amount / 1000));
+        if (recentOrder.payment_method) updated.payment_method = recentOrder.payment_method;
       }
-
       return updated;
     });
+    setMatchedCustomerList([]);
   };
 
   const handleCreateOrder = async (e) => {
@@ -280,19 +306,32 @@ export default function App() {
     }
 
     let customerId;
-    const { data: custData } = await supabase
+    let finalCustomerName = newOrder.customer_name.trim();
+
+    // 동일한 전화번호의 기존 고객 확인
+    const { data: custByPhone } = await supabase
       .from('customers')
-      .select('id')
-      .eq('name', newOrder.customer_name)
+      .select('id, name')
       .eq('phone', newOrder.phone)
       .maybeSingle();
 
-    if (custData) {
-      customerId = custData.id;
+    if (custByPhone) {
+      customerId = custByPhone.id;
+      finalCustomerName = custByPhone.name;
     } else {
+      // 전화번호는 새로운 번호인데 이름이 같은 기존 고객이 존재하는지 검사 (동명이인 처리)
+      const baseName = finalCustomerName.replace(/[0-9]/g, '');
+      const sameNameCusts = customers.filter(c => c.name.replace(/[0-9]/g, '') === baseName);
+
+      if (sameNameCusts.length > 0) {
+        // 기존 동명이인이 있는 경우 숫자 번호부여 (예: 홍길동2, 홍길동3)
+        const nextNum = sameNameCusts.length + 1;
+        finalCustomerName = `${baseName}${nextNum}`;
+      }
+
       const { data: newCust, error: custErr } = await supabase
         .from('customers')
-        .insert([{ name: newOrder.customer_name, phone: newOrder.phone }])
+        .insert([{ name: finalCustomerName, phone: newOrder.phone }])
         .select()
         .single();
       
@@ -324,7 +363,7 @@ export default function App() {
       return;
     }
 
-    alert('주문이 성공적으로 등록되었습니다!');
+    alert(`주문이 성공적으로 등록되었습니다! (고객명: ${finalCustomerName})`);
     
     const kstNow = getKoreaNowFormatted();
     setNewOrder({
@@ -339,6 +378,7 @@ export default function App() {
       payment_method: '신용카드',
       memo: ''
     });
+    setMatchedCustomerList([]);
     setActiveMenu('orders');
     fetchData();
   };
@@ -399,12 +439,69 @@ export default function App() {
     fetchData();
   };
 
-  // CSV 데이터 백업 내보내기 (주문정보, 고객정보 2개 파일)
+  // --- 주문 삭제 관련 핸들러 ---
+  const handleToggleSelectAllOrders = (e) => {
+    if (e.target.checked) {
+      setSelectedOrderIds(orders.map(o => o.id));
+    } else {
+      setSelectedOrderIds([]);
+    }
+  };
+
+  const handleToggleSelectOrder = (id) => {
+    setSelectedOrderIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleDeleteSelectedOrders = async () => {
+    if (selectedOrderIds.length === 0) return alert('삭제할 주문을 선택해주세요.');
+    if (!window.confirm(`선택한 ${selectedOrderIds.length}개의 주문을 삭제하시겠습니까?`)) return;
+
+    const { error } = await supabase.from('orders').delete().in('id', selectedOrderIds);
+    if (error) {
+      alert('주문 삭제 실패: ' + error.message);
+    } else {
+      alert('선택한 주문이 삭제되었습니다.');
+      setSelectedOrderIds([]);
+      fetchData();
+    }
+  };
+
+  // --- 고객 삭제 관련 핸들러 ---
+  const handleToggleSelectAllCustomers = (e) => {
+    if (e.target.checked) {
+      setSelectedCustomerIds(filteredCustomers.map(c => c.id));
+    } else {
+      setSelectedCustomerIds([]);
+    }
+  };
+
+  const handleToggleSelectCustomer = (id) => {
+    setSelectedCustomerIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleDeleteSelectedCustomers = async () => {
+    if (selectedCustomerIds.length === 0) return alert('삭제할 고객을 선택해주세요.');
+    if (!window.confirm(`선택한 ${selectedCustomerIds.length}명의 고객 정보를 삭제하시겠습니까?\n(관련 주문 내역의 고객정보도 함께 초기화될 수 있습니다)`)) return;
+
+    const { error } = await supabase.from('customers').delete().in('id', selectedCustomerIds);
+    if (error) {
+      alert('고객 삭제 실패: ' + error.message);
+    } else {
+      alert('선택한 고객 정보가 삭제되었습니다.');
+      setSelectedCustomerIds([]);
+      fetchData();
+    }
+  };
+
+  // CSV 데이터 백업 내보내기
   const handleExportCSV = () => {
     try {
       const today = getKoreaNowFormatted().date;
 
-      // 1. 주문 정보 CSV 내보내기
       const orderHeaders = ['주문ID', '고객명', '연락처', '상품명', '금액', '픽업일시', '접수일시', '결제수단', '메모'];
       const orderRows = orders.map(o => [
         o.id,
@@ -419,7 +516,6 @@ export default function App() {
       ]);
       downloadCSV(orderHeaders, orderRows, `export_orders_${today}.csv`);
 
-      // 2. 고객 정보 CSV 내보내기 (약간의 지연시간을 두어 두 파일 모두 팝업 차단 없이 다운로드 지원)
       setTimeout(() => {
         const custHeaders = ['ID', '이름', '연락처', '등록일'];
         const custRows = customers.map(c => [
@@ -438,7 +534,7 @@ export default function App() {
     }
   };
 
-  // CSV 파일 복원 (다중 선택 가능 - 주문파일, 고객파일 두 개 한꺼번에 선택)
+  // CSV 파일 복원
   const handleImportCSV = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -458,10 +554,8 @@ export default function App() {
 
         if (parsedRows.length === 0) continue;
 
-        // 파일 내 컬럼 키값 확인
         const sampleKeys = Object.keys(parsedRows[0]);
 
-        // 고객 정보 파일인 경우 (키에 '이름' 또는 '연락처'가 있고 '주문ID'가 없는 경우)
         if (sampleKeys.includes('이름') && sampleKeys.includes('연락처') && !sampleKeys.includes('주문ID')) {
           for (const row of parsedRows) {
             if (row['이름'] && row['연락처']) {
@@ -470,9 +564,7 @@ export default function App() {
             }
           }
         } 
-        // 주문 정보 파일인 경우 (키에 '주문ID' 또는 '상품명'이 포함된 경우)
         else if (sampleKeys.includes('주문ID') || sampleKeys.includes('상품명')) {
-          // 고객 재조회 후 ID 맵핑
           const { data: updatedCustomers } = await supabase.from('customers').select('*');
 
           for (const row of parsedRows) {
@@ -787,8 +879,8 @@ export default function App() {
             </h2>
 
             <form onSubmit={handleCreateOrder} className="space-y-3 md:space-y-4">
-              <div className="grid grid-cols-2 gap-2 md:gap-4">
-                <div>
+              <div className="grid grid-cols-2 gap-2 md:gap-4 relative">
+                <div className="relative">
                   <label className="text-[11px] md:text-xs font-normal text-slate-700">고객 성명 *</label>
                   <input
                     type="text"
@@ -796,10 +888,30 @@ export default function App() {
                     onChange={e => handleCustomerNameChange(e.target.value)}
                     className="w-full p-2 md:p-3 border border-slate-200 rounded-xl mt-1 text-xs md:text-sm bg-white"
                     style={{ backgroundColor: '#ffffff' }}
-                    placeholder="홍길동 (입력시 자동완성)"
+                    placeholder="홍길동 (입력시 동명이인 목록 표시)"
                     required
                   />
+
+                  {/* 동명이인 드롭다운 목록 */}
+                  {matchedCustomerList.length > 1 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-rose-200 rounded-xl shadow-lg z-20 max-h-48 overflow-y-auto p-1">
+                      <div className="text-[11px] text-rose-500 font-bold px-2 py-1 bg-rose-50 rounded-t-lg">
+                        ⚠️ 동명이인이 존재합니다. 아래에서 클릭하세요:
+                      </div>
+                      {matchedCustomerList.map(c => (
+                        <div
+                          key={c.id}
+                          onClick={() => selectCustomerForNewOrder(c)}
+                          className="p-2 text-xs hover:bg-rose-50 rounded-lg cursor-pointer flex justify-between items-center"
+                        >
+                          <span className="font-bold text-slate-800">{c.name}</span>
+                          <span className="text-slate-500 text-[11px]">{c.phone}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
+
                 <div>
                   <label className="text-[11px] md:text-xs font-normal text-slate-700">휴대폰 번호 *</label>
                   <input
@@ -969,39 +1081,69 @@ export default function App() {
               )}
 
               {subTab === 'list' && (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse whitespace-nowrap">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-slate-500 text-xs md:text-sm bg-slate-50">
-                        <th className="py-2.5 px-3">픽업일시</th>
-                        <th className="py-2.5 px-3">접수일시</th>
-                        <th className="py-2.5 px-3">고객명</th>
-                        <th className="py-2.5 px-3">연락처</th>
-                        <th className="py-2.5 px-3">상품명</th>
-                        <th className="py-2.5 px-3">금액</th>
-                        <th className="py-2.5 px-3">결제수단</th>
-                        <th className="py-2.5 px-3">관리</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {orders.map(o => (
-                        <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors text-xs md:text-sm">
-                          <td className="py-2.5 px-3 text-slate-600">{o.pickup_datetime?.replace('T', ' ').slice(0, 16) || '-'}</td>
-                          <td className="py-2.5 px-3 text-xs text-slate-400">{o.created_at?.replace('T', ' ').slice(0, 16) || '-'}</td>
-                          <td className="py-2.5 px-3 font-bold text-slate-900 whitespace-nowrap">{o.customers?.name || '-'}</td>
-                          <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">{o.customers?.phone || '-'}</td>
-                          <td className="py-2.5 px-3 font-semibold text-slate-800 whitespace-nowrap">{o.product_name}</td>
-                          <td className="py-2.5 px-3 font-bold text-rose-500 whitespace-nowrap">{o.amount?.toLocaleString()}원</td>
-                          <td className="py-2.5 px-3"><span className="px-2 py-0.5 bg-slate-100 rounded text-xs font-medium whitespace-nowrap">{o.payment_method}</span></td>
-                          <td className="py-2.5 px-3">
-                            <button onClick={() => startEditOrder(o)} className="text-xs bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 px-2.5 py-1 rounded-lg font-normal cursor-pointer whitespace-nowrap">
-                              수정하기
-                            </button>
-                          </td>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-500">총 {orders.length}건의 주문</span>
+                    {selectedOrderIds.length > 0 && (
+                      <button
+                        onClick={handleDeleteSelectedOrders}
+                        className="px-3 py-1 bg-rose-500 hover:bg-rose-600 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        🗑️ 선택 항목 ({selectedOrderIds.length}개) 삭제
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse whitespace-nowrap">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-slate-500 text-xs md:text-sm bg-slate-50">
+                          <th className="py-2.5 px-3">픽업일시</th>
+                          <th className="py-2.5 px-3">접수일시</th>
+                          <th className="py-2.5 px-3">고객명</th>
+                          <th className="py-2.5 px-3">연락처</th>
+                          <th className="py-2.5 px-3">상품명</th>
+                          <th className="py-2.5 px-3">금액</th>
+                          <th className="py-2.5 px-3">결제수단</th>
+                          <th className="py-2.5 px-3">관리</th>
+                          <th className="py-2.5 px-3 text-center">
+                            <input
+                              type="checkbox"
+                              onChange={handleToggleSelectAllOrders}
+                              checked={orders.length > 0 && selectedOrderIds.length === orders.length}
+                              className="accent-rose-500 cursor-pointer"
+                            />
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {orders.map(o => (
+                          <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors text-xs md:text-sm">
+                            <td className="py-2.5 px-3 text-slate-600">{o.pickup_datetime?.replace('T', ' ').slice(0, 16) || '-'}</td>
+                            <td className="py-2.5 px-3 text-xs text-slate-400">{o.created_at?.replace('T', ' ').slice(0, 16) || '-'}</td>
+                            <td className="py-2.5 px-3 font-bold text-slate-900 whitespace-nowrap">{o.customers?.name || '-'}</td>
+                            <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">{o.customers?.phone || '-'}</td>
+                            <td className="py-2.5 px-3 font-semibold text-slate-800 whitespace-nowrap">{o.product_name}</td>
+                            <td className="py-2.5 px-3 font-bold text-rose-500 whitespace-nowrap">{o.amount?.toLocaleString()}원</td>
+                            <td className="py-2.5 px-3"><span className="px-2 py-0.5 bg-slate-100 rounded text-xs font-medium whitespace-nowrap">{o.payment_method}</span></td>
+                            <td className="py-2.5 px-3">
+                              <button onClick={() => startEditOrder(o)} className="text-xs bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 px-2.5 py-1 rounded-lg font-normal cursor-pointer whitespace-nowrap">
+                                수정하기
+                              </button>
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={selectedOrderIds.includes(o.id)}
+                                onChange={() => handleToggleSelectOrder(o.id)}
+                                className="accent-rose-500 cursor-pointer"
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>
@@ -1080,9 +1222,19 @@ export default function App() {
         {/* 3. 고객 관리 */}
         {activeMenu === 'customers' && (
           <div className="bg-white p-3 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            <h2 className="text-base md:text-xl font-bold text-slate-800 flex items-center gap-2">
-              <span>🎂</span> 고객 목록 및 검색
-            </h2>
+            <div className="flex justify-between items-center">
+              <h2 className="text-base md:text-xl font-bold text-slate-800 flex items-center gap-2">
+                <span>🎂</span> 고객 목록 (총 <span className="text-rose-500">{filteredCustomers.length}</span>명)
+              </h2>
+              {selectedCustomerIds.length > 0 && (
+                <button
+                  onClick={handleDeleteSelectedCustomers}
+                  className="px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  🗑️ 선택 고객 ({selectedCustomerIds.length}명) 삭제
+                </button>
+              )}
+            </div>
 
             <input
               type="text"
@@ -1096,17 +1248,35 @@ export default function App() {
               <table className="w-full text-left border-collapse whitespace-nowrap">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 text-xs md:text-sm bg-slate-50">
+                    <th className="py-2.5 px-3 w-16 text-center">No.</th>
                     <th className="py-2.5 px-3">이름</th>
                     <th className="py-2.5 px-3">연락처</th>
                     <th className="py-2.5 px-3">최근 픽업일</th>
+                    <th className="py-2.5 px-3 text-center">
+                      <input
+                        type="checkbox"
+                        onChange={handleToggleSelectAllCustomers}
+                        checked={filteredCustomers.length > 0 && selectedCustomerIds.length === filteredCustomers.length}
+                        className="accent-rose-500 cursor-pointer"
+                      />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredCustomers.map(c => (
+                  {filteredCustomers.map((c, idx) => (
                     <tr key={c.id} className="border-b border-slate-100 text-xs md:text-sm hover:bg-slate-50">
+                      <td className="py-2.5 px-3 text-center text-slate-400 font-medium">{filteredCustomers.length - idx}</td>
                       <td className="py-2.5 px-3 font-bold text-slate-900">{c.name}</td>
                       <td className="py-2.5 px-3 text-slate-600">{c.phone || '-'}</td>
                       <td className="py-2.5 px-3 text-slate-500">{getCustomerPickupDate(c.id, c.name)}</td>
+                      <td className="py-2.5 px-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedCustomerIds.includes(c.id)}
+                          onChange={() => handleToggleSelectCustomer(c.id)}
+                          className="accent-rose-500 cursor-pointer"
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
