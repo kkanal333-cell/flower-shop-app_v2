@@ -187,13 +187,26 @@ const parseCSVText = (text) => {
 };
 
 export default function App() {
-  const [activeMenu, setActiveMenu] = useState('orders');
-  const [subTab, setSubTab] = useState('calendar');
+  // 새로고침 시에도 이전 메뉴/탭 상태 유지
+  const [activeMenu, setActiveMenu] = useState(() => {
+    return localStorage.getItem('active_menu') || 'orders';
+  });
+  const [subTab, setSubTab] = useState(() => {
+    return localStorage.getItem('sub_tab') || 'calendar';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('active_menu', activeMenu);
+  }, [activeMenu]);
+
+  useEffect(() => {
+    localStorage.setItem('sub_tab', subTab);
+  }, [subTab]);
   
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
   
-  // 휴지통 상태 관리 (로컬스토리지 연동하여 새로고침 시 유지)
+  // 휴지통 상태 관리 (로컬스토리지 연동하여 새로고침 시 유지 및 동기화)
   const [trashOrders, setTrashOrders] = useState(() => {
     const saved = localStorage.getItem('trash_orders');
     return saved ? JSON.parse(saved) : [];
@@ -2095,9 +2108,10 @@ export default function App() {
                   삭제된 고객 정보 및 주문 내역이 이곳에 보관되며, 필요시 복원하거나 휴지통을 비울 수 있습니다.
                 </p>
               </div>
+              {/* 1. 휴지통 비우기 버튼 글씨 검정색으로 수정 */}
               <button
                 onClick={handleEmptyTrash}
-                className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shadow-sm cursor-pointer whitespace-nowrap"
+                className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-black font-bold rounded-xl text-xs shadow-sm cursor-pointer whitespace-nowrap"
               >
                 🗑️ 휴지통 비우기
               </button>
@@ -2134,12 +2148,15 @@ export default function App() {
                 </div>
               </div>
 
+              {/* 3. 삭제된 주문 내역 리스트에 고객명, 연락처 항목 추가 */}
               <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                <table className="w-full text-left border-collapse table-fixed min-w-[780px]">
+                <table className="w-full text-left border-collapse table-fixed min-w-[900px]">
                   <thead>
                     <tr className="border-b border-slate-200 text-slate-700 text-xs bg-slate-100 font-bold">
                       <th className="py-2.5 px-3 w-32">삭제 일시</th>
                       <th className="py-2.5 px-3 w-28">픽업일시</th>
+                      <th className="py-2.5 px-3 w-20">고객명</th>
+                      <th className="py-2.5 px-3 w-28">연락처</th>
                       <th className="py-2.5 px-3 w-24">상품명</th>
                       <th className="py-2.5 px-3 w-24">금액</th>
                       <th className="py-2.5 px-3">메모</th>
@@ -2156,7 +2173,7 @@ export default function App() {
                   <tbody>
                     {trashOrders.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-6 text-center text-slate-400 text-xs">
+                        <td colSpan={8} className="py-6 text-center text-slate-400 text-xs">
                           휴지통에 삭제된 주문 내역이 없습니다.
                         </td>
                       </tr>
@@ -2165,6 +2182,8 @@ export default function App() {
                         <tr key={o.id} className="border-b border-slate-100 text-xs hover:bg-slate-50">
                           <td className="py-2.5 px-3 text-slate-500 font-semibold">{o.deleted_at || '-'}</td>
                           <td className="py-2.5 px-3 text-slate-800">{formatShortDateTime(o.pickup_datetime)}</td>
+                          <td className="py-2.5 px-3 text-slate-900 font-bold truncate">{o.customers?.name || '-'}</td>
+                          <td className="py-2.5 px-3 text-slate-700 truncate">{o.customers?.phone || '-'}</td>
                           <td className="py-2.5 px-3 text-slate-700">{o.product_name}</td>
                           <td className="py-2.5 px-3 text-rose-600">{o.amount?.toLocaleString()}원</td>
                           <td className="py-2.5 px-3 text-slate-500 truncate" title={o.memo}>{o.memo || '-'}</td>
