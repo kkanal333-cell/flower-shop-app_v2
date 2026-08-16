@@ -598,11 +598,11 @@ export default function App() {
     fetchData();
   };
 
-  // 수정사항 5: 개별 주문 영수증 인쇄 함수 (아이콘 없이 '출력' 문구만 표출)
+  // 80mm 빅솔론 프린터 최적화 인쇄 함수
   const handlePrintSingleOrder = (o) => {
-    const printWindow = window.open('', '_blank', 'width=450,height=600');
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
     if (!printWindow) {
-      alert('팝업 차단이 설정되어 있어 인쇄 창을 열 수 없습니다. 팝업 차단을 해제해주세요.');
+      alert('팝업 차단이 설정되어 있습니다. 팝업을 허용해주세요.');
       return;
     }
 
@@ -610,41 +610,39 @@ export default function App() {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>주문서 영수증 - #${o.id}</title>
+        <meta charset="UTF-8">
+        <title>영수증</title>
         <style>
-          body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; color: #111; font-size: 14px; }
-          .receipt-box { border: 2px solid #333; padding: 20px; border-radius: 10px; max-width: 380px; margin: 0 auto; background: #fff; }
-          h2 { text-align: center; margin-bottom: 20px; font-size: 18px; border-bottom: 2px solid #333; padding-bottom: 10px; }
-          .row { display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px dashed #ddd; padding-bottom: 6px; }
-          .label { font-weight: bold; color: #555; }
-          .value { text-align: right; font-weight: bold; }
-          .memo-section { margin-top: 15px; background: #f9f9f9; padding: 10px; border-radius: 6px; border: 1px solid #eee; }
-          .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #777; }
+          body { font-family: 'Arial', sans-serif; margin: 0; padding: 5px; width: 360px; font-size: 13px; line-height: 1.4; color: #000; }
+          .center { text-align: center; }
+          .title { font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
+          .row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+          .label { font-weight: bold; }
+          .value { font-weight: bold; }
+          .memo { margin-top: 10px; padding-top: 5px; border-top: 1px dashed #000; }
+          .footer { margin-top: 20px; text-align: center; font-size: 12px; }
           @media print {
-            body { padding: 0; }
+            body { width: 100%; margin: 0; padding: 0; }
             button { display: none; }
           }
         </style>
       </head>
       <body>
-        <div class="receipt-box">
-          <h2>🌸 꽃집 예약 주문서</h2>
-          <div class="row"><span class="label">주문 번호</span><span class="value">#${o.id}</span></div>
-          <div class="row"><span class="label">고객 성명</span><span class="value">${o.customers?.name || '-'}</span></div>
-          <div class="row"><span class="label">연락처</span><span class="value">${o.customers?.phone || '-'}</span></div>
-          <div class="row"><span class="label">상품 종류</span><span class="value">${o.product_name || '-'}</span></div>
-          <div class="row"><span class="label">결제 금액</span><span class="value">${o.amount?.toLocaleString()}원</span></div>
-          <div class="row"><span class="label">결제 방식</span><span class="value">${o.payment_method || '-'}</span></div>
-          <div class="row"><span class="label">픽업 일시</span><span class="value">${formatShortDateTime(o.pickup_datetime)}</span></div>
-          <div class="row"><span class="label">접수 일시</span><span class="value">${formatShortDateTime(o.created_at)}</span></div>
-          <div class="memo-section">
-            <span class="label" style="display:block; margin-bottom:4px;">💬 요청사항 / 메모</span>
-            <div style="font-weight: normal; word-break: break-all;">${o.memo || '없음'}</div>
-          </div>
-          <div class="footer">감사합니다. 정성을 다해 준비하겠습니다!</div>
-          <div style="text-align: center; margin-top: 20px;">
-            <button onclick="window.print()" style="padding: 10px 20px; background: #333; color: #fff; border: none; border-radius: 5px; font-weight: bold; cursor: pointer;">인쇄하기</button>
-          </div>
+        <div class="center title">예약 주문서</div>
+        <div class="row"><span class="label">번호:</span><span>#${o.id}</span></div>
+        <div class="row"><span class="label">성명:</span><span>${o.customers?.name || '-'}</span></div>
+        <div class="row"><span class="label">연락처:</span><span>${o.customers?.phone || '-'}</span></div>
+        <div class="row"><span class="label">품목:</span><span>${o.product_name || '-'}</span></div>
+        <div class="row"><span class="label">금액:</span><span>${o.amount?.toLocaleString()}원</span></div>
+        <div class="row"><span class="label">결제:</span><span>${o.payment_method || '-'}</span></div>
+        <div class="row"><span class="label">픽업:</span><span>${formatShortDateTime(o.pickup_datetime)}</span></div>
+        <div class="memo">
+          <strong>요청사항:</strong><br/>
+          ${o.memo || '없음'}
+        </div>
+        <div class="footer">감사합니다. 정성을 다하겠습니다.</div>
+        <div class="center" style="margin-top: 20px;">
+          <button onclick="window.print()" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">인쇄하기</button>
         </div>
       </body>
       </html>
@@ -1683,7 +1681,6 @@ export default function App() {
                                     >
                                       수정
                                     </button>
-                                    {/* 수정사항 5: 출력 버튼 아이콘 제거 및 '출력' 문구만 표출 */}
                                     <button
                                       onClick={() => handlePrintSingleOrder(o)}
                                       className="text-[11px] bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 font-bold px-1.5 py-0.5 rounded cursor-pointer shadow-2xs"
@@ -1801,7 +1798,6 @@ export default function App() {
                               >
                                 수정
                               </button>
-                              {/* 수정사항 5: 출력 버튼 아이콘 제거 및 '출력' 문구만 표출 */}
                               <button
                                 onClick={() => handlePrintSingleOrder(o)}
                                 className="text-xs bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 font-bold px-2 py-0.5 rounded cursor-pointer whitespace-nowrap"
