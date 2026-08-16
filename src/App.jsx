@@ -90,14 +90,14 @@ const getKoreaNowFormatted = () => {
   return { date: dateStr, time: timeStr, dayOfWeek, currentHour, kstDateObj: kst };
 };
 
-// 수정사항 1: 현재 시간 직후의 가장 가까운 15분(또는 30분) 단위 픽업 일시 계산 함수
+// 현재 시간 직후의 가장 가까운 30분 단위 픽업 일시 계산 함수
 const getNextQuarterHourDateTime = () => {
   const now = new Date();
   const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
   const kst = new Date(utc + (9 * 60 * 60 * 1000));
 
   const totalMinutes = kst.getHours() * 60 + kst.getMinutes() + 1;
-  const remainder = totalMinutes % 30; // 30분 단위 올림 적용
+  const remainder = totalMinutes % 30;
   const roundedMinutes = totalMinutes + (30 - remainder);
 
   const targetDate = new Date(kst.getTime());
@@ -206,7 +206,6 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState(getKoreaNowFormatted().date);
   const [editingOrder, setEditingOrder] = useState(null);
 
-  // 수정사항 2: 달력 하단 팝업형 신규 입력 모달 상태 관리
   const [isCalendarOrderModalOpen, setIsCalendarOrderModalOpen] = useState(false);
 
   const [selectedOrderIds, setSelectedOrderIds] = useState([]);
@@ -217,19 +216,14 @@ export default function App() {
   const [matchedCustomerList, setMatchedCustomerList] = useState([]);
 
   const [showBackupAlertModal, setShowBackupAlertModal] = useState(false);
-
-  // 메모 자동완성 여부 상태
   const [isMemoAutofilled, setIsMemoAutofilled] = useState(false);
 
-  // 수정사항 3: 모바일 뒤로가기 버튼 팝업 가로채기 처리 (취소 후에도 지속 생성되도록 수정)
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    // 초기 히스토리 스택 푸시
     window.history.pushState({ page: 'main' }, '', window.location.href);
 
     const handlePopState = (event) => {
-      // 뒤로가기 감지 시 다시 히스토리를 푸시하여 연속 방지망 유지
       window.history.pushState({ page: 'main' }, '', window.location.href);
       
       const confirmExit = window.confirm("정말 앱을 종료하시겠습니까?");
@@ -538,7 +532,7 @@ export default function App() {
     });
     setIsMemoAutofilled(false);
     setMatchedCustomerList([]);
-    setIsCalendarOrderModalOpen(false); // 팝업형 신규입력 모달 닫기
+    setIsCalendarOrderModalOpen(false);
     fetchData();
   };
 
@@ -598,7 +592,7 @@ export default function App() {
     fetchData();
   };
 
-  // 80mm 빅솔론 프린터 최적화 인쇄 함수 (성명, 연락처 글씨 2배 크게 수정)
+  // 단건 인쇄 함수
   const handlePrintSingleOrder = (o) => {
     const printWindow = window.open('', '_blank', 'width=400,height=600');
     if (!printWindow) {
@@ -619,7 +613,6 @@ export default function App() {
           .row { display: flex; justify-content: space-between; margin-bottom: 4px; align-items: baseline; }
           .label { font-weight: bold; }
           .value { font-weight: bold; }
-          /* 성명과 연락처 글씨 크기를 2배 크게 설정 */
           .big-text { font-size: 26px !important; font-weight: bold; }
           .memo { margin-top: 10px; padding-top: 5px; border-top: 1px dashed #000; }
           .footer { margin-top: 20px; text-align: center; font-size: 12px; }
@@ -646,6 +639,90 @@ export default function App() {
         <div class="center" style="margin-top: 20px;">
           <button onclick="window.print()" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">인쇄하기</button>
         </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
+  // 선택한 항목들 연달아 출력하는 함수 (감열식 자동 커팅 지원)
+  const handlePrintSelectedOrders = () => {
+    if (selectedOrderIds.length === 0) return;
+
+    const targetOrders = sortedAndFilteredOrders.filter(o => selectedOrderIds.includes(o.id));
+    if (targetOrders.length === 0) return;
+
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (!printWindow) {
+      alert('팝업 차단이 설정되어 있습니다. 팝업을 허용해주세요.');
+      return;
+    }
+
+    // 각 주문서마다 페이지 구분 클래스(ticket-page)를 주어 감열 프린터가 자동 컷팅하도록 유도
+    const ticketsHtml = targetOrders.map((o, index) => `
+      <div class="ticket-page">
+        <div class="center title">예약 주문서 (${index + 1}/${targetOrders.length})</div>
+        <div class="row"><span class="label">번호:</span><span>#${o.id}</span></div>
+        <div class="row"><span class="label">성명:</span><span class="big-text">${o.customers?.name || '-'}</span></div>
+        <div class="row"><span class="label">연락처:</span><span class="big-text">${o.customers?.phone || '-'}</span></div>
+        <div class="row"><span class="label">품목:</span><span>${o.product_name || '-'}</span></div>
+        <div class="row"><span class="label">금액:</span><span>${o.amount?.toLocaleString()}원</span></div>
+        <div class="row"><span class="label">결제:</span><span>${o.payment_method || '-'}</span></div>
+        <div class="row"><span class="label">픽업:</span><span>${formatShortDateTime(o.pickup_datetime)}</span></div>
+        <div class="memo">
+          <strong>요청사항:</strong><br/>
+          ${o.memo || '없음'}
+        </div>
+        <div class="footer">감사합니다. 정성을 다하겠습니다.</div>
+      </div>
+    `).join('');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>선택 주문서 일괄 출력</title>
+        <style>
+          body { font-family: 'Arial', sans-serif; margin: 0; padding: 5px; width: 360px; font-size: 13px; line-height: 1.4; color: #000; }
+          .center { text-align: center; }
+          .title { font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
+          .row { display: flex; justify-content: space-between; margin-bottom: 4px; align-items: baseline; }
+          .label { font-weight: bold; }
+          .big-text { font-size: 26px !important; font-weight: bold; }
+          .memo { margin-top: 10px; padding-top: 5px; border-top: 1px dashed #000; margin-bottom: 10px; }
+          .footer { margin-top: 15px; text-align: center; font-size: 12px; }
+          
+          /* 각 주문서가 끝날 때마다 페이지를 나누어 자동 커팅 유도 */
+          .ticket-page {
+            page-break-after: always;
+            break-after: page;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+          }
+          .ticket-page:last-child {
+            page-break-after: avoid;
+            break-after: avoid;
+            margin-bottom: 0;
+          }
+
+          @media print {
+            @page {
+              size: 80mm auto;
+              margin: 0;
+            }
+            body { width: 100%; margin: 0; padding: 0; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="no-print center" style="margin-bottom: 20px; padding: 10px; background: #eee;">
+          <button onclick="window.print()" style="padding: 10px 20px; font-size: 16px; cursor: pointer; font-weight: bold;">선택 항목 한꺼번에 인쇄하기</button>
+        </div>
+        ${ticketsHtml}
       </body>
       </html>
     `;
@@ -739,7 +816,7 @@ export default function App() {
         downloadCSV(custHeaders, custRows, `export_customers_${today}.csv`);
       }, 300);
 
-      alert(`주문정보(export_orders_${today}.csv) 및 고객정보(export_customers_${today}.csv) 파일 다운로드가 시작되었습니다.`);
+      alert(`주문정보 및 고객정보 파일 다운로드가 시작되었습니다.`);
       handleCloseBackupModal();
     } catch (err) {
       console.error(err);
@@ -806,7 +883,7 @@ export default function App() {
       fetchData();
     } catch (err) {
       console.error(err);
-      alert('CSV 복원 중 오류가 발생했습니다. CSV 형식을 확인해주세요.');
+      alert('CSV 복원 중 오류가 발생했습니다.');
     } finally {
       e.target.value = '';
     }
@@ -1018,7 +1095,6 @@ export default function App() {
         ` : ''}
       `}</style>
 
-      {/* 주간 백업 팝업 알림 모달 */}
       {showBackupAlertModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border-2 border-rose-400 text-center space-y-4">
@@ -1046,7 +1122,6 @@ export default function App() {
         </div>
       )}
 
-      {/* 사이드바 / 상단 메뉴 */}
       <aside className="bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 w-full md:w-28 p-1 md:p-2 flex flex-col shrink-0 shadow-xs">
         <div className="hidden md:flex items-center justify-between text-rose-500 font-extrabold text-sm mb-1 px-1">
           <span className="flex items-center gap-1">📌 메뉴</span>
@@ -1092,9 +1167,7 @@ export default function App() {
         </div>
       </aside>
 
-      {/* 메인 콘텐츠 영역 */}
       <main className="flex-1 p-2 md:p-5 max-w-6xl mx-auto w-full">
-        {/* 주문 수정 모달 */}
         {editingOrder && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 z-50">
             <div className="bg-white rounded-2xl p-4 md:p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-xl border border-slate-200">
@@ -1210,7 +1283,6 @@ export default function App() {
           </div>
         )}
 
-        {/* 수정사항 2: 달력 하단 팝업형 신규 입력 모달 */}
         {isCalendarOrderModalOpen && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 z-50">
             <div className="bg-white rounded-2xl p-4 md:p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-xl border border-slate-200">
@@ -1358,7 +1430,6 @@ export default function App() {
           </div>
         )}
 
-        {/* 1. 신규주문 */}
         {activeMenu === 'new' && (
           <div className="max-w-2xl mx-auto bg-white p-3 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
             <h2 className="text-base md:text-xl font-bold text-slate-900 mb-4 md:mb-6 flex items-center gap-2">
@@ -1375,14 +1446,14 @@ export default function App() {
                     onChange={e => handleCustomerNameChange(e.target.value)}
                     className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
                     style={{ backgroundColor: '#ffffff' }}
-                    placeholder="홍길동 (입력시 자동완성 목록 표시)"
+                    placeholder="홍길동"
                     required
                   />
 
                   {matchedCustomerList.length > 0 && (
                     <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-rose-300 rounded-xl shadow-lg z-20 max-h-48 overflow-y-auto p-1">
                       <div className="text-[11px] text-rose-600 font-bold px-2 py-1 bg-rose-50 rounded-t-lg">
-                        💡 검색된 고객 목록 (선택 시 자동 입력):
+                        💡 검색된 고객 목록:
                       </div>
                       {matchedCustomerList.map(c => (
                         <div
@@ -1426,9 +1497,7 @@ export default function App() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-slate-700">
-                    결제 금액 (천원 단위)
-                  </label>
+                  <label className="text-[11px] md:text-xs font-bold text-slate-700">결제 금액 (천원 단위)</label>
                   <div className="relative mt-1">
                     <input
                       type="number"
@@ -1457,7 +1526,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-slate-700">픽업 시간 * (30분 단위)</label>
+                  <label className="text-[11px] md:text-xs font-bold text-slate-700">픽업 시간 *</label>
                   <TimePickerCustom
                     value={newOrder.pickup_time}
                     onChange={val => setNewOrder({...newOrder, pickup_time: val})}
@@ -1468,7 +1537,7 @@ export default function App() {
 
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-slate-700">접수 날짜 (현재 시각)</label>
+                  <label className="text-[11px] md:text-xs font-bold text-slate-700">접수 날짜</label>
                   <input
                     type="date"
                     value={newOrder.receipt_date}
@@ -1529,7 +1598,6 @@ export default function App() {
           </div>
         )}
 
-        {/* 2. 주문 & 달력 */}
         {activeMenu === 'orders' && (
           <div className="space-y-3 md:space-y-6">
             <div className="bg-white p-2 sm:p-3 md:p-5 rounded-xl border border-slate-200 shadow-sm">
@@ -1583,17 +1651,32 @@ export default function App() {
                       className="flex-1 p-2.5 border border-slate-300 rounded-xl text-xs md:text-sm bg-white text-slate-900 focus:outline-none focus:border-rose-500"
                     />
 
-                    <button
-                      onClick={handleDeleteSelectedOrders}
-                      disabled={selectedOrderIds.length === 0}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold border-2 transition-all flex items-center justify-center gap-1 ${
-                        selectedOrderIds.length > 0
-                          ? 'bg-white hover:bg-rose-50 text-slate-900 border-rose-600 cursor-pointer shadow-xs font-extrabold'
-                          : 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed opacity-60'
-                      }`}
-                    >
-                      🗑️ 선택 항목 ({selectedOrderIds.length}개) 삭제
-                    </button>
+                    <div className="flex gap-2">
+                      {/* 선택한 항목 출력 버튼 추가 */}
+                      <button
+                        onClick={handlePrintSelectedOrders}
+                        disabled={selectedOrderIds.length === 0}
+                        className={`px-3 py-2 rounded-xl text-xs font-bold border-2 transition-all flex items-center justify-center gap-1 ${
+                          selectedOrderIds.length > 0
+                            ? 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-500 cursor-pointer shadow-xs font-extrabold'
+                            : 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed opacity-60'
+                        }`}
+                      >
+                        🖨️ 선택 항목 ({selectedOrderIds.length}개) 출력
+                      </button>
+
+                      <button
+                        onClick={handleDeleteSelectedOrders}
+                        disabled={selectedOrderIds.length === 0}
+                        className={`px-3 py-2 rounded-xl text-xs font-bold border-2 transition-all flex items-center justify-center gap-1 ${
+                          selectedOrderIds.length > 0
+                            ? 'bg-white hover:bg-rose-50 text-slate-900 border-rose-600 cursor-pointer shadow-xs font-extrabold'
+                            : 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed opacity-60'
+                        }`}
+                      >
+                        🗑️ 선택 항목 ({selectedOrderIds.length}개) 삭제
+                      </button>
+                    </div>
                   </div>
 
                   <div className="text-xs text-slate-600 font-medium">
@@ -1712,7 +1795,6 @@ export default function App() {
               )}
             </div>
 
-            {/* 수정사항 2: 달력 하단 선택 날짜 상세 주문 목록 & 팝업형 '+신규입력' 버튼 */}
             {subTab === 'calendar' && selectedDate && (
               <div className="bg-white p-3 md:p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-2">
@@ -1729,7 +1811,7 @@ export default function App() {
                         phone: '010-',
                         product_name: '꽃다발',
                         amount_thousands: '55',
-                        pickup_date: selectedDate, // 선택한 달력 날짜 반영
+                        pickup_date: selectedDate,
                         pickup_time: nextQ.time,
                         receipt_date: kstNow.date,
                         receipt_time: kstNow.time,
@@ -1818,7 +1900,6 @@ export default function App() {
           </div>
         )}
 
-        {/* 3. 고객 관리 */}
         {activeMenu === 'customers' && (
           <div className="bg-white p-3 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
             <div className="flex justify-between items-center">
@@ -1896,7 +1977,6 @@ export default function App() {
           </div>
         )}
 
-        {/* 4. 알림 */}
         {activeMenu === 'notifications' && (
           <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
             <h2 className="text-base md:text-xl font-bold text-slate-900">🔔 알림 및 주간 백업 관리</h2>
@@ -1909,7 +1989,6 @@ export default function App() {
           </div>
         )}
 
-        {/* 5. CSV 백업/복원 */}
         {activeMenu === 'backup' && (
           <div className="bg-white p-4 md:p-8 rounded-2xl border border-slate-200 shadow-sm max-w-xl mx-auto space-y-6">
             <div>
@@ -1928,7 +2007,6 @@ export default function App() {
                 - <code className="text-rose-600 font-bold">export_orders_{getKoreaNowFormatted().date}.csv</code><br />
                 - <code className="text-rose-600 font-bold">export_customers_{getKoreaNowFormatted().date}.csv</code>
               </p>
-              {/* 내보내기 버튼 글자색 명확한 검은색으로 지정 */}
               <button
                 onClick={handleExportCSV}
                 className="w-full py-2.5 px-4 bg-rose-200 hover:bg-rose-300 text-slate-900 font-extrabold rounded-xl text-xs md:text-sm shadow-xs transition-colors cursor-pointer border border-rose-400"
