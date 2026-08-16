@@ -9,9 +9,6 @@ const SUPABASE_URL = 'https://zthuqzzholyjolteuvty.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_xkg9ULmNiqKrCcESytGbmw_u1Z12_gG';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// 기본 비밀번호 (8005로 설정)
-const DEFAULT_APP_PASSWORD = "8005"; 
-
 // 옵션 목록
 const PAYMENT_OPTIONS = ["신용카드", "현금", "계좌이체", "전화예약입금", "네이버", "인스타", "미결제"];
 const PRODUCT_OPTIONS = ["꽃다발", "꽃바구니", "햇살콘플라워", "꽃묶음", "식물", "용품", "시즌한정", "기타"];
@@ -190,23 +187,29 @@ const parseCSVText = (text) => {
 };
 
 export default function App() {
-  const appPassword = DEFAULT_APP_PASSWORD;
-
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return sessionStorage.getItem('app_authenticated') === 'true';
-  });
-  const [inputPin, setInputPin] = useState('');
-  const [pinError, setPinError] = useState(false);
-
   const [activeMenu, setActiveMenu] = useState('orders');
   const [subTab, setSubTab] = useState('calendar');
   
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
   
-  // 휴지통 상태 관리
-  const [trashOrders, setTrashOrders] = useState([]);
-  const [trashCustomers, setTrashCustomers] = useState([]);
+  // 휴지통 상태 관리 (로컬스토리지 연동하여 새로고침 시 유지)
+  const [trashOrders, setTrashOrders] = useState(() => {
+    const saved = localStorage.getItem('trash_orders');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [trashCustomers, setTrashCustomers] = useState(() => {
+    const saved = localStorage.getItem('trash_customers');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('trash_orders', JSON.stringify(trashOrders));
+  }, [trashOrders]);
+
+  useEffect(() => {
+    localStorage.setItem('trash_customers', JSON.stringify(trashCustomers));
+  }, [trashCustomers]);
 
   const [selectedDate, setSelectedDate] = useState(getKoreaNowFormatted().date);
   const [editingOrder, setEditingOrder] = useState(null);
@@ -215,6 +218,10 @@ export default function App() {
 
   const [selectedOrderIds, setSelectedOrderIds] = useState([]);
   const [selectedCustomerIds, setSelectedCustomerIds] = useState([]);
+
+  // 휴지통 내부 선택 상태 관리
+  const [selectedTrashOrderIds, setSelectedTrashOrderIds] = useState([]);
+  const [selectedTrashCustomerIds, setSelectedTrashCustomerIds] = useState([]);
 
   const [orderSearch, setOrderSearch] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
@@ -225,8 +232,6 @@ export default function App() {
 
   // 모바일 뒤로가기 누를 때 취소해도 팝업이 지속적으로 뜨도록 수정
   useEffect(() => {
-    if (!isAuthenticated) return;
-
     window.history.pushState({ page: 'main' }, '', window.location.href);
 
     const handlePopState = (event) => {
@@ -242,24 +247,7 @@ export default function App() {
     return () => {
       window.removeEventListener('popstate', handlePopState);
     };
-  }, [isAuthenticated]);
-
-  const handlePinSubmit = (e) => {
-    e.preventDefault();
-    if (inputPin === appPassword) {
-      setIsAuthenticated(true);
-      sessionStorage.setItem('app_authenticated', 'true');
-      setPinError(false);
-    } else {
-      setPinError(true);
-      setInputPin('');
-    }
-  };
-
-  const handleLogout = () => {
-    sessionStorage.removeItem('app_authenticated');
-    setIsAuthenticated(false);
-  };
+  }, []);
 
   const parseDateTime = (datetimeStr, fallbackDate = '', fallbackTime = '14:00') => {
     if (!datetimeStr) return { date: fallbackDate, time: fallbackTime };
@@ -352,10 +340,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (isAuthenticated) {
-      fetchData();
-    }
-  }, [isAuthenticated]);
+    fetchData();
+  }, []);
 
   const formatPhone = (val) => {
     if (!val) return '';
@@ -749,36 +735,23 @@ export default function App() {
     );
   };
 
-  // 선택된 주문들을 휴지통으로 이동
+  // 선택된 주문들을 휴지통으로 이동 (삭제 시간 기록 포함)
   const handleDeleteSelectedOrders = async () => {
     if (selectedOrderIds.length === 0) return;
     if (!window.confirm(`선택한 ${selectedOrderIds.length}개의 주문을 휴지통으로 이동하시겠습니까?`)) return;
 
-    const targets = orders.filter(o => selectedOrderIds.includes(o.id));
+    const nowStr = `${getKoreaNowFormatted().date} ${getKoreaNowFormatted().time}`;
+    const targets = orders
+      .filter(o => selectedOrderIds.includes(o.id))
+      .map(o => ({ ...o, deleted_at: nowStr }));
     
     const { error } = await supabase.from('orders').delete().in('id', selectedOrderIds);
     if (error) {
       alert('주문 삭제 실패: ' + error.message);
     } else {
-      setTrashOrders(prev => [...prev, ...targets]);
+      setTrashOrders(prev => [...targets, ...prev]);
       alert('선택한 주문이 휴지통으로 이동되었습니다.');
       setSelectedOrderIds([]);
-      fetchData();
-    }
-  };
-
-  // 휴지통 주문 복원
-  const handleRestoreOrder = async (order) => {
-    if (!window.confirm(`주문(#${order.id}, ${order.customers?.name || '고객'})을 복원하시겠습니까?`)) return;
-
-    const { id, customers, ...rest } = order;
-    const { error } = await supabase.from('orders').insert([rest]);
-
-    if (error) {
-      alert('주문 복원 실패: ' + error.message);
-    } else {
-      setTrashOrders(prev => prev.filter(item => item.id !== order.id));
-      alert('주문이 성공적으로 복원되었습니다.');
       fetchData();
     }
   };
@@ -797,38 +770,122 @@ export default function App() {
     );
   };
 
-  // 선택된 고객들을 휴지통으로 이동
+  // 선택된 고객들을 휴지통으로 이동 (삭제 시간 기록 포함)
   const handleDeleteSelectedCustomers = async () => {
     if (selectedCustomerIds.length === 0) return;
     if (!window.confirm(`선택한 ${selectedCustomerIds.length}명의 고객 정보를 휴지통으로 이동하시겠습니까?`)) return;
 
-    const targets = customers.filter(c => selectedCustomerIds.includes(c.id));
+    const nowStr = `${getKoreaNowFormatted().date} ${getKoreaNowFormatted().time}`;
+    const targets = customers
+      .filter(c => selectedCustomerIds.includes(c.id))
+      .map(c => ({ ...c, deleted_at: nowStr }));
 
     const { error } = await supabase.from('customers').delete().in('id', selectedCustomerIds);
     if (error) {
       alert('고객 삭제 실패: ' + error.message);
     } else {
-      setTrashCustomers(prev => [...prev, ...targets]);
+      setTrashCustomers(prev => [...targets, ...prev]);
       alert('선택한 고객 정보가 휴지통으로 이동되었습니다.');
       setSelectedCustomerIds([]);
       fetchData();
     }
   };
 
-  // 휴지통 고객 복원
-  const handleRestoreCustomer = async (cust) => {
-    if (!window.confirm(`고객(${cust.name}) 정보를 복원하시겠습니까?`)) return;
-
-    const { id, ...rest } = cust;
-    const { error } = await supabase.from('customers').insert([rest]);
-
-    if (error) {
-      alert('고객 복원 실패: ' + error.message);
+  // 휴지통 관련 체크박스 및 일괄 작업 핸들러
+  const handleToggleSelectAllTrashOrders = (e) => {
+    if (e.target.checked) {
+      setSelectedTrashOrderIds(trashOrders.map(o => o.id));
     } else {
-      setTrashCustomers(prev => prev.filter(item => item.id !== cust.id));
-      alert('고객 정보가 성공적으로 복원되었습니다.');
-      fetchData();
+      setSelectedTrashOrderIds([]);
     }
+  };
+
+  const handleToggleSelectTrashOrder = (id) => {
+    setSelectedTrashOrderIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleSelectAllTrashCustomers = (e) => {
+    if (e.target.checked) {
+      setSelectedTrashCustomerIds(trashCustomers.map(c => c.id));
+    } else {
+      setSelectedTrashCustomerIds([]);
+    }
+  };
+
+  const handleToggleSelectTrashCustomer = (id) => {
+    setSelectedTrashCustomerIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  // 선택된 휴지통 주문 영구 삭제
+  const handlePermanentDeleteSelectedOrders = () => {
+    if (selectedTrashOrderIds.length === 0) return;
+    if (!window.confirm(`선택한 ${selectedTrashOrderIds.length}개의 주문을 영구 삭제하시겠습니까? (복구 불가)`)) return;
+
+    setTrashOrders(prev => prev.filter(o => !selectedTrashOrderIds.includes(o.id)));
+    setSelectedTrashOrderIds([]);
+    alert('선택한 주문이 영구 삭제되었습니다.');
+  };
+
+  // 선택된 휴지통 주문 복원
+  const handleRestoreSelectedOrders = async () => {
+    if (selectedTrashOrderIds.length === 0) return;
+    if (!window.confirm(`선택한 ${selectedTrashOrderIds.length}개의 주문을 복원하시겠습니까?`)) return;
+
+    const targets = trashOrders.filter(o => selectedTrashOrderIds.includes(o.id));
+    for (const order of targets) {
+      const { id, customers: custObj, deleted_at, ...rest } = order;
+      await supabase.from('orders').insert([rest]);
+    }
+
+    setTrashOrders(prev => prev.filter(o => !selectedTrashOrderIds.includes(o.id)));
+    setSelectedTrashOrderIds([]);
+    alert('선택한 주문이 복원되었습니다.');
+    fetchData();
+  };
+
+  // 선택된 휴지통 고객 영구 삭제
+  const handlePermanentDeleteSelectedCustomers = () => {
+    if (selectedTrashCustomerIds.length === 0) return;
+    if (!window.confirm(`선택한 ${selectedTrashCustomerIds.length}명의 고객 정보를 영구 삭제하시겠습니까? (복구 불가)`)) return;
+
+    setTrashCustomers(prev => prev.filter(c => !selectedTrashCustomerIds.includes(c.id)));
+    setSelectedTrashCustomerIds([]);
+    alert('선택한 고객 정보가 영구 삭제되었습니다.');
+  };
+
+  // 선택된 휴지통 고객 복원
+  const handleRestoreSelectedCustomers = async () => {
+    if (selectedTrashCustomerIds.length === 0) return;
+    if (!window.confirm(`선택한 ${selectedTrashCustomerIds.length}명의 고객 정보를 복원하시겠습니까?`)) return;
+
+    const targets = trashCustomers.filter(c => selectedTrashCustomerIds.includes(c.id));
+    for (const cust of targets) {
+      const { id, deleted_at, ...rest } = cust;
+      await supabase.from('customers').insert([rest]);
+    }
+
+    setTrashCustomers(prev => prev.filter(c => !selectedTrashCustomerIds.includes(c.id)));
+    setSelectedTrashCustomerIds([]);
+    alert('선택한 고객 정보가 복원되었습니다.');
+    fetchData();
+  };
+
+  // 휴지통 비우기 버튼 핸들러
+  const handleEmptyTrash = () => {
+    if (trashOrders.length === 0 && trashCustomers.length === 0) {
+      return alert('휴지통이 이미 비어 있습니다.');
+    }
+    if (!window.confirm('휴지통의 모든 내용을 비우시겠습니까? 영구 삭제되어 복구할 수 없습니다.')) return;
+
+    setTrashOrders([]);
+    setTrashCustomers([]);
+    setSelectedTrashOrderIds([]);
+    setSelectedTrashCustomerIds([]);
+    alert('휴지통이 비워졌습니다.');
   };
 
   const handleExportCSV = () => {
@@ -1070,44 +1127,6 @@ export default function App() {
     );
   };
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-slate-800 flex items-center justify-center p-4">
-        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center border-2 border-slate-400">
-          <div className="text-4xl mb-3">🔒</div>
-          <h2 className="text-xl font-bold text-slate-900 mb-1">시스템 접속 잠금</h2>
-          <p className="text-xs text-slate-600 mb-6">4자리 비밀번호를 입력해주세요.</p>
-
-          <form onSubmit={handlePinSubmit} className="space-y-4">
-            <div>
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={4}
-                value={inputPin}
-                onChange={e => setInputPin(e.target.value.replace(/[^0-9]/g, ''))}
-                placeholder="• • • •"
-                className="w-full text-center text-2xl font-bold tracking-[1em] p-3 border-2 border-slate-400 rounded-xl focus:border-rose-500 focus:outline-none text-slate-900 bg-slate-50"
-                style={{ WebkitTextSecurity: 'disc' }}
-                autoFocus
-              />
-              {pinError && (
-                <p className="text-rose-600 text-xs mt-2 font-bold">⚠️ 비밀번호가 올바르지 않습니다.</p>
-              )}
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-3 bg-white hover:bg-slate-100 text-slate-900 font-extrabold rounded-xl border-2 border-slate-900 shadow-md transition-all text-sm cursor-pointer"
-            >
-              확인 및 접속
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-100/70 flex flex-col md:flex-row pb-12 md:pb-0">
       <style>{`
@@ -1192,23 +1211,7 @@ export default function App() {
               <span className="text-[10px] sm:text-xs font-bold">{menu.label}</span>
             </label>
           ))}
-
-          <button
-            onClick={handleLogout}
-            className="md:hidden py-1 px-1.5 bg-slate-200 hover:bg-slate-300 text-slate-900 rounded-lg text-[10px] font-extrabold border border-slate-400 text-center cursor-pointer whitespace-nowrap shrink-0"
-          >
-            🔒 잠금
-          </button>
         </nav>
-
-        <div className="hidden md:flex flex-col gap-1 mt-auto pt-2 border-t border-slate-200">
-          <button
-            onClick={handleLogout}
-            className="py-1.5 px-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg text-[11px] font-bold border border-slate-300 text-center cursor-pointer"
-          >
-            🔒 잠금
-          </button>
-        </div>
       </aside>
 
       <main className="flex-1 p-2 md:p-5 max-w-6xl mx-auto w-full">
@@ -1777,23 +1780,23 @@ export default function App() {
                                     : 'text-slate-900 hover:bg-slate-50'
                                 }`}
                               >
-                                <td className={`py-2.5 px-2 font-bold whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
+                                <td className={`py-2.5 px-2 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
                                   {formatShortDateTime(o.pickup_datetime)}
                                 </td>
-                                <td className={`py-2.5 px-2 font-bold truncate ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
+                                <td className={`py-2.5 px-2 truncate ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
                                   {o.customers?.name || '-'}
                                 </td>
-                                <td className={`py-2.5 px-2 font-medium truncate ${isPast ? 'text-slate-300' : 'text-slate-700'}`}>
+                                <td className={`py-2.5 px-2 truncate ${isPast ? 'text-slate-300' : 'text-slate-700'}`}>
                                   {o.customers?.phone || '-'}
                                 </td>
-                                <td className={`py-2.5 px-2 font-bold truncate ${isPast ? 'text-slate-300' : 'text-slate-800'}`}>
+                                <td className={`py-2.5 px-2 truncate ${isPast ? 'text-slate-300' : 'text-slate-800'}`}>
                                   {o.product_name}
                                 </td>
-                                <td className={`py-2.5 px-2 font-extrabold truncate ${isPast ? 'text-slate-300' : 'text-rose-600'}`}>
+                                <td className={`py-2.5 px-2 truncate ${isPast ? 'text-slate-300' : 'text-rose-600'}`}>
                                   {o.amount?.toLocaleString()}원
                                 </td>
                                 <td className="py-2.5 px-2">
-                                  <span className={`px-1.5 py-0.5 border rounded text-[11px] font-semibold block text-center truncate ${
+                                  <span className={`px-1.5 py-0.5 border rounded text-[11px] block text-center truncate ${
                                     isPast ? 'bg-slate-100 border-slate-200 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-800'
                                   }`}>
                                     {o.payment_method}
@@ -1810,7 +1813,7 @@ export default function App() {
                                   <div className="flex items-center justify-center gap-1">
                                     <button
                                       onClick={() => startEditOrder(o)}
-                                      className={`text-[11px] bg-white hover:bg-slate-100 border font-bold px-1.5 py-0.5 rounded cursor-pointer shadow-2xs ${
+                                      className={`text-[11px] bg-white hover:bg-slate-100 border px-1.5 py-0.5 rounded cursor-pointer shadow-2xs ${
                                         isPast ? 'text-slate-400 border-slate-300' : 'text-slate-900 border-slate-800'
                                       }`}
                                     >
@@ -1818,7 +1821,7 @@ export default function App() {
                                     </button>
                                     <button
                                       onClick={() => handlePrintSingleOrder(o)}
-                                      className="text-[11px] bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 font-bold px-1.5 py-0.5 rounded cursor-pointer shadow-2xs"
+                                      className="text-[11px] bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 px-1.5 py-0.5 rounded cursor-pointer shadow-2xs"
                                       title="주문서 출력"
                                     >
                                       출력
@@ -1905,15 +1908,15 @@ export default function App() {
 
                           <div className="flex items-center justify-between gap-1 text-xs">
                             <div className="flex items-center gap-1.5 overflow-hidden flex-1 min-w-0">
-                              <span className="font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 shrink-0 whitespace-nowrap">
+                              <span className="text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 shrink-0 whitespace-nowrap">
                                 {o.product_name}
                               </span>
-                              <span className="px-1.5 py-0.5 bg-slate-50 border border-slate-300 rounded text-slate-700 font-semibold shrink-0 whitespace-nowrap">
+                              <span className="px-1.5 py-0.5 bg-slate-50 border border-slate-300 rounded text-slate-700 shrink-0 whitespace-nowrap">
                                 {o.payment_method}
                               </span>
                               {o.memo && (
                                 <span 
-                                  className="text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 truncate font-medium max-w-[150px] md:max-w-[200px] whitespace-nowrap"
+                                  className="text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 truncate max-w-[150px] md:max-w-[200px] whitespace-nowrap"
                                   title={o.memo}
                                 >
                                   💬 {o.memo}
@@ -1922,19 +1925,19 @@ export default function App() {
                             </div>
 
                             <div className="flex items-center gap-2 shrink-0 ml-1">
-                              <span className="font-extrabold text-slate-900 text-xs md:text-sm whitespace-nowrap">
+                              <span className="text-slate-900 text-xs md:text-sm whitespace-nowrap">
                                 {o.amount?.toLocaleString()}원
                               </span>
                               
                               <button
                                 onClick={() => startEditOrder(o)}
-                                className="text-xs bg-white hover:bg-slate-100 border border-slate-800 text-slate-900 font-bold px-2 py-0.5 rounded cursor-pointer whitespace-nowrap"
+                                className="text-xs bg-white hover:bg-slate-100 border border-slate-800 text-slate-900 px-2 py-0.5 rounded cursor-pointer whitespace-nowrap"
                               >
                                 수정
                               </button>
                               <button
                                 onClick={() => handlePrintSingleOrder(o)}
-                                className="text-xs bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 font-bold px-2 py-0.5 rounded cursor-pointer whitespace-nowrap"
+                                className="text-xs bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 px-2 py-0.5 rounded cursor-pointer whitespace-nowrap"
                               >
                                 출력
                               </button>
@@ -2083,51 +2086,95 @@ export default function App() {
 
         {activeMenu === 'trash' && (
           <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
-            <div>
-              <h2 className="text-base md:text-xl font-bold text-slate-900 flex items-center gap-2 mb-1">
-                <span>🗑️</span> 휴지통
-              </h2>
-              <p className="text-xs text-slate-500">
-                삭제된 고객 정보 및 주문 내역이 이곳에 보관되며, 필요시 언제든지 복원할 수 있습니다.
-              </p>
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-base md:text-xl font-bold text-slate-900 flex items-center gap-2 mb-1">
+                  <span>🗑️</span> 휴지통
+                </h2>
+                <p className="text-xs text-slate-500">
+                  삭제된 고객 정보 및 주문 내역이 이곳에 보관되며, 필요시 복원하거나 휴지통을 비울 수 있습니다.
+                </p>
+              </div>
+              <button
+                onClick={handleEmptyTrash}
+                className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shadow-sm cursor-pointer whitespace-nowrap"
+              >
+                🗑️ 휴지통 비우기
+              </button>
             </div>
 
             <div className="space-y-3">
-              <h3 className="text-sm font-extrabold text-rose-700 flex items-center gap-1.5">
-                <span>📋</span> 삭제된 주문 내역 (<strong className="text-rose-600">{trashOrders.length}건</strong>)
-              </h3>
+              <div className="flex justify-between items-center">
+                <h3 className="text-sm font-extrabold text-rose-700 flex items-center gap-1.5">
+                  <span>📋</span> 삭제된 주문 내역 (<strong className="text-rose-600">{trashOrders.length}건</strong>)
+                </h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleRestoreSelectedOrders}
+                    disabled={selectedTrashOrderIds.length === 0}
+                    className={`px-2.5 py-1 text-xs font-bold rounded-lg border ${
+                      selectedTrashOrderIds.length > 0
+                        ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 cursor-pointer'
+                        : 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
+                    }`}
+                  >
+                    선택 복원
+                  </button>
+                  <button
+                    onClick={handlePermanentDeleteSelectedOrders}
+                    disabled={selectedTrashOrderIds.length === 0}
+                    className={`px-2.5 py-1 text-xs font-bold rounded-lg border ${
+                      selectedTrashOrderIds.length > 0
+                        ? 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-300 cursor-pointer'
+                        : 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
+                    }`}
+                  >
+                    선택 영구삭제
+                  </button>
+                </div>
+              </div>
+
               <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                <table className="w-full text-left border-collapse table-fixed min-w-[700px]">
+                <table className="w-full text-left border-collapse table-fixed min-w-[780px]">
                   <thead>
                     <tr className="border-b border-slate-200 text-slate-700 text-xs bg-slate-100 font-bold">
+                      <th className="py-2.5 px-3 w-32">삭제 일시</th>
                       <th className="py-2.5 px-3 w-28">픽업일시</th>
                       <th className="py-2.5 px-3 w-24">상품명</th>
                       <th className="py-2.5 px-3 w-24">금액</th>
                       <th className="py-2.5 px-3">메모</th>
-                      <th className="py-2.5 px-3 w-24 text-center">복원</th>
+                      <th className="py-2.5 px-3 w-16 text-center">
+                        <input
+                          type="checkbox"
+                          onChange={handleToggleSelectAllTrashOrders}
+                          checked={trashOrders.length > 0 && selectedTrashOrderIds.length === trashOrders.length}
+                          className="accent-rose-600 cursor-pointer w-4 h-4"
+                        />
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {trashOrders.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="py-6 text-center text-slate-400 text-xs">
+                        <td colSpan={6} className="py-6 text-center text-slate-400 text-xs">
                           휴지통에 삭제된 주문 내역이 없습니다.
                         </td>
                       </tr>
                     ) : (
                       trashOrders.map(o => (
                         <tr key={o.id} className="border-b border-slate-100 text-xs hover:bg-slate-50">
-                          <td className="py-2.5 px-3 font-bold text-slate-800">{formatShortDateTime(o.pickup_datetime)}</td>
-                          <td className="py-2.5 px-3 font-semibold text-slate-700">{o.product_name}</td>
-                          <td className="py-2.5 px-3 font-extrabold text-rose-600">{o.amount?.toLocaleString()}원</td>
+                          <td className="py-2.5 px-3 text-slate-500 font-semibold">{o.deleted_at || '-'}</td>
+                          <td className="py-2.5 px-3 text-slate-800">{formatShortDateTime(o.pickup_datetime)}</td>
+                          <td className="py-2.5 px-3 text-slate-700">{o.product_name}</td>
+                          <td className="py-2.5 px-3 text-rose-600">{o.amount?.toLocaleString()}원</td>
                           <td className="py-2.5 px-3 text-slate-500 truncate" title={o.memo}>{o.memo || '-'}</td>
                           <td className="py-2.5 px-3 text-center">
-                            <button
-                              onClick={() => handleRestoreOrder(o)}
-                              className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded text-[11px] cursor-pointer"
-                            >
-                              복원
-                            </button>
+                            <input
+                              type="checkbox"
+                              checked={selectedTrashOrderIds.includes(o.id)}
+                              onChange={() => handleToggleSelectTrashOrder(o.id)}
+                              className="accent-rose-600 cursor-pointer w-4 h-4"
+                            />
                           </td>
                         </tr>
                       ))
@@ -2138,37 +2185,73 @@ export default function App() {
             </div>
 
             <div className="space-y-3 pt-4 border-t border-slate-200">
-              <h3 className="text-sm font-extrabold text-rose-700 flex items-center gap-1.5">
-                <span>🎂</span> 삭제된 고객 정보 (<strong className="text-rose-600">{trashCustomers.length}명</strong>)
-              </h3>
+              <div className="flex justify-between items-center">
+                <h3 className="text-sm font-extrabold text-rose-700 flex items-center gap-1.5">
+                  <span>🎂</span> 삭제된 고객 정보 (<strong className="text-rose-600">{trashCustomers.length}명</strong>)
+                </h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleRestoreSelectedCustomers}
+                    disabled={selectedTrashCustomerIds.length === 0}
+                    className={`px-2.5 py-1 text-xs font-bold rounded-lg border ${
+                      selectedTrashCustomerIds.length > 0
+                        ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 cursor-pointer'
+                        : 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
+                    }`}
+                  >
+                    선택 복원
+                  </button>
+                  <button
+                    onClick={handlePermanentDeleteSelectedCustomers}
+                    disabled={selectedTrashCustomerIds.length === 0}
+                    className={`px-2.5 py-1 text-xs font-bold rounded-lg border ${
+                      selectedTrashCustomerIds.length > 0
+                        ? 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-300 cursor-pointer'
+                        : 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
+                    }`}
+                  >
+                    선택 영구삭제
+                  </button>
+                </div>
+              </div>
+
               <div className="overflow-x-auto border border-slate-200 rounded-xl">
                 <table className="w-full text-left border-collapse whitespace-nowrap">
                   <thead>
                     <tr className="border-b border-slate-200 text-slate-700 text-xs bg-slate-100 font-bold">
+                      <th className="py-2.5 px-3 w-36">삭제 일시</th>
                       <th className="py-2.5 px-3">이름</th>
                       <th className="py-2.5 px-3">연락처</th>
-                      <th className="py-2.5 px-3 text-center w-24">복원</th>
+                      <th className="py-2.5 px-3 text-center w-16">
+                        <input
+                          type="checkbox"
+                          onChange={handleToggleSelectAllTrashCustomers}
+                          checked={trashCustomers.length > 0 && selectedTrashCustomerIds.length === trashCustomers.length}
+                          className="accent-rose-600 cursor-pointer w-4 h-4"
+                        />
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {trashCustomers.length === 0 ? (
                       <tr>
-                        <td colSpan={3} className="py-6 text-center text-slate-400 text-xs">
+                        <td colSpan={4} className="py-6 text-center text-slate-400 text-xs">
                           휴지통에 삭제된 고객 정보가 없습니다.
                         </td>
                       </tr>
                     ) : (
                       trashCustomers.map(c => (
                         <tr key={c.id} className="border-b border-slate-100 text-xs hover:bg-slate-50">
-                          <td className="py-2.5 px-3 font-bold text-slate-800">{c.name}</td>
+                          <td className="py-2.5 px-3 text-slate-500 font-semibold">{c.deleted_at || '-'}</td>
+                          <td className="py-2.5 px-3 text-slate-800">{c.name}</td>
                           <td className="py-2.5 px-3 text-slate-600">{c.phone || '-'}</td>
                           <td className="py-2.5 px-3 text-center">
-                            <button
-                              onClick={() => handleRestoreCustomer(c)}
-                              className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded text-[11px] cursor-pointer"
-                            >
-                              복원
-                            </button>
+                            <input
+                              type="checkbox"
+                              checked={selectedTrashCustomerIds.includes(c.id)}
+                              onChange={() => handleToggleSelectTrashCustomer(c.id)}
+                              className="accent-rose-600 cursor-pointer w-4 h-4"
+                            />
                           </td>
                         </tr>
                       ))
