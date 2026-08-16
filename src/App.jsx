@@ -203,6 +203,11 @@ export default function App() {
   
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
+  
+  // [요청 3 반영] 휴지통 상태 관리
+  const [trashOrders, setTrashOrders] = useState([]);
+  const [trashCustomers, setTrashCustomers] = useState([]);
+
   const [selectedDate, setSelectedDate] = useState(getKoreaNowFormatted().date);
   const [editingOrder, setEditingOrder] = useState(null);
 
@@ -745,16 +750,37 @@ export default function App() {
     );
   };
 
+  // [요청 3 반영] 선택된 주문들을 휴지통으로 이동
   const handleDeleteSelectedOrders = async () => {
     if (selectedOrderIds.length === 0) return;
-    if (!window.confirm(`선택한 ${selectedOrderIds.length}개의 주문을 삭제하시겠습니까?`)) return;
+    if (!window.confirm(`선택한 ${selectedOrderIds.length}개의 주문을 휴지통으로 이동하시겠습니까?`)) return;
 
+    const targets = orders.filter(o => selectedOrderIds.includes(o.id));
+    
+    // DB에서 실제 삭제 수행
     const { error } = await supabase.from('orders').delete().in('id', selectedOrderIds);
     if (error) {
       alert('주문 삭제 실패: ' + error.message);
     } else {
-      alert('선택한 주문이 삭제되었습니다.');
+      setTrashOrders(prev => [...prev, ...targets]);
+      alert('선택한 주문이 휴지통으로 이동되었습니다.');
       setSelectedOrderIds([]);
+      fetchData();
+    }
+  };
+
+  // [요청 3 반영] 휴지통 주문 복원
+  const handleRestoreOrder = async (order) => {
+    if (!window.confirm(`주문(#${order.id}, ${order.customers?.name || '고객'})을 복원하시겠습니까?`)) return;
+
+    const { id, customers, ...rest } = order;
+    const { error } = await supabase.from('orders').insert([rest]);
+
+    if (error) {
+      alert('주문 복원 실패: ' + error.message);
+    } else {
+      setTrashOrders(prev => prev.filter(item => item.id !== order.id));
+      alert('주문이 성공적으로 복원되었습니다.');
       fetchData();
     }
   };
@@ -773,16 +799,36 @@ export default function App() {
     );
   };
 
+  // [요청 3 반영] 선택된 고객들을 휴지통으로 이동
   const handleDeleteSelectedCustomers = async () => {
     if (selectedCustomerIds.length === 0) return;
-    if (!window.confirm(`선택한 ${selectedCustomerIds.length}명의 고객 정보를 삭제하시겠습니까?\n(관련 주문 내역의 고객정보도 함께 초기화될 수 있습니다)`)) return;
+    if (!window.confirm(`선택한 ${selectedCustomerIds.length}명의 고객 정보를 휴지통으로 이동하시겠습니까?`)) return;
+
+    const targets = customers.filter(c => selectedCustomerIds.includes(c.id));
 
     const { error } = await supabase.from('customers').delete().in('id', selectedCustomerIds);
     if (error) {
       alert('고객 삭제 실패: ' + error.message);
     } else {
-      alert('선택한 고객 정보가 삭제되었습니다.');
+      setTrashCustomers(prev => [...prev, ...targets]);
+      alert('선택한 고객 정보가 휴지통으로 이동되었습니다.');
       setSelectedCustomerIds([]);
+      fetchData();
+    }
+  };
+
+  // [요청 3 반영] 휴지통 고객 복원
+  const handleRestoreCustomer = async (cust) => {
+    if (!window.confirm(`고객(${cust.name}) 정보를 복원하시겠습니까?`)) return;
+
+    const { id, ...rest } = cust;
+    const { error } = await supabase.from('customers').insert([rest]);
+
+    if (error) {
+      alert('고객 복원 실패: ' + error.message);
+    } else {
+      setTrashCustomers(prev => prev.filter(item => item.id !== cust.id));
+      alert('고객 정보가 성공적으로 복원되었습니다.');
       fetchData();
     }
   };
@@ -965,12 +1011,14 @@ export default function App() {
     return nameMatch || phoneMatch;
   });
 
+  // [요청 3 반영] 메뉴 리스트에 '휴지통' 추가 (백업/복원 메뉴 바로 밑)
   const menuList = [
     { id: 'new', label: '📝 신규주문' },
     { id: 'orders', label: '📋 주문/달력' },
     { id: 'customers', label: '🎂 고객' },
     { id: 'notifications', label: '🔔 알림' },
     { id: 'backup', label: '💾 백업/복원' },
+    { id: 'trash', label: '🗑️ 휴지통' },
   ];
 
   const getCustomerPickupDate = (customerId, customerName) => {
@@ -1182,6 +1230,7 @@ export default function App() {
                     <label className="text-[11px] font-bold text-slate-700">고객명</label>
                     <input
                       type="text"
+                      lang="ko"
                       value={editingOrder.customer_name}
                       onChange={e => setEditingOrder({ ...editingOrder, customer_name: e.target.value })}
                       className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
@@ -1192,6 +1241,8 @@ export default function App() {
                     <label className="text-[11px] font-bold text-slate-700">연락처</label>
                     <input
                       type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       value={editingOrder.phone}
                       onChange={e => setEditingOrder({ ...editingOrder, phone: formatPhone(e.target.value) })}
                       className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
@@ -1255,6 +1306,7 @@ export default function App() {
                 <div>
                   <label className="text-[11px] font-bold text-slate-700">메모</label>
                   <textarea
+                    lang="ko"
                     value={editingOrder.memo}
                     onChange={e => setEditingOrder({ ...editingOrder, memo: e.target.value })}
                     onFocus={e => e.target.select()}
@@ -1297,6 +1349,7 @@ export default function App() {
                     <label className="text-[11px] font-bold text-slate-700">고객 성명 *</label>
                     <input
                       type="text"
+                      lang="ko"
                       value={newOrder.customer_name}
                       onChange={e => handleCustomerNameChange(e.target.value)}
                       className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium"
@@ -1327,6 +1380,8 @@ export default function App() {
                     <label className="text-[11px] font-bold text-slate-700">휴대폰 번호 *</label>
                     <input
                       type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       value={newOrder.phone}
                       onChange={e => setNewOrder({...newOrder, phone: formatPhone(e.target.value)})}
                       className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium"
@@ -1398,6 +1453,7 @@ export default function App() {
                 <div>
                   <label className="text-[11px] font-bold text-slate-700">요청사항 / 메모</label>
                   <textarea
+                    lang="ko"
                     value={newOrder.memo}
                     onChange={e => {
                       setNewOrder({ ...newOrder, memo: e.target.value });
@@ -1440,8 +1496,10 @@ export default function App() {
               <div className="grid grid-cols-2 gap-2 md:gap-4 relative">
                 <div className="relative">
                   <label className="text-[11px] md:text-xs font-bold text-slate-700">고객 성명 *</label>
+                  {/* [요청 1 반영] 한글 자판 유도 lang="ko" 추가 */}
                   <input
                     type="text"
+                    lang="ko"
                     value={newOrder.customer_name}
                     onChange={e => handleCustomerNameChange(e.target.value)}
                     className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
@@ -1471,8 +1529,11 @@ export default function App() {
 
                 <div>
                   <label className="text-[11px] md:text-xs font-bold text-slate-700">휴대폰 번호 *</label>
+                  {/* [요청 1 반영] 숫자 전용 키패드 설정 inputMode="numeric", pattern="[0-9]*" */}
                   <input
                     type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={newOrder.phone}
                     onChange={e => setNewOrder({...newOrder, phone: formatPhone(e.target.value)})}
                     className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
@@ -1572,7 +1633,9 @@ export default function App() {
 
               <div>
                 <label className="text-[11px] md:text-xs font-bold text-slate-700">고객 요구사항 / 메모</label>
+                {/* [요청 1 반영] 한글 자판 유도 lang="ko" 추가 */}
                 <textarea
+                  lang="ko"
                   value={newOrder.memo}
                   onChange={e => {
                     setNewOrder({ ...newOrder, memo: e.target.value });
@@ -1801,7 +1864,6 @@ export default function App() {
                     <span>📅</span> <span className="text-sky-600">{selectedDate}</span> 픽업 주문 ({selectedDayOrders.length}건)
                   </h3>
 
-                  {/* [요청 1 반영] + 기호를 빼고 글씨를 검정색으로 수정 */}
                   <button
                     onClick={() => {
                       const nextQ = getNextQuarterHourDateTime();
@@ -2027,6 +2089,108 @@ export default function App() {
                 onChange={handleImportCSV}
                 className="w-full text-xs text-slate-700 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border file:border-slate-300 file:text-xs file:font-bold file:bg-white file:text-slate-800 hover:file:bg-slate-100 cursor-pointer"
               />
+            </div>
+          </div>
+        )}
+
+        {/* [요청 3 반영] 휴지통 메뉴 화면 구성 */}
+        {activeMenu === 'trash' && (
+          <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+            <div>
+              <h2 className="text-base md:text-xl font-bold text-slate-900 flex items-center gap-2 mb-1">
+                <span>🗑️</span> 휴지통
+              </h2>
+              <p className="text-xs text-slate-500">
+                삭제된 고객 정보 및 주문 내역이 이곳에 보관되며, 필요시 언제든지 복원할 수 있습니다.
+              </p>
+            </div>
+
+            {/* 1. 삭제된 주문 정보 섹션 */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-extrabold text-rose-700 flex items-center gap-1.5">
+                <span>📋</span> 삭제된 주문 내역 (<strong className="text-rose-600">{trashOrders.length}건</strong>)
+              </h3>
+              <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                <table className="w-full text-left border-collapse table-fixed min-w-[700px]">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-slate-700 text-xs bg-slate-100 font-bold">
+                      <th className="py-2.5 px-3 w-28">픽업일시</th>
+                      <th className="py-2.5 px-3 w-24">상품명</th>
+                      <th className="py-2.5 px-3 w-24">금액</th>
+                      <th className="py-2.5 px-3">메모</th>
+                      <th className="py-2.5 px-3 w-24 text-center">복원</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trashOrders.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-6 text-center text-slate-400 text-xs">
+                          휴지통에 삭제된 주문 내역이 없습니다.
+                        </td>
+                      </tr>
+                    ) : (
+                      trashOrders.map(o => (
+                        <tr key={o.id} className="border-b border-slate-100 text-xs hover:bg-slate-50">
+                          <td className="py-2.5 px-3 font-bold text-slate-800">{formatShortDateTime(o.pickup_datetime)}</td>
+                          <td className="py-2.5 px-3 font-semibold text-slate-700">{o.product_name}</td>
+                          <td className="py-2.5 px-3 font-extrabold text-rose-600">{o.amount?.toLocaleString()}원</td>
+                          <td className="py-2.5 px-3 text-slate-500 truncate" title={o.memo}>{o.memo || '-'}</td>
+                          <td className="py-2.5 px-3 text-center">
+                            <button
+                              onClick={() => handleRestoreOrder(o)}
+                              className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded text-[11px] cursor-pointer"
+                            >
+                              복원
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* 2. 삭제된 고객 정보 섹션 */}
+            <div className="space-y-3 pt-4 border-t border-slate-200">
+              <h3 className="text-sm font-extrabold text-rose-700 flex items-center gap-1.5">
+                <span>🎂</span> 삭제된 고객 정보 (<strong className="text-rose-600">{trashCustomers.length}명</strong>)
+              </h3>
+              <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                <table className="w-full text-left border-collapse whitespace-nowrap">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-slate-700 text-xs bg-slate-100 font-bold">
+                      <th className="py-2.5 px-3">이름</th>
+                      <th className="py-2.5 px-3">연락처</th>
+                      <th className="py-2.5 px-3 text-center w-24">복원</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trashCustomers.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="py-6 text-center text-slate-400 text-xs">
+                          휴지통에 삭제된 고객 정보가 없습니다.
+                        </td>
+                      </tr>
+                    ) : (
+                      trashCustomers.map(c => (
+                        <tr key={c.id} className="border-b border-slate-100 text-xs hover:bg-slate-50">
+                          <td className="py-2.5 px-3 font-bold text-slate-800">{c.name}</td>
+                          <td className="py-2.5 px-3 text-slate-600">{c.phone || '-'}</td>
+                          <td className="py-2.5 px-3 text-center">
+                            <button
+                              onClick={() => handleRestoreCustomer(c)}
+                              className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded text-[11px] cursor-pointer"
+                            >
+                              복원
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
