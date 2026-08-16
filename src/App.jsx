@@ -204,7 +204,7 @@ export default function App() {
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
   
-  // [요청 3 반영] 휴지통 상태 관리
+  // 휴지통 상태 관리
   const [trashOrders, setTrashOrders] = useState([]);
   const [trashCustomers, setTrashCustomers] = useState([]);
 
@@ -223,7 +223,7 @@ export default function App() {
   const [showBackupAlertModal, setShowBackupAlertModal] = useState(false);
   const [isMemoAutofilled, setIsMemoAutofilled] = useState(false);
 
-  // [요청 2 반영] 모바일 뒤로가기 누를 때 취소해도 팝업이 지속적으로 뜨도록 수정
+  // 모바일 뒤로가기 누를 때 취소해도 팝업이 지속적으로 뜨도록 수정
   useEffect(() => {
     if (!isAuthenticated) return;
 
@@ -234,7 +234,6 @@ export default function App() {
       if (confirmExit) {
         window.close();
       } else {
-        // 취소를 누른 경우 히스토리를 다시 추가하여 지속적으로 팝업이 뜨도록 처리
         window.history.pushState({ page: 'main' }, '', window.location.href);
       }
     };
@@ -750,14 +749,13 @@ export default function App() {
     );
   };
 
-  // [요청 3 반영] 선택된 주문들을 휴지통으로 이동
+  // 선택된 주문들을 휴지통으로 이동
   const handleDeleteSelectedOrders = async () => {
     if (selectedOrderIds.length === 0) return;
     if (!window.confirm(`선택한 ${selectedOrderIds.length}개의 주문을 휴지통으로 이동하시겠습니까?`)) return;
 
     const targets = orders.filter(o => selectedOrderIds.includes(o.id));
     
-    // DB에서 실제 삭제 수행
     const { error } = await supabase.from('orders').delete().in('id', selectedOrderIds);
     if (error) {
       alert('주문 삭제 실패: ' + error.message);
@@ -769,7 +767,7 @@ export default function App() {
     }
   };
 
-  // [요청 3 반영] 휴지통 주문 복원
+  // 휴지통 주문 복원
   const handleRestoreOrder = async (order) => {
     if (!window.confirm(`주문(#${order.id}, ${order.customers?.name || '고객'})을 복원하시겠습니까?`)) return;
 
@@ -799,7 +797,7 @@ export default function App() {
     );
   };
 
-  // [요청 3 반영] 선택된 고객들을 휴지통으로 이동
+  // 선택된 고객들을 휴지통으로 이동
   const handleDeleteSelectedCustomers = async () => {
     if (selectedCustomerIds.length === 0) return;
     if (!window.confirm(`선택한 ${selectedCustomerIds.length}명의 고객 정보를 휴지통으로 이동하시겠습니까?`)) return;
@@ -817,7 +815,7 @@ export default function App() {
     }
   };
 
-  // [요청 3 반영] 휴지통 고객 복원
+  // 휴지통 고객 복원
   const handleRestoreCustomer = async (cust) => {
     if (!window.confirm(`고객(${cust.name}) 정보를 복원하시겠습니까?`)) return;
 
@@ -1011,7 +1009,6 @@ export default function App() {
     return nameMatch || phoneMatch;
   });
 
-  // [요청 3 반영] 메뉴 리스트에 '휴지통' 추가 (백업/복원 메뉴 바로 밑)
   const menuList = [
     { id: 'new', label: '📝 신규주문' },
     { id: 'orders', label: '📋 주문/달력' },
@@ -1086,7 +1083,6 @@ export default function App() {
               <input
                 type="text"
                 inputMode="numeric"
-                pattern="[0-9]*"
                 maxLength={4}
                 value={inputPin}
                 onChange={e => setInputPin(e.target.value.replace(/[^0-9]/g, ''))}
@@ -1242,7 +1238,6 @@ export default function App() {
                     <input
                       type="text"
                       inputMode="numeric"
-                      pattern="[0-9]*"
                       value={editingOrder.phone}
                       onChange={e => setEditingOrder({ ...editingOrder, phone: formatPhone(e.target.value) })}
                       className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
@@ -1381,12 +1376,10 @@ export default function App() {
                     <input
                       type="text"
                       inputMode="numeric"
-                      pattern="[0-9]*"
                       value={newOrder.phone}
                       onChange={e => setNewOrder({...newOrder, phone: formatPhone(e.target.value)})}
                       className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium"
                       placeholder="010-0000-0000"
-                      maxLength={13}
                       required
                     />
                   </div>
@@ -1496,7 +1489,6 @@ export default function App() {
               <div className="grid grid-cols-2 gap-2 md:gap-4 relative">
                 <div className="relative">
                   <label className="text-[11px] md:text-xs font-bold text-slate-700">고객 성명 *</label>
-                  {/* [요청 1 반영] 한글 자판 유도 lang="ko" 추가 */}
                   <input
                     type="text"
                     lang="ko"
@@ -1529,17 +1521,14 @@ export default function App() {
 
                 <div>
                   <label className="text-[11px] md:text-xs font-bold text-slate-700">휴대폰 번호 *</label>
-                  {/* [요청 1 반영] 숫자 전용 키패드 설정 inputMode="numeric", pattern="[0-9]*" */}
                   <input
                     type="text"
                     inputMode="numeric"
-                    pattern="[0-9]*"
                     value={newOrder.phone}
                     onChange={e => setNewOrder({...newOrder, phone: formatPhone(e.target.value)})}
                     className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
                     style={{ backgroundColor: '#ffffff' }}
                     placeholder="010-0000-0000"
-                    maxLength={13}
                     required
                   />
                 </div>
@@ -1633,7 +1622,6 @@ export default function App() {
 
               <div>
                 <label className="text-[11px] md:text-xs font-bold text-slate-700">고객 요구사항 / 메모</label>
-                {/* [요청 1 반영] 한글 자판 유도 lang="ko" 추가 */}
                 <textarea
                   lang="ko"
                   value={newOrder.memo}
@@ -2093,7 +2081,6 @@ export default function App() {
           </div>
         )}
 
-        {/* [요청 3 반영] 휴지통 메뉴 화면 구성 */}
         {activeMenu === 'trash' && (
           <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
             <div>
@@ -2105,7 +2092,6 @@ export default function App() {
               </p>
             </div>
 
-            {/* 1. 삭제된 주문 정보 섹션 */}
             <div className="space-y-3">
               <h3 className="text-sm font-extrabold text-rose-700 flex items-center gap-1.5">
                 <span>📋</span> 삭제된 주문 내역 (<strong className="text-rose-600">{trashOrders.length}건</strong>)
@@ -2151,7 +2137,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* 2. 삭제된 고객 정보 섹션 */}
             <div className="space-y-3 pt-4 border-t border-slate-200">
               <h3 className="text-sm font-extrabold text-rose-700 flex items-center gap-1.5">
                 <span>🎂</span> 삭제된 고객 정보 (<strong className="text-rose-600">{trashCustomers.length}명</strong>)
