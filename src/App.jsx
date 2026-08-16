@@ -598,7 +598,7 @@ export default function App() {
     fetchData();
   };
 
-  // 80mm 빅솔론 프린터 최적화 인쇄 함수
+  // 80mm 빅솔론 프린터 최적화 인쇄 함수 (성명, 연락처 글씨 2배 크게 수정)
   const handlePrintSingleOrder = (o) => {
     const printWindow = window.open('', '_blank', 'width=400,height=600');
     if (!printWindow) {
@@ -616,9 +616,11 @@ export default function App() {
           body { font-family: 'Arial', sans-serif; margin: 0; padding: 5px; width: 360px; font-size: 13px; line-height: 1.4; color: #000; }
           .center { text-align: center; }
           .title { font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
-          .row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+          .row { display: flex; justify-content: space-between; margin-bottom: 4px; align-items: baseline; }
           .label { font-weight: bold; }
           .value { font-weight: bold; }
+          /* 성명과 연락처 글씨 크기를 2배 크게 설정 */
+          .big-text { font-size: 26px !important; font-weight: bold; }
           .memo { margin-top: 10px; padding-top: 5px; border-top: 1px dashed #000; }
           .footer { margin-top: 20px; text-align: center; font-size: 12px; }
           @media print {
@@ -630,8 +632,8 @@ export default function App() {
       <body>
         <div class="center title">예약 주문서</div>
         <div class="row"><span class="label">번호:</span><span>#${o.id}</span></div>
-        <div class="row"><span class="label">성명:</span><span>${o.customers?.name || '-'}</span></div>
-        <div class="row"><span class="label">연락처:</span><span>${o.customers?.phone || '-'}</span></div>
+        <div class="row"><span class="label">성명:</span><span class="big-text">${o.customers?.name || '-'}</span></div>
+        <div class="row"><span class="label">연락처:</span><span class="big-text">${o.customers?.phone || '-'}</span></div>
         <div class="row"><span class="label">품목:</span><span>${o.product_name || '-'}</span></div>
         <div class="row"><span class="label">금액:</span><span>${o.amount?.toLocaleString()}원</span></div>
         <div class="row"><span class="label">결제:</span><span>${o.payment_method || '-'}</span></div>
