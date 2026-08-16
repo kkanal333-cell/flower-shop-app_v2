@@ -218,17 +218,19 @@ export default function App() {
   const [showBackupAlertModal, setShowBackupAlertModal] = useState(false);
   const [isMemoAutofilled, setIsMemoAutofilled] = useState(false);
 
+  // [요청 2 반영] 모바일 뒤로가기 누를 때 취소해도 팝업이 지속적으로 뜨도록 수정
   useEffect(() => {
     if (!isAuthenticated) return;
 
     window.history.pushState({ page: 'main' }, '', window.location.href);
 
     const handlePopState = (event) => {
-      window.history.pushState({ page: 'main' }, '', window.location.href);
-      
       const confirmExit = window.confirm("정말 앱을 종료하시겠습니까?");
       if (confirmExit) {
         window.close();
+      } else {
+        // 취소를 누른 경우 히스토리를 다시 추가하여 지속적으로 팝업이 뜨도록 처리
+        window.history.pushState({ page: 'main' }, '', window.location.href);
       }
     };
 
@@ -660,7 +662,6 @@ export default function App() {
       return;
     }
 
-    // 각 주문서마다 페이지 구분 클래스(ticket-page)를 주어 감열 프린터가 자동 컷팅하도록 유도
     const ticketsHtml = targetOrders.map((o, index) => `
       <div class="ticket-page">
         <div class="center title">예약 주문서 (${index + 1}/${targetOrders.length})</div>
@@ -695,7 +696,6 @@ export default function App() {
           .memo { margin-top: 10px; padding-top: 5px; border-top: 1px dashed #000; margin-bottom: 10px; }
           .footer { margin-top: 15px; text-align: center; font-size: 12px; }
           
-          /* 각 주문서가 끝날 때마다 페이지를 나누어 자동 커팅 유도 */
           .ticket-page {
             page-break-after: always;
             break-after: page;
@@ -1652,7 +1652,6 @@ export default function App() {
                     />
 
                     <div className="flex gap-2">
-                      {/* 선택한 항목 출력 버튼 추가 */}
                       <button
                         onClick={handlePrintSelectedOrders}
                         disabled={selectedOrderIds.length === 0}
@@ -1802,6 +1801,7 @@ export default function App() {
                     <span>📅</span> <span className="text-sky-600">{selectedDate}</span> 픽업 주문 ({selectedDayOrders.length}건)
                   </h3>
 
+                  {/* [요청 1 반영] + 기호를 빼고 글씨를 검정색으로 수정 */}
                   <button
                     onClick={() => {
                       const nextQ = getNextQuarterHourDateTime();
@@ -1822,9 +1822,9 @@ export default function App() {
                       setMatchedCustomerList([]);
                       setIsCalendarOrderModalOpen(true);
                     }}
-                    className="px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                    className="px-3 py-1.5 bg-rose-100 hover:bg-rose-200 text-black border border-rose-300 rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1"
                   >
-                    <span>➕</span> +신규입력
+                    신규입력
                   </button>
                 </div>
 
