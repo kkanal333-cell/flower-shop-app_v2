@@ -341,6 +341,8 @@ export default function App() {
 
   const handleMenuChange = (menuId, overridePickupDate = null) => {
     setActiveMenu(menuId);
+    // 메뉴를 이동할 때마다 최신 데이터로 새로고침 (다른 기기에서 입력한 내용도 바로 반영)
+    fetchData();
     if (menuId === 'new') {
       const kstNow = getKoreaNowFormatted();
       const nextQ = getNextQuarterHourDateTime();
