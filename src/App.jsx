@@ -1268,7 +1268,7 @@ export default function App() {
       )}
 
       {showExitHint && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-xl z-50">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-black text-xs font-bold px-4 py-2.5 rounded-full shadow-xl z-50">
           뒤로가기를 한 번 더 누르면 종료됩니다
         </div>
       )}
