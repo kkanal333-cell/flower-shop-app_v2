@@ -2610,7 +2610,7 @@ export default function App() {
                                         className="text-[11px] bg-lime-100 hover:bg-lime-200 border border-lime-400 text-lime-900 px-1 py-0.5 rounded cursor-pointer whitespace-nowrap font-bold"
                                         title="작품 사진 보기"
                                       >
-                                        보기 {photoMap[String(o.id)].length}/{MAX_ORDER_PHOTOS}
+                                        보기 {photoMap[String(o.id)].length}
                                       </button>
                                     )}
                                     {(photoMap[String(o.id)]?.length || 0) < MAX_ORDER_PHOTOS && (
