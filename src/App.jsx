@@ -24,6 +24,15 @@ const RIBBON_FONT_OPTIONS = [
   { label: "Noto Sans KR (고딕)", value: "'Noto Sans KR', sans-serif" },
   { label: "나눔손글씨 붓 (캘리그라피)", value: "'Nanum Brush Script', cursive" },
   { label: "나눔손글씨 펜 (손글씨체)", value: "'Nanum Pen Script', cursive" },
+  { label: "Noto Sans KR Black", value: "'Noto Sans KR', sans-serif" },
+  { label: "Noto Serif KR Black", value: "'Noto Serif KR', serif" },
+  { label: "나눔스퀘어", value: "'Nanum Gothic', sans-serif" },
+  { label: "Arial", value: "Arial, sans-serif" },
+  { label: "Verdana", value: "Verdana, sans-serif" },
+  { label: "Tahoma", value: "Tahoma, sans-serif" },
+  { label: "Georgia", value: "Georgia, serif" },
+  { label: "Times New Roman", value: "'Times New Roman', serif" },
+  { label: "Courier New", value: "'Courier New', monospace" },
 ];
 
 // 리본편집기 인쇄/미리보기에서 공통으로 사용할 Google Fonts 주소
@@ -253,11 +262,18 @@ export default function App() {
   const [ribbonFontSize, setRibbonFontSize] = useState(26); // px, 글자 크기
   const [ribbonLetterSpacing, setRibbonLetterSpacing] = useState(4); // px, 자간(글자 사이 세로 간격)
   const [ribbonLineGap, setRibbonLineGap] = useState(28); // px, 행간(줄과 줄 사이 가로 간격)
+  const [ribbonPaperWidth, setRibbonPaperWidth] = useState(80); // mm, 프린터 용지 폭
   const [ribbonMarginLeft, setRibbonMarginLeft] = useState(25); // mm, 좌측 여백
   const [ribbonMarginRight, setRibbonMarginRight] = useState(25); // mm, 우측 여백
   const [ribbonBold, setRibbonBold] = useState(true);
   const [ribbonShowGuide, setRibbonShowGuide] = useState(true); // 재단 가이드선(점선) 표시 여부
   const [ribbonCopies, setRibbonCopies] = useState(1);
+  const [ribbonTemplates, setRibbonTemplates] = useState([]);
+  const [selectedRibbonTemplateId, setSelectedRibbonTemplateId] = useState('');
+  const [ribbonTemplateLoading, setRibbonTemplateLoading] = useState(false);
+  const [photoMap, setPhotoMap] = useState({});
+  const [photoViewer, setPhotoViewer] = useState(null);
+  const [photoUploadingOrderId, setPhotoUploadingOrderId] = useState(null);
 
   // 리본 편집기 화면에서만 구글 폰트(나눔명조/나눔고딕 등)를 불러와 미리보기에 그대로 반영
   useEffect(() => {
@@ -269,8 +285,17 @@ export default function App() {
     document.head.appendChild(link);
   }, []);
 
-  const ribbonContentWidthMm = Math.max(0, 80 - (Number(ribbonMarginLeft) || 0) - (Number(ribbonMarginRight) || 0));
+  const ribbonMarginMax = Math.min(38, Math.max(0, Math.floor((Number(ribbonPaperWidth) - 2) / 2)));
+  const ribbonContentWidthMm = Math.max(0, Number(ribbonPaperWidth) - (Number(ribbonMarginLeft) || 0) - (Number(ribbonMarginRight) || 0));
   const ribbonLines = ribbonText.split('\n').filter(line => line.trim() !== '');
+
+  // 용지 폭을 바꾸면 기존의 30mm 리본 폭을 최대한 유지하도록 좌우 여백을 자동 조정합니다.
+  useEffect(() => {
+    const targetRibbonWidth = 30;
+    const autoMargin = Math.max(0, (Number(ribbonPaperWidth) - targetRibbonWidth) / 2);
+    setRibbonMarginLeft(Math.min(ribbonMarginMax, autoMargin));
+    setRibbonMarginRight(Math.min(ribbonMarginMax, autoMargin));
+  }, [ribbonPaperWidth]);
 
   // 모바일 뒤로가기 누를 때마다 항상 종료 확인 팝업이 뜨도록 처리
   // (새로고침/URL 이동에는 절대 관여하지 않고, 오직 브라우저 '뒤로가기' 동작만 가로챕니다)
@@ -408,6 +433,213 @@ export default function App() {
     }
   };
 
+  const fetchRibbonTemplates = async () => {
+    const { data, error } = await supabase
+      .from('ribbon_templates')
+      .select('*')
+      .order('is_default', { ascending: false })
+      .order('updated_at', { ascending: false });
+    if (error) {
+      console.warn('Ribbon templates fetch error:', error.message);
+      return;
+    }
+    setRibbonTemplates(data || []);
+    const defaultTemplate = (data || []).find(t => t.is_default);
+    if (defaultTemplate && !selectedRibbonTemplateId) {
+      applyRibbonTemplate(defaultTemplate, false);
+    }
+  };
+
+  const applyRibbonTemplate = (template, showAlert = true) => {
+    if (!template?.config) return;
+    const c = template.config;
+    if (c.ribbonText !== undefined) setRibbonText(c.ribbonText);
+    if (c.ribbonFontFamily !== undefined) setRibbonFontFamily(c.ribbonFontFamily);
+    if (c.ribbonFontSize !== undefined) setRibbonFontSize(Math.min(120, Math.max(12, Number(c.ribbonFontSize))));
+    if (c.ribbonLetterSpacing !== undefined) setRibbonLetterSpacing(Number(c.ribbonLetterSpacing));
+    if (c.ribbonLineGap !== undefined) setRibbonLineGap(Number(c.ribbonLineGap));
+    if (c.ribbonPaperWidth !== undefined) setRibbonPaperWidth(Number(c.ribbonPaperWidth) === 58 ? 58 : 80);
+    if (c.ribbonMarginLeft !== undefined) setRibbonMarginLeft(Number(c.ribbonMarginLeft));
+    if (c.ribbonMarginRight !== undefined) setRibbonMarginRight(Number(c.ribbonMarginRight));
+    if (c.ribbonBold !== undefined) setRibbonBold(Boolean(c.ribbonBold));
+    if (c.ribbonShowGuide !== undefined) setRibbonShowGuide(Boolean(c.ribbonShowGuide));
+    if (c.ribbonCopies !== undefined) setRibbonCopies(Number(c.ribbonCopies) || 1);
+    setSelectedRibbonTemplateId(String(template.id));
+    if (showAlert) alert(`'${template.name}' 양식을 불러왔습니다.`);
+  };
+
+  const handleSaveRibbonTemplate = async () => {
+    const defaultName = selectedRibbonTemplateId
+      ? (ribbonTemplates.find(t => String(t.id) === String(selectedRibbonTemplateId))?.name || '')
+      : '';
+    const name = window.prompt('저장할 리본 양식 이름을 입력하세요.', defaultName || '기본 리본 양식');
+    if (!name || !name.trim()) return;
+
+    const config = {
+      ribbonText, ribbonFontFamily, ribbonFontSize, ribbonLetterSpacing, ribbonLineGap,
+      ribbonPaperWidth, ribbonMarginLeft, ribbonMarginRight, ribbonBold, ribbonShowGuide, ribbonCopies
+    };
+    setRibbonTemplateLoading(true);
+    try {
+      const selectedTemplate = selectedRibbonTemplateId
+        ? ribbonTemplates.find(t => String(t.id) === String(selectedRibbonTemplateId))
+        : null;
+      const row = {
+        ...(selectedTemplate && selectedTemplate.name === name.trim() ? { id: selectedRibbonTemplateId } : {}),
+        name: name.trim(),
+          config,
+          is_default: false,
+        updated_at: new Date().toISOString()
+      };
+      const { data, error } = await supabase
+        .from('ribbon_templates')
+        .upsert([row], { onConflict: 'name' })
+        .select()
+        .single();
+      if (error) throw error;
+      setSelectedRibbonTemplateId(String(data.id));
+      await fetchRibbonTemplates();
+      alert('리본 양식이 Supabase에 저장되었습니다.');
+    } catch (err) {
+      console.error(err);
+      alert('리본 양식 저장 실패: ' + err.message);
+    } finally {
+      setRibbonTemplateLoading(false);
+    }
+  };
+
+  const handleLoadRibbonTemplate = () => {
+    if (!selectedRibbonTemplateId) return alert('불러올 양식을 선택해주세요.');
+    const template = ribbonTemplates.find(t => String(t.id) === String(selectedRibbonTemplateId));
+    if (template) applyRibbonTemplate(template, true);
+  };
+
+  const handleSetDefaultRibbonTemplate = async () => {
+    if (!selectedRibbonTemplateId) return alert('기본으로 지정할 양식을 먼저 선택해주세요.');
+    try {
+      const { error: resetError } = await supabase.from('ribbon_templates').update({ is_default: false }).neq('id', selectedRibbonTemplateId);
+      if (resetError) throw resetError;
+      const { error } = await supabase.from('ribbon_templates').update({ is_default: true }).eq('id', selectedRibbonTemplateId);
+      if (error) throw error;
+      await fetchRibbonTemplates();
+      alert('선택한 양식을 기본 양식으로 지정했습니다.');
+    } catch (err) {
+      alert('기본 양식 지정 실패: ' + err.message);
+    }
+  };
+
+  const loadOrderPhotos = async () => {
+    const { data, error } = await supabase.from('order_photos').select('*');
+    if (error) {
+      console.warn('Order photos fetch error:', error.message);
+      return;
+    }
+    const next = {};
+    (data || []).forEach(photo => { next[String(photo.order_id)] = photo; });
+    setPhotoMap(next);
+  };
+
+  const compressOrderPhoto = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const maxSide = 1600;
+        const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+        const ctx = canvas.getContext('2d', { alpha: false });
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(blob => {
+          if (!blob) return reject(new Error('사진 압축에 실패했습니다.'));
+          resolve(blob);
+        }, 'image/jpeg', 0.82);
+      };
+      img.onerror = () => reject(new Error('사진을 읽을 수 없습니다.'));
+      img.src = reader.result;
+    };
+    reader.onerror = () => reject(new Error('사진 파일을 읽을 수 없습니다.'));
+    reader.readAsDataURL(file);
+  });
+
+  const handleOrderPhotoUpload = async (order) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.capture = 'environment';
+    input.onchange = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setPhotoUploadingOrderId(order.id);
+      try {
+        const blob = await compressOrderPhoto(file);
+        const oldPhoto = photoMap[String(order.id)];
+        const path = `${order.id}/${Date.now()}.jpg`;
+        const { error: uploadError } = await supabase.storage
+          .from('order-photos')
+          .upload(path, blob, { contentType: 'image/jpeg', upsert: false, cacheControl: '31536000' });
+        if (uploadError) throw uploadError;
+
+        const { data: publicData } = supabase.storage.from('order-photos').getPublicUrl(path);
+        const payload = {
+          order_id: order.id,
+          storage_path: path,
+          public_url: publicData.publicUrl,
+          original_name: file.name,
+          size_bytes: blob.size,
+          updated_at: new Date().toISOString()
+        };
+        const { error: dbError } = await supabase.from('order_photos').upsert([payload], { onConflict: 'order_id' });
+        if (dbError) {
+          await supabase.storage.from('order-photos').remove([path]);
+          throw dbError;
+        }
+        if (oldPhoto?.storage_path && oldPhoto.storage_path !== path) {
+          await supabase.storage.from('order-photos').remove([oldPhoto.storage_path]);
+        }
+        await loadOrderPhotos();
+        setPhotoViewer(prev => prev && String(prev.order_id) === String(order.id) ? { ...payload } : prev);
+        alert(`작품 사진이 저장되었습니다. (${Math.round(blob.size / 1024)}KB)`);
+      } catch (err) {
+        console.error(err);
+        alert('작품 사진 업로드 실패: ' + err.message);
+      } finally {
+        setPhotoUploadingOrderId(null);
+      }
+    };
+    input.click();
+  };
+
+  const handleOrderPhotoDelete = async (orderId) => {
+    const photo = photoMap[String(orderId)];
+    if (!photo) return;
+    if (!window.confirm('이 주문의 작품 사진을 삭제하시겠습니까?')) return;
+    try {
+      if (photo.storage_path) await supabase.storage.from('order-photos').remove([photo.storage_path]);
+      const { error } = await supabase.from('order_photos').delete().eq('order_id', orderId);
+      if (error) throw error;
+      await loadOrderPhotos();
+    } catch (err) {
+      alert('사진 삭제 실패: ' + err.message);
+    }
+  };
+
+  const cleanupOrderPhotosForIds = async (orderIds) => {
+    const ids = (orderIds || []).map(id => String(id));
+    if (ids.length === 0) return;
+    const { data, error } = await supabase.from('order_photos').select('id, order_id, storage_path').in('order_id', ids);
+    if (error) {
+      console.warn('Order photo cleanup lookup failed:', error.message);
+      return;
+    }
+    const paths = (data || []).map(p => p.storage_path).filter(Boolean);
+    if (paths.length) await supabase.storage.from('order-photos').remove(paths);
+    await supabase.from('order_photos').delete().in('order_id', ids);
+  };
+
   const fetchData = async () => {
     // 활성 주문 (휴지통에 없는 주문)
     const { data: orderData, error: orderError } = await supabase
@@ -448,6 +680,9 @@ export default function App() {
 
     if (trashCustomerData) setTrashCustomers(trashCustomerData);
     if (trashCustomerError) console.error("Trash customers fetch error:", trashCustomerError);
+
+    await loadOrderPhotos();
+    await fetchRibbonTemplates();
   };
 
   useEffect(() => {
@@ -840,7 +1075,7 @@ export default function App() {
       return;
     }
     if (ribbonContentWidthMm <= 0) {
-      alert('좌우 여백의 합이 용지 폭(80mm)을 넘어 인쇄 영역이 없습니다. 여백을 줄여주세요.');
+      alert(`좌우 여백의 합이 용지 폭(${ribbonPaperWidth}mm)을 넘어 인쇄 영역이 없습니다. 여백을 줄여주세요.`);
       return;
     }
 
@@ -880,7 +1115,7 @@ export default function App() {
           * { box-sizing: border-box; }
           body { margin: 0; padding: 0; color: #000; }
           .ribbon-outer {
-            width: 80mm;
+            width: ${ribbonPaperWidth}mm;
             page-break-after: always;
             break-after: page;
           }
@@ -912,7 +1147,7 @@ export default function App() {
           }
           .no-print { text-align: center; padding: 10px; background: #eee; }
           @media print {
-            @page { size: 80mm auto; margin: 0; }
+            @page { size: ${ribbonPaperWidth}mm auto; margin: 0; }
             .no-print { display: none; }
           }
         </style>
@@ -1027,6 +1262,7 @@ export default function App() {
     if (selectedTrashOrderIds.length === 0) return;
     if (!window.confirm(`선택한 ${selectedTrashOrderIds.length}개의 주문을 영구 삭제하시겠습니까? (복구 불가)`)) return;
 
+    await cleanupOrderPhotosForIds(selectedTrashOrderIds);
     const { error } = await supabase.from('orders').delete().in('id', selectedTrashOrderIds);
     if (error) {
       alert('영구 삭제 실패: ' + error.message);
@@ -1093,6 +1329,7 @@ export default function App() {
     const customerIds = trashCustomers.map(c => c.id);
 
     if (orderIds.length > 0) {
+      await cleanupOrderPhotosForIds(orderIds);
       const { error } = await supabase.from('orders').delete().in('id', orderIds);
       if (error) return alert('휴지통 비우기 실패(주문): ' + error.message);
     }
@@ -1428,7 +1665,7 @@ export default function App() {
             <div className="flex gap-2 pt-2">
               <button
                 onClick={handleExportCSV}
-                className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-black rounded-xl text-xs font-bold shadow-md cursor-pointer"
+                className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
               >
                 📥 지금 바로 백업 다운로드
               </button>
@@ -1473,6 +1710,25 @@ export default function App() {
       </aside>
 
       <main className="flex-1 p-2 md:p-5 max-w-6xl mx-auto w-full">
+        {photoViewer && (
+          <div className="fixed inset-0 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-4 z-[70]" onClick={() => setPhotoViewer(null)}>
+            <div className="bg-white rounded-2xl p-3 md:p-5 max-w-3xl w-full max-h-[92vh] shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div className="text-sm font-bold text-slate-900">📷 완성 작품 사진</div>
+                <div className="flex gap-2">
+                  <button onClick={() => { const o = orders.find(x => String(x.id) === String(photoViewer.order_id)); if (o) handleOrderPhotoUpload(o); }} className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold border border-slate-300">교체</button>
+                  <button onClick={() => handleOrderPhotoDelete(photoViewer.order_id)} className="px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-300">삭제</button>
+                  <button onClick={() => setPhotoViewer(null)} className="px-3 py-1.5 rounded-lg bg-slate-800 text-white text-xs font-bold">닫기</button>
+                </div>
+              </div>
+              <div className="bg-slate-100 rounded-xl p-2 flex items-center justify-center max-h-[78vh] overflow-auto">
+                <img src={photoViewer.public_url} alt="완성 작품" className="max-w-full max-h-[74vh] object-contain rounded-lg" />
+              </div>
+              <div className="text-[11px] text-slate-500 mt-2 text-right">업로드 파일: {photoViewer.original_name || '-'} · {photoViewer.size_bytes ? `${Math.round(photoViewer.size_bytes / 1024)}KB` : ''}</div>
+            </div>
+          </div>
+        )}
+
         {editingOrder && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 z-50">
             <div className="bg-white rounded-2xl p-4 md:p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-xl border border-slate-200">
@@ -2033,6 +2289,7 @@ export default function App() {
                           <th className="py-2.5 px-2 w-28">메모</th>
                           <th className="py-2.5 px-2 w-24">접수일시</th>
                           <th className="py-2.5 px-2 w-24 text-center">관리 / 출력</th>
+                          <th className="py-2.5 px-2 w-16 text-center">사진</th>
                           <th className="py-2.5 px-2 w-12 text-center">
                             <input
                               type="checkbox"
@@ -2046,7 +2303,7 @@ export default function App() {
                       <tbody>
                         {sortedAndFilteredOrders.length === 0 ? (
                           <tr>
-                            <td colSpan={10} className="py-6 text-center text-slate-500 text-xs md:text-sm">
+                            <td colSpan={11} className="py-6 text-center text-slate-500 text-xs md:text-sm">
                               검색 결과가 없습니다.
                             </td>
                           </tr>
@@ -2111,6 +2368,36 @@ export default function App() {
                                       출력
                                     </button>
                                   </div>
+                                </td>
+
+                                <td className="py-2.5 px-2 text-center">
+                                  {photoMap[String(o.id)] ? (
+                                    <div className="flex items-center justify-center gap-1">
+                                      <button
+                                        onClick={() => setPhotoViewer(photoMap[String(o.id)])}
+                                        className="text-[11px] bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-700 px-1.5 py-0.5 rounded cursor-pointer"
+                                        title="작품 사진 보기"
+                                      >
+                                        📷 보기
+                                      </button>
+                                      <button
+                                        onClick={() => handleOrderPhotoUpload(o)}
+                                        disabled={photoUploadingOrderId === o.id}
+                                        className="text-[11px] bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 px-1.5 py-0.5 rounded cursor-pointer"
+                                        title="사진 교체"
+                                      >
+                                        {photoUploadingOrderId === o.id ? '…' : '교체'}
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleOrderPhotoUpload(o)}
+                                      disabled={photoUploadingOrderId === o.id}
+                                      className="text-[11px] bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 px-1.5 py-0.5 rounded cursor-pointer"
+                                    >
+                                      {photoUploadingOrderId === o.id ? '업로드…' : '📷 사진'}
+                                    </button>
+                                  )}
                                 </td>
 
                                 <td className="py-2.5 px-2 text-center">
@@ -2591,13 +2878,21 @@ export default function App() {
                   </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] md:text-xs font-bold text-slate-700">글자 크기 ({ribbonFontSize}px)</label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="md:col-span-2">
+                    <label className="text-[11px] md:text-xs font-bold text-slate-700">글자 크기 ({ribbonFontSize}px, 최대 120px)</label>
                     <input
-                      type="range" min="12" max="60" value={ribbonFontSize}
-                      onChange={e => setRibbonFontSize(Number(e.target.value))}
+                      type="range" min="12" max="120" value={ribbonFontSize}
+                      onChange={e => setRibbonFontSize(Math.min(120, Number(e.target.value)))}
                       className="w-full mt-2 cursor-pointer accent-rose-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] md:text-xs font-bold text-slate-700">크기 직접 입력</label>
+                    <input
+                      type="number" min="12" max="120" value={ribbonFontSize}
+                      onChange={e => setRibbonFontSize(Math.min(120, Math.max(12, Number(e.target.value) || 12)))}
+                      className="w-full p-2 border border-slate-300 rounded-xl mt-1 text-sm bg-white text-slate-900 font-medium"
                     />
                   </div>
                   <div>
@@ -2631,11 +2926,31 @@ export default function App() {
                   </div>
                 </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] md:text-xs font-bold text-slate-700">용지 폭</label>
+                    <select
+                      value={ribbonPaperWidth}
+                      onChange={e => setRibbonPaperWidth(Number(e.target.value))}
+                      className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-sm bg-white text-slate-900 font-medium cursor-pointer"
+                    >
+                      <option value={80}>80mm</option>
+                      <option value={58}>58mm</option>
+                    </select>
+                    <p className="text-[10px] text-slate-500 mt-1">용지 변경 시 30mm 리본 기준으로 좌우 여백을 자동 조정합니다.</p>
+                  </div>
+                  <div className="flex items-end">
+                    <div className="w-full text-xs font-bold rounded-lg px-3 py-2 bg-sky-50 text-sky-700 border border-sky-200">
+                      현재 인쇄 영역: 약 {ribbonContentWidthMm.toFixed(0)}mm
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[11px] md:text-xs font-bold text-slate-700">좌측 여백 ({ribbonMarginLeft}mm)</label>
                     <input
-                      type="range" min="0" max="38" value={ribbonMarginLeft}
+                      type="range" min="0" max={ribbonMarginMax} value={Math.min(ribbonMarginLeft, ribbonMarginMax)}
                       onChange={e => setRibbonMarginLeft(Number(e.target.value))}
                       className="w-full mt-2 cursor-pointer accent-rose-500"
                     />
@@ -2643,7 +2958,7 @@ export default function App() {
                   <div>
                     <label className="text-[11px] md:text-xs font-bold text-slate-700">우측 여백 ({ribbonMarginRight}mm)</label>
                     <input
-                      type="range" min="0" max="38" value={ribbonMarginRight}
+                      type="range" min="0" max={ribbonMarginMax} value={Math.min(ribbonMarginRight, ribbonMarginMax)}
                       onChange={e => setRibbonMarginRight(Number(e.target.value))}
                       className="w-full mt-2 cursor-pointer accent-rose-500"
                     />
@@ -2651,7 +2966,7 @@ export default function App() {
                 </div>
 
                 <div className={`text-xs font-bold rounded-lg px-3 py-2 ${ribbonContentWidthMm > 0 ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-red-50 text-red-700 border border-red-300'}`}>
-                  현재 인쇄 폭(용지 80mm 기준): 약 {ribbonContentWidthMm.toFixed(0)}mm
+                  현재 인쇄 폭(용지 {ribbonPaperWidth}mm 기준): 약 {ribbonContentWidthMm.toFixed(0)}mm
                   {ribbonContentWidthMm <= 0 && ' — 여백 합이 너무 커서 인쇄 영역이 없습니다.'}
                 </div>
 
@@ -2674,6 +2989,26 @@ export default function App() {
                   </label>
                 </div>
 
+                <div className="border-t border-slate-200 pt-3 mt-2 space-y-2">
+                  <div className="text-[11px] md:text-xs font-bold text-slate-700">☁️ Supabase 양식 저장 / 불러오기</div>
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto] gap-2">
+                    <select
+                      value={selectedRibbonTemplateId}
+                      onChange={e => setSelectedRibbonTemplateId(e.target.value)}
+                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                    >
+                      <option value="">저장된 양식 선택</option>
+                      {ribbonTemplates.map(t => (
+                        <option key={t.id} value={t.id}>{t.name}{t.is_default ? ' ★기본' : ''}</option>
+                      ))}
+                    </select>
+                    <button onClick={handleSaveRibbonTemplate} disabled={ribbonTemplateLoading} className="px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">{ribbonTemplateLoading ? '저장 중…' : '현재 양식 저장'}</button>
+                    <button onClick={handleLoadRibbonTemplate} className="px-3 py-2 rounded-xl bg-white border border-slate-400 text-slate-800 text-xs font-bold">불러오기</button>
+                    <button onClick={handleSetDefaultRibbonTemplate} className="px-3 py-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-800 text-xs font-bold">기본 지정</button>
+                  </div>
+                  <p className="text-[10px] text-slate-500">글꼴·크기·자간·행간·용지폭·여백·굵기·가이드선·인쇄매수를 한꺼번에 저장합니다.</p>
+                </div>
+
                 <button
                   onClick={handlePrintRibbon}
                   className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-black font-bold rounded-xl text-sm shadow-sm cursor-pointer mt-2"
@@ -2687,7 +3022,7 @@ export default function App() {
                 <label className="text-[11px] md:text-xs font-bold text-slate-700 mb-1 block">미리보기 (실제 인쇄물과 비율이 다소 다를 수 있습니다)</label>
                 <div className="border border-slate-300 rounded-xl bg-slate-50 p-3 overflow-x-auto flex justify-center">
                   <div
-                    style={{ width: '80mm', minHeight: '60mm', background: '#fff', boxSizing: 'border-box' }}
+                    style={{ width: `${ribbonPaperWidth}mm`, minHeight: '60mm', background: '#fff', boxSizing: 'border-box' }}
                     className="shadow-sm"
                   >
                     <div
