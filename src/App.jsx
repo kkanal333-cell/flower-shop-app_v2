@@ -569,7 +569,8 @@ export default function App() {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    input.capture = 'environment';
+    // capture 속성을 사용하지 않아 모바일에서도 카메라가 아닌
+    // 기기에 저장된 사진/앨범을 선택할 수 있도록 합니다.
     input.onchange = async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
@@ -1593,6 +1594,21 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-100/70 flex flex-col md:flex-row pb-12 md:pb-0">
       <style>{`
+        button,
+        button *,
+        [role="button"],
+        [role="button"] *,
+        .text-rose-600,
+        .text-rose-700,
+        .text-rose-800,
+        .text-slate-500,
+        .text-slate-600,
+        .text-slate-700,
+        .text-slate-800,
+        .text-slate-900 {
+          color: #000 !important;
+        }
+
         .fc .fc-daygrid-body-unbalanced .fc-daygrid-day-events {
           min-height: 0.8em !important;
         }
@@ -1711,20 +1727,44 @@ export default function App() {
 
       <main className="flex-1 p-2 md:p-5 max-w-6xl mx-auto w-full">
         {photoViewer && (
-          <div className="fixed inset-0 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-4 z-[70]" onClick={() => setPhotoViewer(null)}>
-            <div className="bg-white rounded-2xl p-3 md:p-5 max-w-3xl w-full max-h-[92vh] shadow-2xl" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between gap-3 mb-3">
-                <div className="text-sm font-bold text-slate-900">📷 완성 작품 사진</div>
-                <div className="flex gap-2">
-                  <button onClick={() => { const o = orders.find(x => String(x.id) === String(photoViewer.order_id)); if (o) handleOrderPhotoUpload(o); }} className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold border border-slate-300">교체</button>
-                  <button onClick={() => handleOrderPhotoDelete(photoViewer.order_id)} className="px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-300">삭제</button>
-                  <button onClick={() => setPhotoViewer(null)} className="px-3 py-1.5 rounded-lg bg-slate-800 text-white text-xs font-bold">닫기</button>
+          <div
+            className="fixed inset-0 bg-black/90 flex items-center justify-center p-3 md:p-6 z-[9999]"
+            onClick={() => setPhotoViewer(null)}
+            role="dialog"
+            aria-modal="true"
+            aria-label="완성 작품 사진"
+          >
+            <div
+              className="relative bg-white rounded-xl p-2 md:p-3 w-auto max-w-[92vw] max-h-[88vh] shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-3 mb-2 px-1">
+                <div className="text-xs md:text-sm font-bold text-black">완성 작품 사진</div>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => handleOrderPhotoDelete(photoViewer.order_id)}
+                    className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-100 text-black text-[11px] font-bold border border-black"
+                  >
+                    삭제
+                  </button>
+                  <button
+                    onClick={() => setPhotoViewer(null)}
+                    className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-100 text-black text-[11px] font-bold border border-black"
+                  >
+                    닫기
+                  </button>
                 </div>
               </div>
-              <div className="bg-slate-100 rounded-xl p-2 flex items-center justify-center max-h-[78vh] overflow-auto">
-                <img src={photoViewer.public_url} alt="완성 작품" className="max-w-full max-h-[74vh] object-contain rounded-lg" />
+              <div className="bg-black rounded-lg flex items-center justify-center max-w-[88vw] max-h-[78vh] overflow-hidden">
+                <img
+                  src={photoViewer.public_url}
+                  alt="완성 작품"
+                  className="block max-w-[88vw] max-h-[76vh] w-auto h-auto object-contain"
+                />
               </div>
-              <div className="text-[11px] text-slate-500 mt-2 text-right">업로드 파일: {photoViewer.original_name || '-'} · {photoViewer.size_bytes ? `${Math.round(photoViewer.size_bytes / 1024)}KB` : ''}</div>
+              <div className="text-[10px] text-black mt-1 px-1 text-right truncate max-w-[88vw]">
+                {photoViewer.original_name || '-'} · {photoViewer.size_bytes ? `${Math.round(photoViewer.size_bytes / 1024)}KB` : ''}
+              </div>
             </div>
           </div>
         )}
@@ -1932,7 +1972,7 @@ export default function App() {
                         className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium pr-14"
                         placeholder="예: 55"
                       />
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-rose-600 pointer-events-none">
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-black pointer-events-none">
                         = {((Number(newOrder.amount_thousands) || 0) * 1000).toLocaleString()}원
                       </span>
                     </div>
@@ -2097,7 +2137,7 @@ export default function App() {
                       style={{ backgroundColor: '#ffffff' }}
                       placeholder="예: 55"
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-rose-600 pointer-events-none">
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-black pointer-events-none">
                       = {((Number(newOrder.amount_thousands) || 0) * 1000).toLocaleString()}원
                     </span>
                   </div>
@@ -2280,17 +2320,17 @@ export default function App() {
                     <table className="w-full text-left border-collapse table-fixed min-w-[840px]">
                       <thead>
                         <tr className="border-b border-slate-200 text-slate-700 text-xs md:text-sm bg-slate-100 font-bold">
-                          <th className="py-2.5 px-2 w-28">픽업일시</th>
-                          <th className="py-2.5 px-2 w-20">고객명</th>
-                          <th className="py-2.5 px-2 w-28">연락처</th>
-                          <th className="py-2.5 px-2 w-20">상품명</th>
-                          <th className="py-2.5 px-2 w-20">금액</th>
-                          <th className="py-2.5 px-2 w-20">결제수단</th>
-                          <th className="py-2.5 px-2 w-28">메모</th>
-                          <th className="py-2.5 px-2 w-24">접수일시</th>
-                          <th className="py-2.5 px-2 w-24 text-center">관리 / 출력</th>
-                          <th className="py-2.5 px-2 w-16 text-center">사진</th>
-                          <th className="py-2.5 px-2 w-12 text-center">
+                          <th className="py-1 px-1 w-24">픽업일시</th>
+                          <th className="py-1 px-1 w-16">고객명</th>
+                          <th className="py-1 px-1 w-24">연락처</th>
+                          <th className="py-1 px-1 w-16">상품명</th>
+                          <th className="py-1 px-1 w-16">금액</th>
+                          <th className="py-1 px-1 w-16">결제수단</th>
+                          <th className="py-1 px-1 w-24">메모</th>
+                          <th className="py-1 px-1 w-24">접수일시</th>
+                          <th className="py-1 px-1 w-20 text-center">관리 / 출력</th>
+                          <th className="py-1 px-1 w-12 text-center">사진</th>
+                          <th className="py-1 px-1 w-10 text-center">
                             <input
                               type="checkbox"
                               onChange={handleToggleSelectAllOrders}
@@ -2321,37 +2361,37 @@ export default function App() {
                                     : 'text-slate-900 hover:bg-slate-50'
                                 }`}
                               >
-                                <td className={`py-2.5 px-2 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
+                                <td className={`py-1 px-1 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
                                   {formatShortDateTime(o.pickup_datetime)}
                                 </td>
-                                <td className={`py-2.5 px-2 truncate ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
+                                <td className={`py-1 px-1 truncate ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
                                   {o.customers?.name || '-'}
                                 </td>
-                                <td className={`py-2.5 px-2 truncate ${isPast ? 'text-slate-300' : 'text-slate-700'}`}>
+                                <td className={`py-1 px-1 truncate ${isPast ? 'text-slate-300' : 'text-slate-700'}`}>
                                   {o.customers?.phone || '-'}
                                 </td>
-                                <td className={`py-2.5 px-2 truncate ${isPast ? 'text-slate-300' : 'text-slate-800'}`}>
+                                <td className={`py-1 px-1 truncate ${isPast ? 'text-slate-300' : 'text-slate-800'}`}>
                                   {o.product_name}
                                 </td>
-                                <td className={`py-2.5 px-2 truncate ${isPast ? 'text-slate-300' : 'text-rose-600'}`}>
+                                <td className={`py-1 px-1 truncate ${isPast ? 'text-slate-300' : 'text-rose-600'}`}>
                                   {o.amount?.toLocaleString()}원
                                 </td>
-                                <td className="py-2.5 px-2">
+                                <td className="py-1 px-1">
                                   <span className={`px-1.5 py-0.5 border rounded text-[11px] block text-center truncate ${
                                     isPast ? 'bg-slate-100 border-slate-200 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-800'
                                   }`}>
                                     {o.payment_method}
                                   </span>
                                 </td>
-                                <td className={`py-2.5 px-2 truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo}>
+                                <td className={`py-1 px-1 truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo}>
                                   {o.memo || '-'}
                                 </td>
-                                <td className={`py-2.5 px-2 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-500'}`}>
+                                <td className={`py-1 px-1 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-500'}`}>
                                   {formatShortDateTime(o.created_at)}
                                 </td>
                                 
-                                <td className="py-2.5 px-2 text-center">
-                                  <div className="flex items-center justify-center gap-1">
+                                <td className="py-1 px-1 text-center">
+                                  <div className="flex items-center justify-center gap-0.5">
                                     <button
                                       onClick={() => startEditOrder(o)}
                                       className={`text-[11px] bg-white hover:bg-slate-100 border px-1.5 py-0.5 rounded cursor-pointer shadow-2xs ${
@@ -2370,9 +2410,9 @@ export default function App() {
                                   </div>
                                 </td>
 
-                                <td className="py-2.5 px-2 text-center">
+                                <td className="py-1 px-1 text-center">
                                   {photoMap[String(o.id)] ? (
-                                    <div className="flex items-center justify-center gap-1">
+                                    <div className="flex items-center justify-center gap-0.5">
                                       <button
                                         onClick={() => setPhotoViewer(photoMap[String(o.id)])}
                                         className="text-[11px] bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-700 px-1.5 py-0.5 rounded cursor-pointer"
@@ -2400,7 +2440,7 @@ export default function App() {
                                   )}
                                 </td>
 
-                                <td className="py-2.5 px-2 text-center">
+                                <td className="py-1 px-1 text-center">
                                   <input
                                     type="checkbox"
                                     checked={selectedOrderIds.includes(o.id)}
