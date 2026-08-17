@@ -1748,17 +1748,29 @@ export default function App() {
       <main className="flex-1 p-2 md:p-5 max-w-6xl mx-auto w-full">
         {photoViewer && (
           <div
-            className="fixed inset-0 bg-black flex items-center justify-center p-3 md:p-6 z-[9999] overflow-y-auto"
+            className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 overflow-y-auto"
+            style={{ padding: '16px' }}
             onClick={() => setPhotoViewer(null)}
             role="dialog"
             aria-modal="true"
             aria-label="완성 작품 사진"
           >
             <div
-              className="relative bg-white rounded-xl w-full max-w-[420px] md:max-w-[480px] max-h-[85vh] shadow-2xl flex flex-col overflow-hidden"
+              className="relative bg-white rounded-xl shadow-xl border border-slate-200"
+              style={{
+                width: '100%',
+                maxWidth: '380px',
+                maxHeight: '80vh',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden'
+              }}
               onClick={e => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-slate-200 bg-white shrink-0">
+              <div
+                className="flex items-center justify-between gap-3 px-3 py-2 border-b border-slate-200 bg-white"
+                style={{ flexShrink: 0 }}
+              >
                 <div className="text-xs md:text-sm font-bold text-black">완성 작품 사진</div>
                 <div className="flex gap-1.5">
                   <button
@@ -1775,14 +1787,28 @@ export default function App() {
                   </button>
                 </div>
               </div>
-              <div className="bg-black flex items-center justify-center overflow-hidden p-2">
+              <div
+                className="flex items-center justify-center bg-slate-50"
+                style={{ padding: '10px', overflow: 'hidden' }}
+              >
                 <img
                   src={photoViewer.public_url}
                   alt="완성 작품"
-                  className="block max-w-full max-h-[55vh] md:max-h-[60vh] w-auto h-auto object-contain"
+                  style={{
+                    display: 'block',
+                    maxWidth: '100%',
+                    maxHeight: '55vh',
+                    width: 'auto',
+                    height: 'auto',
+                    objectFit: 'contain',
+                    borderRadius: '4px'
+                  }}
                 />
               </div>
-              <div className="text-[10px] text-black px-3 py-1.5 border-t border-slate-200 bg-white text-right truncate shrink-0">
+              <div
+                className="text-[10px] text-black px-3 py-1.5 border-t border-slate-200 bg-white text-right truncate"
+                style={{ flexShrink: 0 }}
+              >
                 {photoViewer.original_name || '-'} · {photoViewer.size_bytes ? `${Math.round(photoViewer.size_bytes / 1024)}KB` : ''}
               </div>
             </div>
@@ -2340,17 +2366,17 @@ export default function App() {
                     <table className="w-full text-left border-collapse table-fixed min-w-[780px]">
                       <thead>
                         <tr className="border-b border-slate-200 text-slate-700 text-xs md:text-sm bg-slate-100 font-bold">
-                          <th className="py-0.5 px-0.5 w-24">픽업일시</th>
-                          <th className="py-0.5 px-0.5 w-16">고객명</th>
-                          <th className="py-0.5 px-0.5 w-24">연락처</th>
-                          <th className="py-0.5 px-0.5 w-16">상품명</th>
-                          <th className="py-0.5 px-0.5 w-16">금액</th>
-                          <th className="py-0.5 px-0.5 w-16">결제수단</th>
-                          <th className="py-0.5 px-0.5 w-24">메모</th>
-                          <th className="py-0.5 px-0.5 w-24">접수일시</th>
-                          <th className="py-0.5 px-0.5 w-20 text-center">관리 / 출력</th>
-                          <th className="py-0.5 px-0.5 w-10 text-center">사진</th>
-                          <th className="py-0.5 px-0.5 w-8 text-center">
+                          <th className="px-0.5 w-24" style={{ paddingTop: '3px', paddingBottom: '3px' }}>픽업일시</th>
+                          <th className="px-0.5 w-16" style={{ paddingTop: '3px', paddingBottom: '3px' }}>고객명</th>
+                          <th className="px-0.5 w-24" style={{ paddingTop: '3px', paddingBottom: '3px' }}>연락처</th>
+                          <th className="px-0.5 w-16" style={{ paddingTop: '3px', paddingBottom: '3px' }}>상품명</th>
+                          <th className="px-0.5 w-16" style={{ paddingTop: '3px', paddingBottom: '3px' }}>금액</th>
+                          <th className="px-0.5 w-16" style={{ paddingTop: '3px', paddingBottom: '3px' }}>결제수단</th>
+                          <th className="px-0.5 w-24" style={{ paddingTop: '3px', paddingBottom: '3px' }}>메모</th>
+                          <th className="px-0.5 w-24" style={{ paddingTop: '3px', paddingBottom: '3px' }}>접수일시</th>
+                          <th className="px-0.5 w-20 text-center" style={{ paddingTop: '3px', paddingBottom: '3px' }}>관리 / 출력</th>
+                          <th className="px-0.5 w-10 text-center" style={{ paddingTop: '3px', paddingBottom: '3px' }}>사진</th>
+                          <th className="px-0.5 w-8 text-center" style={{ paddingTop: '3px', paddingBottom: '3px' }}>
                             <input
                               type="checkbox"
                               onChange={handleToggleSelectAllOrders}
@@ -2371,6 +2397,7 @@ export default function App() {
                           sortedAndFilteredOrders.map(o => {
                             const pickupDate = o.pickup_datetime ? o.pickup_datetime.replace(' ', 'T').split('T')[0] : '';
                             const isPast = pickupDate !== '' && pickupDate < todayDateStr;
+                            const cellPad = { paddingTop: '3px', paddingBottom: '3px' };
 
                             return (
                               <tr 
@@ -2381,36 +2408,36 @@ export default function App() {
                                     : 'text-slate-900 hover:bg-slate-50'
                                 }`}
                               >
-                                <td className={`py-0.5 px-0.5 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
+                                <td className={`px-0.5 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`} style={cellPad}>
                                   {formatShortDateTime(o.pickup_datetime)}
                                 </td>
-                                <td className={`py-0.5 px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
+                                <td className={`px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-slate-900'}`} style={cellPad}>
                                   {o.customers?.name || '-'}
                                 </td>
-                                <td className={`py-0.5 px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-slate-700'}`}>
+                                <td className={`px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-slate-700'}`} style={cellPad}>
                                   {o.customers?.phone || '-'}
                                 </td>
-                                <td className={`py-0.5 px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-slate-800'}`}>
+                                <td className={`px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-slate-800'}`} style={cellPad}>
                                   {o.product_name}
                                 </td>
-                                <td className={`py-0.5 px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-rose-600'}`}>
+                                <td className={`px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-rose-600'}`} style={cellPad}>
                                   {o.amount?.toLocaleString()}원
                                 </td>
-                                <td className="py-0.5 px-0.5">
+                                <td className="px-0.5" style={cellPad}>
                                   <span className={`px-1 py-0.5 border rounded text-[11px] block text-center truncate ${
                                     isPast ? 'bg-slate-100 border-slate-200 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-800'
                                   }`}>
                                     {o.payment_method}
                                   </span>
                                 </td>
-                                <td className={`py-0.5 px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo}>
+                                <td className={`px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo} style={cellPad}>
                                   {o.memo || '-'}
                                 </td>
-                                <td className={`py-0.5 px-0.5 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-500'}`}>
+                                <td className={`px-0.5 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-500'}`} style={cellPad}>
                                   {formatShortDateTime(o.created_at)}
                                 </td>
                                 
-                                <td className="py-0.5 px-0.5 text-center">
+                                <td className="px-0.5 text-center" style={cellPad}>
                                   <div className="flex items-center justify-center gap-0.5">
                                     <button
                                       onClick={() => startEditOrder(o)}
@@ -2430,11 +2457,11 @@ export default function App() {
                                   </div>
                                 </td>
 
-                                <td className="py-0.5 px-0.5 text-center">
+                                <td className="px-0.5 text-center" style={cellPad}>
                                   {photoMap[String(o.id)] ? (
                                     <button
                                       onClick={() => setPhotoViewer(photoMap[String(o.id)])}
-                                      className="text-[11px] bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-700 px-1 py-0.5 rounded cursor-pointer whitespace-nowrap"
+                                      className="text-[11px] bg-lime-100 hover:bg-lime-200 border border-lime-400 text-lime-900 px-1 py-0.5 rounded cursor-pointer whitespace-nowrap font-bold"
                                       title="작품 사진 보기"
                                     >
                                       보기
@@ -2450,7 +2477,7 @@ export default function App() {
                                   )}
                                 </td>
 
-                                <td className="py-0.5 px-0.5 text-center">
+                                <td className="px-0.5 text-center" style={cellPad}>
                                   <input
                                     type="checkbox"
                                     checked={selectedOrderIds.includes(o.id)}
