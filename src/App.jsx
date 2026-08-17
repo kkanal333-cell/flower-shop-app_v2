@@ -2512,15 +2512,15 @@ export default function App() {
                       <thead>
                         <tr className="border-b border-slate-200 text-slate-700 text-xs md:text-sm bg-slate-100 font-bold">
                           <th className="px-0.5 w-24" style={{ paddingTop: '3px', paddingBottom: '3px' }}>픽업일시</th>
-                          <th className="px-0.5 w-14" style={{ paddingTop: '3px', paddingBottom: '3px' }}>고객명</th>
+                          <th className="px-0.5 w-16" style={{ paddingTop: '3px', paddingBottom: '3px' }}>고객명</th>
                           <th className="px-0.5 w-24" style={{ paddingTop: '3px', paddingBottom: '3px' }}>연락처</th>
-                          <th className="px-0.5 w-14" style={{ paddingTop: '3px', paddingBottom: '3px' }}>상품명</th>
+                          <th className="px-0.5 w-16" style={{ paddingTop: '3px', paddingBottom: '3px' }}>상품명</th>
                           <th className="px-0.5 w-16" style={{ paddingTop: '3px', paddingBottom: '3px' }}>금액</th>
                           <th className="px-0.5 w-16" style={{ paddingTop: '3px', paddingBottom: '3px' }}>결제수단</th>
                           <th className="px-0.5 w-24" style={{ paddingTop: '3px', paddingBottom: '3px' }}>메모</th>
-                          <th className="px-0.5 w-22" style={{ paddingTop: '3px', paddingBottom: '3px' }}>접수일시</th>
+                          <th className="px-0.5 w-24" style={{ paddingTop: '3px', paddingBottom: '3px' }}>접수일시</th>
                           <th className="px-0.5 w-20 text-center" style={{ paddingTop: '3px', paddingBottom: '3px' }}>관리 / 출력</th>
-                          <th className="px-0.5 w-12 text-center" style={{ paddingTop: '3px', paddingBottom: '3px' }}>사진</th>
+                          <th className="px-0.5 w-10 text-center" style={{ paddingTop: '3px', paddingBottom: '3px' }}>사진</th>
                           <th className="px-0.5 w-8 text-center" style={{ paddingTop: '3px', paddingBottom: '3px' }}>
                             <input
                               type="checkbox"
