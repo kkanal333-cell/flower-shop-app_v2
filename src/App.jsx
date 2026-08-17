@@ -1759,8 +1759,8 @@ export default function App() {
               className="relative bg-white rounded-xl shadow-xl border border-slate-200"
               style={{
                 width: '100%',
-                maxWidth: '380px',
-                maxHeight: '80vh',
+                maxWidth: '520px',
+                maxHeight: '85vh',
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden'
@@ -1797,7 +1797,7 @@ export default function App() {
                   style={{
                     display: 'block',
                     maxWidth: '100%',
-                    maxHeight: '55vh',
+                    maxHeight: '70vh',
                     width: 'auto',
                     height: 'auto',
                     objectFit: 'contain',
