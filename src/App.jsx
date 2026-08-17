@@ -571,9 +571,28 @@ export default function App() {
     input.accept = 'image/*';
     // capture 속성을 사용하지 않아 모바일에서도 카메라가 아닌
     // 기기에 저장된 사진/앨범을 선택할 수 있도록 합니다.
+    // 일부 모바일 브라우저는 DOM에 붙어있지 않은 input 요소를 클릭하면
+    // 사진 선택 대신 카메라 촬영으로 바로 진입하는 경우가 있어,
+    // 화면에 보이지 않게 body에 추가한 뒤 클릭하고 사용 후 제거합니다.
+    input.style.position = 'fixed';
+    input.style.top = '-9999px';
+    input.style.left = '-9999px';
+    input.style.opacity = '0';
+    document.body.appendChild(input);
+
+    const cleanupInput = () => {
+      if (input.parentNode) input.parentNode.removeChild(input);
+    };
+    // 사용자가 파일 선택을 취소한 경우에도 정리되도록 창이 다시
+    // 포커스를 받으면(=선택창이 닫히면) 잠시 후 input을 제거합니다.
+    window.addEventListener('focus', function onFocusOnce() {
+      window.removeEventListener('focus', onFocusOnce);
+      setTimeout(cleanupInput, 500);
+    }, { once: true });
+
     input.onchange = async (e) => {
       const file = e.target.files?.[0];
-      if (!file) return;
+      if (!file) { cleanupInput(); return; }
       setPhotoUploadingOrderId(order.id);
       try {
         const blob = await compressOrderPhoto(file);
@@ -609,6 +628,7 @@ export default function App() {
         alert('작품 사진 업로드 실패: ' + err.message);
       } finally {
         setPhotoUploadingOrderId(null);
+        cleanupInput();
       }
     };
     input.click();
@@ -1728,17 +1748,17 @@ export default function App() {
       <main className="flex-1 p-2 md:p-5 max-w-6xl mx-auto w-full">
         {photoViewer && (
           <div
-            className="fixed inset-0 bg-black/90 flex items-center justify-center p-3 md:p-6 z-[9999]"
+            className="fixed inset-0 bg-black flex items-center justify-center p-3 md:p-6 z-[9999] overflow-y-auto"
             onClick={() => setPhotoViewer(null)}
             role="dialog"
             aria-modal="true"
             aria-label="완성 작품 사진"
           >
             <div
-              className="relative bg-white rounded-xl p-2 md:p-3 w-auto max-w-[92vw] max-h-[88vh] shadow-2xl"
+              className="relative bg-white rounded-xl w-full max-w-[420px] md:max-w-[480px] max-h-[85vh] shadow-2xl flex flex-col overflow-hidden"
               onClick={e => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between gap-3 mb-2 px-1">
+              <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-slate-200 bg-white shrink-0">
                 <div className="text-xs md:text-sm font-bold text-black">완성 작품 사진</div>
                 <div className="flex gap-1.5">
                   <button
@@ -1755,14 +1775,14 @@ export default function App() {
                   </button>
                 </div>
               </div>
-              <div className="bg-black rounded-lg flex items-center justify-center max-w-[88vw] max-h-[78vh] overflow-hidden">
+              <div className="bg-black flex items-center justify-center overflow-hidden p-2">
                 <img
                   src={photoViewer.public_url}
                   alt="완성 작품"
-                  className="block max-w-[88vw] max-h-[76vh] w-auto h-auto object-contain"
+                  className="block max-w-full max-h-[55vh] md:max-h-[60vh] w-auto h-auto object-contain"
                 />
               </div>
-              <div className="text-[10px] text-black mt-1 px-1 text-right truncate max-w-[88vw]">
+              <div className="text-[10px] text-black px-3 py-1.5 border-t border-slate-200 bg-white text-right truncate shrink-0">
                 {photoViewer.original_name || '-'} · {photoViewer.size_bytes ? `${Math.round(photoViewer.size_bytes / 1024)}KB` : ''}
               </div>
             </div>
@@ -2065,7 +2085,7 @@ export default function App() {
             <form onSubmit={handleCreateOrder} className="space-y-3 md:space-y-4">
               <div className="grid grid-cols-2 gap-2 md:gap-4 relative">
                 <div className="relative">
-                  <label className="text-[11px] md:text-xs font-bold text-slate-700">고객 성명 *</label>
+                  <label className="text-[11px] md:text-xs font-bold text-black">고객 성명 *</label>
                   <input
                     type="text"
                     lang="ko"
@@ -2074,25 +2094,25 @@ export default function App() {
                     spellCheck={false}
                     value={newOrder.customer_name}
                     onChange={e => handleCustomerNameChange(e.target.value)}
-                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
                     style={{ backgroundColor: '#ffffff' }}
                     placeholder="홍길동"
                     required
                   />
 
                   {matchedCustomerList.length > 0 && (
-                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-rose-300 rounded-xl shadow-lg z-20 max-h-48 overflow-y-auto p-1">
-                      <div className="text-[11px] text-rose-600 font-bold px-2 py-1 bg-rose-50 rounded-t-lg">
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-300 rounded-xl shadow-lg z-20 max-h-48 overflow-y-auto p-1">
+                      <div className="text-[11px] text-black font-bold px-2 py-1 bg-slate-100 rounded-t-lg">
                         💡 검색된 고객 목록:
                       </div>
                       {matchedCustomerList.map(c => (
                         <div
                           key={c.id || c.name}
                           onClick={() => selectCustomerForNewOrder(c)}
-                          className="p-2 text-xs hover:bg-rose-50 rounded-lg cursor-pointer flex justify-between items-center"
+                          className="p-2 text-xs hover:bg-slate-100 rounded-lg cursor-pointer flex justify-between items-center"
                         >
-                          <span className="font-bold text-slate-900">{c.name}</span>
-                          <span className="text-slate-600 text-[11px]">{c.phone || '-'}</span>
+                          <span className="font-bold text-black">{c.name}</span>
+                          <span className="text-black text-[11px]">{c.phone || '-'}</span>
                         </div>
                       ))}
                     </div>
@@ -2100,13 +2120,13 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-slate-700">휴대폰 번호 *</label>
+                  <label className="text-[11px] md:text-xs font-bold text-black">휴대폰 번호 *</label>
                   <input
                     type="text"
                     inputMode="numeric"
                     value={newOrder.phone}
                     onChange={e => setNewOrder({...newOrder, phone: formatPhone(e.target.value)})}
-                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
                     style={{ backgroundColor: '#ffffff' }}
                     placeholder="010-0000-0000"
                     required
@@ -2116,24 +2136,24 @@ export default function App() {
 
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-slate-700">상품종류 *</label>
+                  <label className="text-[11px] md:text-xs font-bold text-black">상품종류 *</label>
                   <select
                     value={newOrder.product_name}
                     onChange={e => setNewOrder({...newOrder, product_name: e.target.value})}
-                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
                     style={{ backgroundColor: '#ffffff' }}
                   >
                     {PRODUCT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-slate-700">결제 금액 (천원 단위)</label>
+                  <label className="text-[11px] md:text-xs font-bold text-black">결제 금액 (천원 단위)</label>
                   <div className="relative mt-1">
                     <input
                       type="number"
                       value={newOrder.amount_thousands}
                       onChange={e => setNewOrder({...newOrder, amount_thousands: e.target.value})}
-                      className="w-full p-2 md:p-3 border border-slate-300 rounded-xl text-xs md:text-sm bg-white text-slate-900 font-medium pr-16"
+                      className="w-full p-2 md:p-3 border border-slate-300 rounded-xl text-xs md:text-sm bg-white text-black font-medium pr-16"
                       style={{ backgroundColor: '#ffffff' }}
                       placeholder="예: 55"
                     />
@@ -2146,17 +2166,17 @@ export default function App() {
 
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-slate-700">픽업 날짜 *</label>
+                  <label className="text-[11px] md:text-xs font-bold text-black">픽업 날짜 *</label>
                   <input
                     type="date"
                     value={newOrder.pickup_date}
                     onChange={e => setNewOrder({...newOrder, pickup_date: e.target.value})}
-                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
                     style={{ backgroundColor: '#ffffff' }}
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-slate-700">픽업 시간 *</label>
+                  <label className="text-[11px] md:text-xs font-bold text-black">픽업 시간 *</label>
                   <TimePickerCustom
                     value={newOrder.pickup_time}
                     onChange={val => setNewOrder({...newOrder, pickup_time: val})}
@@ -2167,33 +2187,33 @@ export default function App() {
 
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-slate-700">접수 날짜</label>
+                  <label className="text-[11px] md:text-xs font-bold text-black">접수 날짜</label>
                   <input
                     type="date"
                     value={newOrder.receipt_date}
                     onChange={e => setNewOrder({...newOrder, receipt_date: e.target.value})}
-                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm text-slate-800 font-medium"
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm text-black font-medium"
                     style={{ backgroundColor: '#f1f5f9' }}
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-slate-700">접수 시간</label>
+                  <label className="text-[11px] md:text-xs font-bold text-black">접수 시간</label>
                   <input
                     type="time"
                     value={newOrder.receipt_time}
                     onChange={e => setNewOrder({...newOrder, receipt_time: e.target.value})}
-                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm text-slate-800 font-medium"
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm text-black font-medium"
                     style={{ backgroundColor: '#f1f5f9' }}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-[11px] md:text-xs font-bold text-slate-700">결제 방식 *</label>
+                <label className="text-[11px] md:text-xs font-bold text-black">결제 방식 *</label>
                 <select
                   value={newOrder.payment_method}
                   onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
-                  className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
+                  className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
                   style={{ backgroundColor: '#ffffff' }}
                 >
                   {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
@@ -2201,7 +2221,7 @@ export default function App() {
               </div>
 
               <div>
-                <label className="text-[11px] md:text-xs font-bold text-slate-700">고객 요구사항 / 메모</label>
+                <label className="text-[11px] md:text-xs font-bold text-black">고객 요구사항 / 메모</label>
                 <textarea
                   lang="ko"
                   autoCapitalize="off"
@@ -2214,7 +2234,7 @@ export default function App() {
                   }}
                   onFocus={e => e.target.select()}
                   className={`w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white font-medium transition-colors ${
-                    isMemoAutofilled ? 'text-slate-300' : 'text-slate-900'
+                    isMemoAutofilled ? 'text-slate-300' : 'text-black'
                   }`}
                   style={{ backgroundColor: '#ffffff' }}
                   rows={3}
@@ -2317,20 +2337,20 @@ export default function App() {
                   </div>
 
                   <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                    <table className="w-full text-left border-collapse table-fixed min-w-[840px]">
+                    <table className="w-full text-left border-collapse table-fixed min-w-[780px]">
                       <thead>
                         <tr className="border-b border-slate-200 text-slate-700 text-xs md:text-sm bg-slate-100 font-bold">
-                          <th className="py-1 px-1 w-24">픽업일시</th>
-                          <th className="py-1 px-1 w-16">고객명</th>
-                          <th className="py-1 px-1 w-24">연락처</th>
-                          <th className="py-1 px-1 w-16">상품명</th>
-                          <th className="py-1 px-1 w-16">금액</th>
-                          <th className="py-1 px-1 w-16">결제수단</th>
-                          <th className="py-1 px-1 w-24">메모</th>
-                          <th className="py-1 px-1 w-24">접수일시</th>
-                          <th className="py-1 px-1 w-20 text-center">관리 / 출력</th>
-                          <th className="py-1 px-1 w-12 text-center">사진</th>
-                          <th className="py-1 px-1 w-10 text-center">
+                          <th className="py-0.5 px-0.5 w-24">픽업일시</th>
+                          <th className="py-0.5 px-0.5 w-16">고객명</th>
+                          <th className="py-0.5 px-0.5 w-24">연락처</th>
+                          <th className="py-0.5 px-0.5 w-16">상품명</th>
+                          <th className="py-0.5 px-0.5 w-16">금액</th>
+                          <th className="py-0.5 px-0.5 w-16">결제수단</th>
+                          <th className="py-0.5 px-0.5 w-24">메모</th>
+                          <th className="py-0.5 px-0.5 w-24">접수일시</th>
+                          <th className="py-0.5 px-0.5 w-20 text-center">관리 / 출력</th>
+                          <th className="py-0.5 px-0.5 w-10 text-center">사진</th>
+                          <th className="py-0.5 px-0.5 w-8 text-center">
                             <input
                               type="checkbox"
                               onChange={handleToggleSelectAllOrders}
@@ -2361,40 +2381,40 @@ export default function App() {
                                     : 'text-slate-900 hover:bg-slate-50'
                                 }`}
                               >
-                                <td className={`py-1 px-1 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
+                                <td className={`py-0.5 px-0.5 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
                                   {formatShortDateTime(o.pickup_datetime)}
                                 </td>
-                                <td className={`py-1 px-1 truncate ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
+                                <td className={`py-0.5 px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
                                   {o.customers?.name || '-'}
                                 </td>
-                                <td className={`py-1 px-1 truncate ${isPast ? 'text-slate-300' : 'text-slate-700'}`}>
+                                <td className={`py-0.5 px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-slate-700'}`}>
                                   {o.customers?.phone || '-'}
                                 </td>
-                                <td className={`py-1 px-1 truncate ${isPast ? 'text-slate-300' : 'text-slate-800'}`}>
+                                <td className={`py-0.5 px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-slate-800'}`}>
                                   {o.product_name}
                                 </td>
-                                <td className={`py-1 px-1 truncate ${isPast ? 'text-slate-300' : 'text-rose-600'}`}>
+                                <td className={`py-0.5 px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-rose-600'}`}>
                                   {o.amount?.toLocaleString()}원
                                 </td>
-                                <td className="py-1 px-1">
-                                  <span className={`px-1.5 py-0.5 border rounded text-[11px] block text-center truncate ${
+                                <td className="py-0.5 px-0.5">
+                                  <span className={`px-1 py-0.5 border rounded text-[11px] block text-center truncate ${
                                     isPast ? 'bg-slate-100 border-slate-200 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-800'
                                   }`}>
                                     {o.payment_method}
                                   </span>
                                 </td>
-                                <td className={`py-1 px-1 truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo}>
+                                <td className={`py-0.5 px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo}>
                                   {o.memo || '-'}
                                 </td>
-                                <td className={`py-1 px-1 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-500'}`}>
+                                <td className={`py-0.5 px-0.5 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-500'}`}>
                                   {formatShortDateTime(o.created_at)}
                                 </td>
                                 
-                                <td className="py-1 px-1 text-center">
+                                <td className="py-0.5 px-0.5 text-center">
                                   <div className="flex items-center justify-center gap-0.5">
                                     <button
                                       onClick={() => startEditOrder(o)}
-                                      className={`text-[11px] bg-white hover:bg-slate-100 border px-1.5 py-0.5 rounded cursor-pointer shadow-2xs ${
+                                      className={`text-[11px] bg-white hover:bg-slate-100 border px-1 py-0.5 rounded cursor-pointer shadow-2xs ${
                                         isPast ? 'text-slate-400 border-slate-300' : 'text-slate-900 border-slate-800'
                                       }`}
                                     >
@@ -2402,7 +2422,7 @@ export default function App() {
                                     </button>
                                     <button
                                       onClick={() => handlePrintSingleOrder(o)}
-                                      className="text-[11px] bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 px-1.5 py-0.5 rounded cursor-pointer shadow-2xs"
+                                      className="text-[11px] bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 px-1 py-0.5 rounded cursor-pointer shadow-2xs"
                                       title="주문서 출력"
                                     >
                                       출력
@@ -2410,37 +2430,27 @@ export default function App() {
                                   </div>
                                 </td>
 
-                                <td className="py-1 px-1 text-center">
+                                <td className="py-0.5 px-0.5 text-center">
                                   {photoMap[String(o.id)] ? (
-                                    <div className="flex items-center justify-center gap-0.5">
-                                      <button
-                                        onClick={() => setPhotoViewer(photoMap[String(o.id)])}
-                                        className="text-[11px] bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-700 px-1.5 py-0.5 rounded cursor-pointer"
-                                        title="작품 사진 보기"
-                                      >
-                                        📷 보기
-                                      </button>
-                                      <button
-                                        onClick={() => handleOrderPhotoUpload(o)}
-                                        disabled={photoUploadingOrderId === o.id}
-                                        className="text-[11px] bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 px-1.5 py-0.5 rounded cursor-pointer"
-                                        title="사진 교체"
-                                      >
-                                        {photoUploadingOrderId === o.id ? '…' : '교체'}
-                                      </button>
-                                    </div>
+                                    <button
+                                      onClick={() => setPhotoViewer(photoMap[String(o.id)])}
+                                      className="text-[11px] bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-700 px-1 py-0.5 rounded cursor-pointer whitespace-nowrap"
+                                      title="작품 사진 보기"
+                                    >
+                                      보기
+                                    </button>
                                   ) : (
                                     <button
                                       onClick={() => handleOrderPhotoUpload(o)}
                                       disabled={photoUploadingOrderId === o.id}
-                                      className="text-[11px] bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 px-1.5 py-0.5 rounded cursor-pointer"
+                                      className="text-[11px] bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 px-1 py-0.5 rounded cursor-pointer whitespace-nowrap"
                                     >
-                                      {photoUploadingOrderId === o.id ? '업로드…' : '📷 사진'}
+                                      {photoUploadingOrderId === o.id ? '업로드…' : '사진'}
                                     </button>
                                   )}
                                 </td>
 
-                                <td className="py-1 px-1 text-center">
+                                <td className="py-0.5 px-0.5 text-center">
                                   <input
                                     type="checkbox"
                                     checked={selectedOrderIds.includes(o.id)}
