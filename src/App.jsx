@@ -233,27 +233,28 @@ export default function App() {
   // (새로고침/URL 이동에는 절대 관여하지 않고, 오직 브라우저 '뒤로가기' 동작만 가로챕니다)
   //
   // ※ window.confirm()을 직접 쓰지 않는 이유:
-  //   이 앱은 PWA(standalone) 모드로 실행되는데, Chrome 계열 브라우저는 같은 페이지에서
-  //   confirm()/alert() 등 네이티브 다이얼로그가 반복 호출되면 자동으로 "스팸 다이얼로그"로
-  //   판단해 그 이후 호출은 화면에 아예 띄우지 않고 조용히 무시해버립니다.
-  //   (최초 1회만 뜨고 이후로는 뜨지 않던 증상이 바로 이 브라우저 차단 때문입니다.)
-  //   그래서 네이티브 confirm 대신, 이미 앱에 있는 커스텀 모달(showBackupAlertModal)과
-  //   동일한 방식으로 React state 기반의 자체 팝업을 그려서 띄웁니다. 이 방식은 브라우저의
-  //   다이얼로그 차단 로직과 전혀 무관하므로 몇 번을 눌러도 항상 뜹니다.
+  //   PWA(standalone) 모드에서는 Chrome 계열 브라우저가 같은 페이지에서 반복되는
+  //   confirm()/alert() 다이얼로그를 "스팸"으로 판단해 이후 호출을 조용히 막아버립니다.
+  //   그래서 React state 기반의 자체 팝업(showBackupAlertModal과 동일한 방식)을 사용합니다.
+  //
+  // ※ "종료" 버튼을 눌렀을 때 왜 즉시 앱이 닫히지 않을 수 있는지:
+  //   브라우저 보안 정책상, 스크립트가 열지 않은 탭/PWA는 스크립트로 100% 강제 종료할 수
+  //   없습니다(window.close()는 조용히 무시됨). 대신 가드를 해제한 뒤 한 단계 뒤로
+  //   이동시켜 두므로, 종료를 누른 뒤 뒤로가기를 한 번만 더 누르면(또는 기기에 따라
+  //   자동으로) 완전히 종료됩니다. index.html에도 React가 뜨기 전부터 가드를 걸어두는
+  //   스크립트를 추가해, 앱 실행 직후 바로 뒤로가기를 누르는 경우도 최대한 방지합니다.
   const backGuardActiveRef = useRef(false);
   const [showExitConfirmModal, setShowExitConfirmModal] = useState(false);
+  const [showExitHint, setShowExitHint] = useState(false);
 
   useLayoutEffect(() => {
     const STATE_MARK = 'app-guard';
-
-    // 히스토리에 여유 버퍼를 여러 겹 쌓아 두어, 기기/브라우저별로 뒤로가기 한 번에
-    // 여러 단계가 소모되는 경우(삼성 갤럭시 기본 브라우저 등)에도 바로 종료되지 않도록 합니다.
     const pushGuard = () => {
       window.history.pushState({ mark: STATE_MARK, t: Date.now() }, '', window.location.href);
     };
 
-    pushGuard();
-    pushGuard();
+    // index.html의 인라인 스크립트가 이미 1차로 가드를 걸어두지만, 여기서 한 번 더
+    // 확실하게 걸어둡니다.
     pushGuard();
     backGuardActiveRef.current = true;
 
@@ -261,7 +262,7 @@ export default function App() {
       if (!backGuardActiveRef.current) return;
 
       // 뒤로가기가 감지되면, 사용자가 답하기 전에 실제로 화면을 벗어나지 않도록
-      // 버퍼를 즉시 다시 채워둔 뒤 커스텀 확인 모달을 띄웁니다.
+      // 가드를 즉시 다시 채워둔 뒤 커스텀 확인 모달을 띄웁니다.
       pushGuard();
       setShowExitConfirmModal(true);
     };
@@ -273,21 +274,22 @@ export default function App() {
     };
   }, []);
 
-  // 종료 확인 모달 - 취소: 그냥 닫기 (버퍼는 popstate 시점에 이미 다시 채워둔 상태)
+  // 종료 확인 모달 - 취소: 그냥 닫기 (가드는 popstate 시점에 이미 다시 채워둔 상태)
   const handleCancelExit = () => {
     setShowExitConfirmModal(false);
   };
 
-  // 종료 확인 모달 - 종료: 더 이상 가로채지 않고 실제로 앱을 벗어나도록 시도
-  // (웹/PWA 특성상 스크립트로 100% 강제 종료를 보장할 수는 없어 아래 방법들을 순차 시도합니다)
+  // 종료 확인 모달 - 종료: 더 이상 가로채지 않고, 딱 한 단계만 뒤로 이동시켜 둡니다.
+  // (더 이상 가드를 다시 걸지 않으므로, 여기서 뒤로가기를 한 번만 더 누르면 확실히 종료됩니다)
   const handleConfirmExit = () => {
     setShowExitConfirmModal(false);
     backGuardActiveRef.current = false;
     window.close();
-    setTimeout(() => {
-      window.history.go(-(window.history.length + 5));
-    }, 50);
+    window.history.back();
+    setShowExitHint(true);
+    setTimeout(() => setShowExitHint(false), 2500);
   };
+
 
   const parseDateTime = (datetimeStr, fallbackDate = '', fallbackTime = '14:00') => {
     if (!datetimeStr) return { date: fallbackDate, time: fallbackTime };
@@ -1250,18 +1252,24 @@ export default function App() {
             <div className="flex gap-2 pt-2">
               <button
                 onClick={handleCancelExit}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-300 cursor-pointer"
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-black rounded-xl text-xs font-bold border border-slate-300 cursor-pointer"
               >
                 취소
               </button>
               <button
                 onClick={handleConfirmExit}
-                className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
+                className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-black rounded-xl text-xs font-bold shadow-md cursor-pointer"
               >
                 종료
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {showExitHint && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-xl z-50">
+          뒤로가기를 한 번 더 누르면 종료됩니다
         </div>
       )}
 
