@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -230,33 +230,43 @@ export default function App() {
   const [isMemoAutofilled, setIsMemoAutofilled] = useState(false);
 
   // 모바일 뒤로가기 누를 때마다 항상 종료 확인 팝업이 뜨도록 처리
-  useEffect(() => {
-    // 히스토리에 여유 버퍼를 확보해 두어, 앱 로드 직후 첫 뒤로가기에도
-    // 바로 종료되지 않고 반드시 확인 팝업을 거치도록 합니다.
-    window.history.pushState({ page: 'main' }, '', window.location.href);
-    window.history.pushState({ page: 'main' }, '', window.location.href);
+  // (새로고침/URL 이동에는 절대 관여하지 않고, 오직 브라우저 '뒤로가기' 동작만 가로챕니다)
+  const backGuardActiveRef = useRef(false);
 
-    const handlePopState = () => {
-      const confirmExit = window.confirm("정말 앱을 종료하시겠습니까?");
+  useLayoutEffect(() => {
+    const STATE_MARK = 'app-guard';
+
+    // 히스토리에 여유 버퍼를 여러 겹 쌓아 두어, 기기/브라우저별로 뒤로가기 한 번에
+    // 여러 단계가 소모되는 경우(삼성 갤럭시 기본 브라우저 등)에도 바로 종료되지 않도록 합니다.
+    const pushGuard = () => {
+      window.history.pushState({ mark: STATE_MARK, t: Date.now() }, '', window.location.href);
+    };
+
+    pushGuard();
+    pushGuard();
+    pushGuard();
+    backGuardActiveRef.current = true;
+
+    const handlePopState = (event) => {
+      if (!backGuardActiveRef.current) return;
+
+      // 이미 우리가 쌓아둔 버퍼 안에 있다면, 뒤로가기가 감지된 것이므로 항상 확인 팝업을 띄웁니다.
+      const confirmExit = window.confirm('정말 앱을 종료하시겠습니까?');
       if (confirmExit) {
+        // 더 이상 팝업으로 가로채지 않고, 쌓아둔 버퍼를 모두 지나 실제로 앱을 벗어나게 둡니다.
+        backGuardActiveRef.current = false;
         window.close();
+        window.history.go(-(window.history.length));
       } else {
-        // 취소 시에도 히스토리를 다시 채워, 다음 뒤로가기에도 항상 팝업이 뜨도록 유지
-        window.history.pushState({ page: 'main' }, '', window.location.href);
+        // 취소 시 버퍼를 다시 채워, 다음 뒤로가기에도 항상 팝업이 뜨도록 유지합니다.
+        pushGuard();
       }
     };
 
-    // 탭을 직접 닫거나 새로고침 등으로 페이지를 떠나려는 경우를 대비한 보조 안전장치
-    const handleBeforeUnload = (e) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-
     window.addEventListener('popstate', handlePopState);
-    window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
+      backGuardActiveRef.current = false;
       window.removeEventListener('popstate', handlePopState);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, []);
 
