@@ -2520,7 +2520,7 @@ export default function App() {
                           <th className="px-0.5 w-28" style={{ paddingTop: '3px', paddingBottom: '3px' }}>메모</th>
                           <th className="px-0.5 w-20" style={{ paddingTop: '3px', paddingBottom: '3px' }}>접수일시</th>
                           <th className="px-0.5 w-20 text-center" style={{ paddingTop: '3px', paddingBottom: '3px' }}>관리 / 출력</th>
-                          <th className="px-0.5 w-12 text-center" style={{ paddingTop: '3px', paddingBottom: '3px' }}>사진3p</th>
+                          <th className="px-0.5 w-12 text-center" style={{ paddingTop: '3px', paddingBottom: '3px' }}>사진(3p)</th>
                           <th className="px-0.5 w-8 text-center" style={{ paddingTop: '3px', paddingBottom: '3px' }}>
                             <input
                               type="checkbox"
