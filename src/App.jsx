@@ -1428,7 +1428,7 @@ export default function App() {
             <div className="flex gap-2 pt-2">
               <button
                 onClick={handleExportCSV}
-                className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
+                className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-black rounded-xl text-xs font-bold shadow-md cursor-pointer"
               >
                 📥 지금 바로 백업 다운로드
               </button>
