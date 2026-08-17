@@ -514,17 +514,18 @@ export default function App() {
     if (template) applyRibbonTemplate(template, true);
   };
 
-  const handleSetDefaultRibbonTemplate = async () => {
-    if (!selectedRibbonTemplateId) return alert('기본으로 지정할 양식을 먼저 선택해주세요.');
+  const handleDeleteRibbonTemplate = async () => {
+    if (!selectedRibbonTemplateId) return alert('삭제할 양식을 먼저 선택해주세요.');
+    const template = ribbonTemplates.find(t => String(t.id) === String(selectedRibbonTemplateId));
+    if (!window.confirm(`'${template?.name || '선택한 양식'}'을(를) 삭제하시겠습니까?`)) return;
     try {
-      const { error: resetError } = await supabase.from('ribbon_templates').update({ is_default: false }).neq('id', selectedRibbonTemplateId);
-      if (resetError) throw resetError;
-      const { error } = await supabase.from('ribbon_templates').update({ is_default: true }).eq('id', selectedRibbonTemplateId);
+      const { error } = await supabase.from('ribbon_templates').delete().eq('id', selectedRibbonTemplateId);
       if (error) throw error;
+      setSelectedRibbonTemplateId('');
       await fetchRibbonTemplates();
-      alert('선택한 양식을 기본 양식으로 지정했습니다.');
+      alert('양식이 삭제되었습니다.');
     } catch (err) {
-      alert('기본 양식 지정 실패: ' + err.message);
+      alert('양식 삭제 실패: ' + err.message);
     }
   };
 
@@ -2955,21 +2956,13 @@ export default function App() {
                   </select>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div className="md:col-span-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
                     <label className="text-[11px] md:text-xs font-bold text-slate-700">글자 크기 ({ribbonFontSize}px, 최대 120px)</label>
                     <input
                       type="range" min="12" max="120" value={ribbonFontSize}
                       onChange={e => setRibbonFontSize(Math.min(120, Number(e.target.value)))}
                       className="w-full mt-2 cursor-pointer accent-rose-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] md:text-xs font-bold text-slate-700">크기 직접 입력</label>
-                    <input
-                      type="number" min="12" max="120" value={ribbonFontSize}
-                      onChange={e => setRibbonFontSize(Math.min(120, Math.max(12, Number(e.target.value) || 12)))}
-                      className="w-full p-2 border border-slate-300 rounded-xl mt-1 text-sm bg-white text-slate-900 font-medium"
                     />
                   </div>
                   <div>
@@ -3003,24 +2996,17 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] md:text-xs font-bold text-slate-700">용지 폭</label>
-                    <select
-                      value={ribbonPaperWidth}
-                      onChange={e => setRibbonPaperWidth(Number(e.target.value))}
-                      className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-sm bg-white text-slate-900 font-medium cursor-pointer"
-                    >
-                      <option value={80}>80mm</option>
-                      <option value={58}>58mm</option>
-                    </select>
-                    <p className="text-[10px] text-slate-500 mt-1">용지 변경 시 30mm 리본 기준으로 좌우 여백을 자동 조정합니다.</p>
-                  </div>
-                  <div className="flex items-end">
-                    <div className="w-full text-xs font-bold rounded-lg px-3 py-2 bg-sky-50 text-sky-700 border border-sky-200">
-                      현재 인쇄 영역: 약 {ribbonContentWidthMm.toFixed(0)}mm
-                    </div>
-                  </div>
+                <div>
+                  <label className="text-[11px] md:text-xs font-bold text-slate-700">용지 폭</label>
+                  <select
+                    value={ribbonPaperWidth}
+                    onChange={e => setRibbonPaperWidth(Number(e.target.value))}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-sm bg-white text-slate-900 font-medium cursor-pointer"
+                  >
+                    <option value={80}>80mm</option>
+                    <option value={58}>58mm</option>
+                  </select>
+                  <p className="text-[10px] text-slate-500 mt-1">용지 변경 시 30mm 리본 기준으로 좌우 여백을 자동 조정합니다.</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -3068,30 +3054,45 @@ export default function App() {
 
                 <div className="border-t border-slate-200 pt-3 mt-2 space-y-2">
                   <div className="text-[11px] md:text-xs font-bold text-slate-700">☁️ Supabase 양식 저장 / 불러오기</div>
-                  <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto] gap-2">
-                    <select
-                      value={selectedRibbonTemplateId}
-                      onChange={e => setSelectedRibbonTemplateId(e.target.value)}
-                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
-                    >
-                      <option value="">저장된 양식 선택</option>
-                      {ribbonTemplates.map(t => (
-                        <option key={t.id} value={t.id}>{t.name}{t.is_default ? ' ★기본' : ''}</option>
-                      ))}
-                    </select>
-                    <button onClick={handleSaveRibbonTemplate} disabled={ribbonTemplateLoading} className="px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">{ribbonTemplateLoading ? '저장 중…' : '현재 양식 저장'}</button>
-                    <button onClick={handleLoadRibbonTemplate} className="px-3 py-2 rounded-xl bg-white border border-slate-400 text-slate-800 text-xs font-bold">불러오기</button>
-                    <button onClick={handleSetDefaultRibbonTemplate} className="px-3 py-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-800 text-xs font-bold">기본 지정</button>
-                  </div>
+                  <select
+                    value={selectedRibbonTemplateId}
+                    onChange={e => setSelectedRibbonTemplateId(e.target.value)}
+                    className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                  >
+                    <option value="">저장된 양식 선택</option>
+                    {ribbonTemplates.map(t => (
+                      <option key={t.id} value={t.id}>{t.name}{t.is_default ? ' ★기본' : ''}</option>
+                    ))}
+                  </select>
                   <p className="text-[10px] text-slate-500">글꼴·크기·자간·행간·용지폭·여백·굵기·가이드선·인쇄매수를 한꺼번에 저장합니다.</p>
+                  <div className="flex flex-nowrap gap-2 pt-1">
+                    <button
+                      onClick={handleSaveRibbonTemplate}
+                      disabled={ribbonTemplateLoading}
+                      className="flex-1 px-3 py-2 rounded-xl bg-slate-900 border border-slate-900 text-white text-xs font-bold cursor-pointer whitespace-nowrap"
+                    >
+                      {ribbonTemplateLoading ? '저장 중…' : '현재 양식 저장'}
+                    </button>
+                    <button
+                      onClick={handleLoadRibbonTemplate}
+                      className="flex-1 px-3 py-2 rounded-xl bg-white border border-slate-400 text-slate-800 text-xs font-bold cursor-pointer whitespace-nowrap"
+                    >
+                      불러오기
+                    </button>
+                    <button
+                      onClick={handleDeleteRibbonTemplate}
+                      className="flex-1 px-3 py-2 rounded-xl bg-white border border-rose-400 text-rose-700 text-xs font-bold cursor-pointer whitespace-nowrap"
+                    >
+                      삭제
+                    </button>
+                    <button
+                      onClick={handlePrintRibbon}
+                      className="flex-1 px-3 py-2 rounded-xl bg-rose-600 border border-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer whitespace-nowrap"
+                    >
+                      🖨️ 리본 인쇄하기
+                    </button>
+                  </div>
                 </div>
-
-                <button
-                  onClick={handlePrintRibbon}
-                  className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-black font-bold rounded-xl text-sm shadow-sm cursor-pointer mt-2"
-                >
-                  🖨️ 리본 인쇄하기
-                </button>
               </div>
 
               {/* 오른쪽: 미리보기 */}
