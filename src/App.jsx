@@ -1718,7 +1718,7 @@ export default function App() {
                 <div className="flex gap-2">
                   <button onClick={() => { const o = orders.find(x => String(x.id) === String(photoViewer.order_id)); if (o) handleOrderPhotoUpload(o); }} className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold border border-slate-300">교체</button>
                   <button onClick={() => handleOrderPhotoDelete(photoViewer.order_id)} className="px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-300">삭제</button>
-                  <button onClick={() => setPhotoViewer(null)} className="px-3 py-1.5 rounded-lg bg-slate-800 text-white text-xs font-bold">닫기</button>
+                  <button onClick={() => setPhotoViewer(null)} className="px-3 py-1.5 rounded-lg bg-slate-800 text-black text-xs font-bold">닫기</button>
                 </div>
               </div>
               <div className="bg-slate-100 rounded-xl p-2 flex items-center justify-center max-h-[78vh] overflow-auto">
