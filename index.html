@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>화사한하루 - 꽃집 주문/예약 관리</title>
 
+    <!-- 앱이 완전히 로딩되기 전(React 마운트 전)에 아주 빠르게 눌리는 뒤로가기에도
+         대응할 수 있도록, 가장 먼저 히스토리 가드를 한 겹 걸어둡니다.
+         (App.jsx에서 마운트 시 한 번 더 가드를 걸어 이중으로 보호합니다) -->
+    <script>
+      history.pushState({ mark: 'app-guard-early' }, '', location.href);
+    </script>
+
     <!-- PWA 및 모바일 앱 설정 -->
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#ffffff" />
