@@ -205,24 +205,10 @@ export default function App() {
   
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
-  
-  // 휴지통 상태 관리 (로컬스토리지 연동하여 새로고침 시 유지 및 동기화)
-  const [trashOrders, setTrashOrders] = useState(() => {
-    const saved = localStorage.getItem('trash_orders');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [trashCustomers, setTrashCustomers] = useState(() => {
-    const saved = localStorage.getItem('trash_customers');
-    return saved ? JSON.parse(saved) : [];
-  });
 
-  useEffect(() => {
-    localStorage.setItem('trash_orders', JSON.stringify(trashOrders));
-  }, [trashOrders]);
-
-  useEffect(() => {
-    localStorage.setItem('trash_customers', JSON.stringify(trashCustomers));
-  }, [trashCustomers]);
+  // 휴지통 상태 관리 (Supabase의 deleted_at 컬럼 기준으로 관리 -> 모바일/PC 등 모든 기기에서 동일하게 동기화됨)
+  const [trashOrders, setTrashOrders] = useState([]);
+  const [trashCustomers, setTrashCustomers] = useState([]);
 
   const [selectedDate, setSelectedDate] = useState(getKoreaNowFormatted().date);
   const [editingOrder, setEditingOrder] = useState(null);
@@ -335,21 +321,45 @@ export default function App() {
   };
 
   const fetchData = async () => {
+    // 활성 주문 (휴지통에 없는 주문)
     const { data: orderData, error: orderError } = await supabase
       .from('orders')
       .select('*, customers(id, name, phone)')
+      .is('deleted_at', null)
       .order('id', { ascending: false });
 
     if (orderData) setOrders(orderData);
     if (orderError) console.error("Orders fetch error:", orderError);
 
+    // 활성 고객 (휴지통에 없는 고객)
     const { data: customerData, error: customerError } = await supabase
       .from('customers')
       .select('*')
+      .is('deleted_at', null)
       .order('id', { ascending: false });
 
     if (customerData) setCustomers(customerData);
     if (customerError) console.error("Customers fetch error:", customerError);
+
+    // 휴지통에 있는 주문 (deleted_at 값이 있는 주문) - 모든 기기에서 동일하게 조회됨
+    const { data: trashOrderData, error: trashOrderError } = await supabase
+      .from('orders')
+      .select('*, customers(id, name, phone)')
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false });
+
+    if (trashOrderData) setTrashOrders(trashOrderData);
+    if (trashOrderError) console.error("Trash orders fetch error:", trashOrderError);
+
+    // 휴지통에 있는 고객 (deleted_at 값이 있는 고객) - 모든 기기에서 동일하게 조회됨
+    const { data: trashCustomerData, error: trashCustomerError } = await supabase
+      .from('customers')
+      .select('*')
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false });
+
+    if (trashCustomerData) setTrashCustomers(trashCustomerData);
+    if (trashCustomerError) console.error("Trash customers fetch error:", trashCustomerError);
   };
 
   useEffect(() => {
@@ -754,15 +764,12 @@ export default function App() {
     if (!window.confirm(`선택한 ${selectedOrderIds.length}개의 주문을 휴지통으로 이동하시겠습니까?`)) return;
 
     const nowStr = `${getKoreaNowFormatted().date} ${getKoreaNowFormatted().time}`;
-    const targets = orders
-      .filter(o => selectedOrderIds.includes(o.id))
-      .map(o => ({ ...o, deleted_at: nowStr }));
-    
-    const { error } = await supabase.from('orders').delete().in('id', selectedOrderIds);
+
+    // 실제 행을 삭제하지 않고 deleted_at 값을 기록하여 휴지통으로 이동 (모든 기기에서 동기화되도록 Supabase에 반영)
+    const { error } = await supabase.from('orders').update({ deleted_at: nowStr }).in('id', selectedOrderIds);
     if (error) {
       alert('주문 삭제 실패: ' + error.message);
     } else {
-      setTrashOrders(prev => [...targets, ...prev]);
       alert('선택한 주문이 휴지통으로 이동되었습니다.');
       setSelectedOrderIds([]);
       fetchData();
@@ -789,15 +796,12 @@ export default function App() {
     if (!window.confirm(`선택한 ${selectedCustomerIds.length}명의 고객 정보를 휴지통으로 이동하시겠습니까?`)) return;
 
     const nowStr = `${getKoreaNowFormatted().date} ${getKoreaNowFormatted().time}`;
-    const targets = customers
-      .filter(c => selectedCustomerIds.includes(c.id))
-      .map(c => ({ ...c, deleted_at: nowStr }));
 
-    const { error } = await supabase.from('customers').delete().in('id', selectedCustomerIds);
+    // 실제 행을 삭제하지 않고 deleted_at 값을 기록하여 휴지통으로 이동 (모든 기기에서 동기화되도록 Supabase에 반영)
+    const { error } = await supabase.from('customers').update({ deleted_at: nowStr }).in('id', selectedCustomerIds);
     if (error) {
       alert('고객 삭제 실패: ' + error.message);
     } else {
-      setTrashCustomers(prev => [...targets, ...prev]);
       alert('선택한 고객 정보가 휴지통으로 이동되었습니다.');
       setSelectedCustomerIds([]);
       fetchData();
@@ -833,72 +837,89 @@ export default function App() {
     );
   };
 
-  // 선택된 휴지통 주문 영구 삭제
-  const handlePermanentDeleteSelectedOrders = () => {
+  // 선택된 휴지통 주문 영구 삭제 (Supabase에서 실제로 삭제 -> 모든 기기에 반영)
+  const handlePermanentDeleteSelectedOrders = async () => {
     if (selectedTrashOrderIds.length === 0) return;
     if (!window.confirm(`선택한 ${selectedTrashOrderIds.length}개의 주문을 영구 삭제하시겠습니까? (복구 불가)`)) return;
 
-    setTrashOrders(prev => prev.filter(o => !selectedTrashOrderIds.includes(o.id)));
-    setSelectedTrashOrderIds([]);
-    alert('선택한 주문이 영구 삭제되었습니다.');
+    const { error } = await supabase.from('orders').delete().in('id', selectedTrashOrderIds);
+    if (error) {
+      alert('영구 삭제 실패: ' + error.message);
+    } else {
+      setSelectedTrashOrderIds([]);
+      alert('선택한 주문이 영구 삭제되었습니다.');
+      fetchData();
+    }
   };
 
-  // 선택된 휴지통 주문 복원
+  // 선택된 휴지통 주문 복원 (deleted_at을 비워서 원래 목록으로 복귀)
   const handleRestoreSelectedOrders = async () => {
     if (selectedTrashOrderIds.length === 0) return;
     if (!window.confirm(`선택한 ${selectedTrashOrderIds.length}개의 주문을 복원하시겠습니까?`)) return;
 
-    const targets = trashOrders.filter(o => selectedTrashOrderIds.includes(o.id));
-    for (const order of targets) {
-      const { id, customers: custObj, deleted_at, ...rest } = order;
-      await supabase.from('orders').insert([rest]);
+    const { error } = await supabase.from('orders').update({ deleted_at: null }).in('id', selectedTrashOrderIds);
+    if (error) {
+      alert('주문 복원 실패: ' + error.message);
+    } else {
+      setSelectedTrashOrderIds([]);
+      alert('선택한 주문이 복원되었습니다.');
+      fetchData();
     }
-
-    setTrashOrders(prev => prev.filter(o => !selectedTrashOrderIds.includes(o.id)));
-    setSelectedTrashOrderIds([]);
-    alert('선택한 주문이 복원되었습니다.');
-    fetchData();
   };
 
-  // 선택된 휴지통 고객 영구 삭제
-  const handlePermanentDeleteSelectedCustomers = () => {
+  // 선택된 휴지통 고객 영구 삭제 (Supabase에서 실제로 삭제 -> 모든 기기에 반영)
+  const handlePermanentDeleteSelectedCustomers = async () => {
     if (selectedTrashCustomerIds.length === 0) return;
     if (!window.confirm(`선택한 ${selectedTrashCustomerIds.length}명의 고객 정보를 영구 삭제하시겠습니까? (복구 불가)`)) return;
 
-    setTrashCustomers(prev => prev.filter(c => !selectedTrashCustomerIds.includes(c.id)));
-    setSelectedTrashCustomerIds([]);
-    alert('선택한 고객 정보가 영구 삭제되었습니다.');
+    const { error } = await supabase.from('customers').delete().in('id', selectedTrashCustomerIds);
+    if (error) {
+      alert('영구 삭제 실패: ' + error.message);
+    } else {
+      setSelectedTrashCustomerIds([]);
+      alert('선택한 고객 정보가 영구 삭제되었습니다.');
+      fetchData();
+    }
   };
 
-  // 선택된 휴지통 고객 복원
+  // 선택된 휴지통 고객 복원 (deleted_at을 비워서 원래 목록으로 복귀)
   const handleRestoreSelectedCustomers = async () => {
     if (selectedTrashCustomerIds.length === 0) return;
     if (!window.confirm(`선택한 ${selectedTrashCustomerIds.length}명의 고객 정보를 복원하시겠습니까?`)) return;
 
-    const targets = trashCustomers.filter(c => selectedTrashCustomerIds.includes(c.id));
-    for (const cust of targets) {
-      const { id, deleted_at, ...rest } = cust;
-      await supabase.from('customers').insert([rest]);
+    const { error } = await supabase.from('customers').update({ deleted_at: null }).in('id', selectedTrashCustomerIds);
+    if (error) {
+      alert('고객 정보 복원 실패: ' + error.message);
+    } else {
+      setSelectedTrashCustomerIds([]);
+      alert('선택한 고객 정보가 복원되었습니다.');
+      fetchData();
     }
-
-    setTrashCustomers(prev => prev.filter(c => !selectedTrashCustomerIds.includes(c.id)));
-    setSelectedTrashCustomerIds([]);
-    alert('선택한 고객 정보가 복원되었습니다.');
-    fetchData();
   };
 
-  // 휴지통 비우기 버튼 핸들러
-  const handleEmptyTrash = () => {
+  // 휴지통 비우기 버튼 핸들러 (휴지통에 있는 모든 항목을 Supabase에서 실제로 삭제)
+  const handleEmptyTrash = async () => {
     if (trashOrders.length === 0 && trashCustomers.length === 0) {
       return alert('휴지통이 이미 비어 있습니다.');
     }
     if (!window.confirm('휴지통의 모든 내용을 비우시겠습니까? 영구 삭제되어 복구할 수 없습니다.')) return;
 
-    setTrashOrders([]);
-    setTrashCustomers([]);
+    const orderIds = trashOrders.map(o => o.id);
+    const customerIds = trashCustomers.map(c => c.id);
+
+    if (orderIds.length > 0) {
+      const { error } = await supabase.from('orders').delete().in('id', orderIds);
+      if (error) return alert('휴지통 비우기 실패(주문): ' + error.message);
+    }
+    if (customerIds.length > 0) {
+      const { error } = await supabase.from('customers').delete().in('id', customerIds);
+      if (error) return alert('휴지통 비우기 실패(고객): ' + error.message);
+    }
+
     setSelectedTrashOrderIds([]);
     setSelectedTrashCustomerIds([]);
     alert('휴지통이 비워졌습니다.');
+    fetchData();
   };
 
   const handleExportCSV = () => {
@@ -1015,15 +1036,21 @@ export default function App() {
       }
     });
 
-    return Object.keys(countsByDate).map(date => ({
-      id: date,
-      title: `${countsByDate[date]}건`,
-      start: date,
-      allDay: true,
-      backgroundColor: '#fbe7e8',
-      textColor: '#be123c',
-      borderColor: '#fda4af'
-    }));
+    // 오늘(어제 이전 = 오늘보다 이전 날짜) 지난 건수는 그레이톤으로 흐리게 표시
+    const todayStr = getKoreaNowFormatted().date;
+
+    return Object.keys(countsByDate).map(date => {
+      const isPast = date < todayStr;
+      return {
+        id: date,
+        title: `${countsByDate[date]}건`,
+        start: date,
+        allDay: true,
+        backgroundColor: isPast ? '#f1f5f9' : '#fbe7e8',
+        textColor: isPast ? '#94a3b8' : '#be123c',
+        borderColor: isPast ? '#e2e8f0' : '#fda4af'
+      };
+    });
   };
 
   const selectedDayOrders = selectedDate
