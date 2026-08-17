@@ -231,7 +231,17 @@ export default function App() {
 
   // 모바일 뒤로가기 누를 때마다 항상 종료 확인 팝업이 뜨도록 처리
   // (새로고침/URL 이동에는 절대 관여하지 않고, 오직 브라우저 '뒤로가기' 동작만 가로챕니다)
+  //
+  // ※ window.confirm()을 직접 쓰지 않는 이유:
+  //   이 앱은 PWA(standalone) 모드로 실행되는데, Chrome 계열 브라우저는 같은 페이지에서
+  //   confirm()/alert() 등 네이티브 다이얼로그가 반복 호출되면 자동으로 "스팸 다이얼로그"로
+  //   판단해 그 이후 호출은 화면에 아예 띄우지 않고 조용히 무시해버립니다.
+  //   (최초 1회만 뜨고 이후로는 뜨지 않던 증상이 바로 이 브라우저 차단 때문입니다.)
+  //   그래서 네이티브 confirm 대신, 이미 앱에 있는 커스텀 모달(showBackupAlertModal)과
+  //   동일한 방식으로 React state 기반의 자체 팝업을 그려서 띄웁니다. 이 방식은 브라우저의
+  //   다이얼로그 차단 로직과 전혀 무관하므로 몇 번을 눌러도 항상 뜹니다.
   const backGuardActiveRef = useRef(false);
+  const [showExitConfirmModal, setShowExitConfirmModal] = useState(false);
 
   useLayoutEffect(() => {
     const STATE_MARK = 'app-guard';
@@ -247,20 +257,13 @@ export default function App() {
     pushGuard();
     backGuardActiveRef.current = true;
 
-    const handlePopState = (event) => {
+    const handlePopState = () => {
       if (!backGuardActiveRef.current) return;
 
-      // 이미 우리가 쌓아둔 버퍼 안에 있다면, 뒤로가기가 감지된 것이므로 항상 확인 팝업을 띄웁니다.
-      const confirmExit = window.confirm('정말 앱을 종료하시겠습니까?');
-      if (confirmExit) {
-        // 더 이상 팝업으로 가로채지 않고, 쌓아둔 버퍼를 모두 지나 실제로 앱을 벗어나게 둡니다.
-        backGuardActiveRef.current = false;
-        window.close();
-        window.history.go(-(window.history.length));
-      } else {
-        // 취소 시 버퍼를 다시 채워, 다음 뒤로가기에도 항상 팝업이 뜨도록 유지합니다.
-        pushGuard();
-      }
+      // 뒤로가기가 감지되면, 사용자가 답하기 전에 실제로 화면을 벗어나지 않도록
+      // 버퍼를 즉시 다시 채워둔 뒤 커스텀 확인 모달을 띄웁니다.
+      pushGuard();
+      setShowExitConfirmModal(true);
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -269,6 +272,22 @@ export default function App() {
       window.removeEventListener('popstate', handlePopState);
     };
   }, []);
+
+  // 종료 확인 모달 - 취소: 그냥 닫기 (버퍼는 popstate 시점에 이미 다시 채워둔 상태)
+  const handleCancelExit = () => {
+    setShowExitConfirmModal(false);
+  };
+
+  // 종료 확인 모달 - 종료: 더 이상 가로채지 않고 실제로 앱을 벗어나도록 시도
+  // (웹/PWA 특성상 스크립트로 100% 강제 종료를 보장할 수는 없어 아래 방법들을 순차 시도합니다)
+  const handleConfirmExit = () => {
+    setShowExitConfirmModal(false);
+    backGuardActiveRef.current = false;
+    window.close();
+    setTimeout(() => {
+      window.history.go(-(window.history.length + 5));
+    }, 50);
+  };
 
   const parseDateTime = (datetimeStr, fallbackDate = '', fallbackTime = '14:00') => {
     if (!datetimeStr) return { date: fallbackDate, time: fallbackTime };
@@ -1217,6 +1236,32 @@ export default function App() {
           }
         ` : ''}
       `}</style>
+
+      {showExitConfirmModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border-2 border-rose-400 text-center space-y-4">
+            <div className="text-4xl">🚪</div>
+            <h3 className="text-lg font-bold text-slate-900">앱을 종료하시겠습니까?</h3>
+            <p className="text-xs md:text-sm text-slate-600 leading-relaxed">
+              저장하지 않은 작업이 있다면 먼저 저장해주세요.
+            </p>
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={handleCancelExit}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-300 cursor-pointer"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleConfirmExit}
+                className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
+              >
+                종료
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showBackupAlertModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
