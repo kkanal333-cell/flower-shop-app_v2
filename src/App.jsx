@@ -229,22 +229,34 @@ export default function App() {
   const [showBackupAlertModal, setShowBackupAlertModal] = useState(false);
   const [isMemoAutofilled, setIsMemoAutofilled] = useState(false);
 
-  // 모바일 뒤로가기 누를 때 취소해도 팝업이 지속적으로 뜨도록 수정
+  // 모바일 뒤로가기 누를 때마다 항상 종료 확인 팝업이 뜨도록 처리
   useEffect(() => {
+    // 히스토리에 여유 버퍼를 확보해 두어, 앱 로드 직후 첫 뒤로가기에도
+    // 바로 종료되지 않고 반드시 확인 팝업을 거치도록 합니다.
+    window.history.pushState({ page: 'main' }, '', window.location.href);
     window.history.pushState({ page: 'main' }, '', window.location.href);
 
-    const handlePopState = (event) => {
+    const handlePopState = () => {
       const confirmExit = window.confirm("정말 앱을 종료하시겠습니까?");
       if (confirmExit) {
         window.close();
       } else {
+        // 취소 시에도 히스토리를 다시 채워, 다음 뒤로가기에도 항상 팝업이 뜨도록 유지
         window.history.pushState({ page: 'main' }, '', window.location.href);
       }
     };
 
+    // 탭을 직접 닫거나 새로고침 등으로 페이지를 떠나려는 경우를 대비한 보조 안전장치
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+
     window.addEventListener('popstate', handlePopState);
+    window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
       window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, []);
 
@@ -770,7 +782,6 @@ export default function App() {
     if (error) {
       alert('주문 삭제 실패: ' + error.message);
     } else {
-      alert('선택한 주문이 휴지통으로 이동되었습니다.');
       setSelectedOrderIds([]);
       fetchData();
     }
@@ -802,7 +813,6 @@ export default function App() {
     if (error) {
       alert('고객 삭제 실패: ' + error.message);
     } else {
-      alert('선택한 고객 정보가 휴지통으로 이동되었습니다.');
       setSelectedCustomerIds([]);
       fetchData();
     }
@@ -1270,6 +1280,9 @@ export default function App() {
                     <input
                       type="text"
                       lang="ko"
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      spellCheck={false}
                       value={editingOrder.customer_name}
                       onChange={e => setEditingOrder({ ...editingOrder, customer_name: e.target.value })}
                       className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
@@ -1345,6 +1358,9 @@ export default function App() {
                   <label className="text-[11px] font-bold text-slate-700">메모</label>
                   <textarea
                     lang="ko"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
                     value={editingOrder.memo}
                     onChange={e => setEditingOrder({ ...editingOrder, memo: e.target.value })}
                     onFocus={e => e.target.select()}
@@ -1388,6 +1404,9 @@ export default function App() {
                     <input
                       type="text"
                       lang="ko"
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      spellCheck={false}
                       value={newOrder.customer_name}
                       onChange={e => handleCustomerNameChange(e.target.value)}
                       className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium"
@@ -1490,6 +1509,9 @@ export default function App() {
                   <label className="text-[11px] font-bold text-slate-700">요청사항 / 메모</label>
                   <textarea
                     lang="ko"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
                     value={newOrder.memo}
                     onChange={e => {
                       setNewOrder({ ...newOrder, memo: e.target.value });
@@ -1535,6 +1557,9 @@ export default function App() {
                   <input
                     type="text"
                     lang="ko"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
                     value={newOrder.customer_name}
                     onChange={e => handleCustomerNameChange(e.target.value)}
                     className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-slate-900 font-medium"
@@ -1667,6 +1692,9 @@ export default function App() {
                 <label className="text-[11px] md:text-xs font-bold text-slate-700">고객 요구사항 / 메모</label>
                 <textarea
                   lang="ko"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                   value={newOrder.memo}
                   onChange={e => {
                     setNewOrder({ ...newOrder, memo: e.target.value });
