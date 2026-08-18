@@ -873,6 +873,19 @@ export default function App() {
     setMatchedCustomerList([]);
   };
 
+  // 신규주문/수정 발생 시 Supabase Edge Function('notify-order')을 호출해 이메일 알림을 보냅니다.
+  // Edge Function 배포와 NOTIFY_EMAIL/RESEND_API_KEY secret 설정이 선행되어야 실제 메일이 발송됩니다.
+  // 메일 발송 실패가 주문 저장 자체를 막지 않도록 항상 try/catch로 감싸 무시(fire-and-forget)합니다.
+  const notifyOrderByEmail = async (eventType, orderInfo) => {
+    try {
+      await supabase.functions.invoke('notify-order', {
+        body: { eventType, ...orderInfo }
+      });
+    } catch (err) {
+      console.warn('주문 알림 메일 전송 실패(무시하고 계속 진행):', err.message);
+    }
+  };
+
   const handleCreateOrder = async (e) => {
     e.preventDefault();
     if (!newOrder.customer_name) return alert('고객 성명을 입력해주세요.');
@@ -936,6 +949,16 @@ export default function App() {
       alert('주문 저장 실패: ' + orderErr.message);
       return;
     }
+
+    notifyOrderByEmail('신규주문', {
+      customer_name: finalCustomerName,
+      phone: newOrder.phone,
+      product_name: newOrder.product_name,
+      amount: actualAmount,
+      pickup_datetime: pickupDatetime,
+      payment_method: newOrder.payment_method,
+      memo: newOrder.memo
+    });
 
     alert(`주문이 성공적으로 등록되었습니다! (고객명: ${finalCustomerName})`);
     
@@ -1009,6 +1032,16 @@ export default function App() {
       status: editingOrder.payment_method,
       memo: editingOrder.memo
     }).eq('id', editingOrder.id);
+
+    notifyOrderByEmail('주문수정', {
+      customer_name: editingOrder.customer_name,
+      phone: editingOrder.phone,
+      product_name: editingOrder.product_name,
+      amount: actualAmount,
+      pickup_datetime: pickupDatetime,
+      payment_method: editingOrder.payment_method,
+      memo: editingOrder.memo
+    });
 
     alert('✅ 모든 수정사항이 저장되었습니다!');
     setEditingOrder(null);
@@ -1661,13 +1694,13 @@ export default function App() {
   });
 
   const menuList = [
-    { id: 'new', label: '📝 신규주문' },
-    { id: 'orders', label: '📋 주문/달력' },
-    { id: 'customers', label: '🎂 고객' },
-    { id: 'notifications', label: '🔔 알림' },
-    { id: 'backup', label: '💾 백업/복원' },
-    { id: 'trash', label: '🗑️ 휴지통' },
-    { id: 'ribbon', label: '🎀 리본편집기' },
+    { id: 'new', icon: '📝', text: '신규주문' },
+    { id: 'orders', icon: '📋', text: '주문/달력' },
+    { id: 'customers', icon: '🎂', text: '고객' },
+    { id: 'notifications', icon: '🔔', text: '알림' },
+    { id: 'backup', icon: '💾', text: '백업/복원' },
+    { id: 'trash', icon: '🗑️', text: '휴지통' },
+    { id: 'ribbon', icon: '🎀', text: '리본편집기' },
   ];
 
   const getCustomerPickupDate = (customerId, customerName) => {
@@ -1837,7 +1870,7 @@ export default function App() {
             <label
               key={menu.id}
               onClick={() => handleMenuChange(menu.id)}
-              className={`flex items-center justify-center md:justify-start gap-0.5 md:gap-1 px-1 md:px-2 py-1 md:py-1.5 rounded-lg cursor-pointer whitespace-nowrap transition-all flex-1 md:flex-none text-center ${
+              className={`flex flex-col md:flex-row items-center justify-center md:justify-start gap-0 md:gap-1 px-0.5 md:px-2 py-1 md:py-1.5 rounded-lg cursor-pointer whitespace-nowrap transition-all flex-1 md:flex-none text-center ${
                 activeMenu === menu.id
                   ? 'bg-rose-100 text-rose-900 font-extrabold border-2 border-rose-600 shadow-xs'
                   : 'text-slate-700 hover:bg-slate-200/50 border border-transparent'
@@ -1850,7 +1883,9 @@ export default function App() {
                 onChange={() => {}}
                 className="w-3 h-3 accent-rose-500 cursor-pointer hidden md:inline"
               />
-              <span className="text-[10px] sm:text-xs font-bold">{menu.label}</span>
+              <span className="text-sm leading-none md:hidden">{menu.icon}</span>
+              <span className="text-[9px] leading-tight font-bold md:hidden">{menu.text}</span>
+              <span className="hidden md:inline text-xs font-bold">{menu.icon} {menu.text}</span>
             </label>
           ))}
         </nav>
@@ -2542,7 +2577,7 @@ export default function App() {
                           sortedAndFilteredOrders.map(o => {
                             const pickupDate = o.pickup_datetime ? o.pickup_datetime.replace(' ', 'T').split('T')[0] : '';
                             const isPast = pickupDate !== '' && pickupDate < todayDateStr;
-                            const cellPad = { paddingTop: '3px', paddingBottom: '3px' };
+                            const cellPad = { paddingTop: '4.5px', paddingBottom: '4.5px' };
 
                             return (
                               <tr 
@@ -2691,7 +2726,7 @@ export default function App() {
                           key={o.id}
                           className="p-2.5 md:p-3 rounded-xl border border-slate-200 bg-white flex flex-col gap-1.5 shadow-2xs"
                         >
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="px-2 py-0.5 bg-sky-100 text-sky-900 font-extrabold text-xs rounded-md whitespace-nowrap border border-sky-300 shrink-0">
                               ⏰ {timeOnly}
                             </span>
@@ -2701,6 +2736,25 @@ export default function App() {
                             <span className="text-xs text-slate-600 font-medium">
                               {o.customers?.phone || ''}
                             </span>
+                            {(photoMap[String(o.id)]?.length || 0) > 0 && (
+                              <button
+                                onClick={() => { setPhotoViewer(o.id); setPhotoViewerIndex(0); }}
+                                className="text-[11px] bg-lime-100 hover:bg-lime-200 border border-lime-400 text-lime-900 px-1 py-0.5 rounded cursor-pointer whitespace-nowrap font-bold shrink-0"
+                                title="작품 사진 보기"
+                              >
+                                보기 {photoMap[String(o.id)].length}/{MAX_ORDER_PHOTOS}
+                              </button>
+                            )}
+                            {(photoMap[String(o.id)]?.length || 0) < MAX_ORDER_PHOTOS && (
+                              <button
+                                onClick={() => handleOrderPhotoUpload(o)}
+                                disabled={photoUploadingOrderId === o.id}
+                                className="text-[11px] bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 px-1 py-0.5 rounded cursor-pointer whitespace-nowrap shrink-0"
+                                title={(photoMap[String(o.id)]?.length || 0) > 0 ? '사진 추가' : '사진 등록'}
+                              >
+                                {photoUploadingOrderId === o.id ? '업로드…' : ((photoMap[String(o.id)]?.length || 0) > 0 ? '+' : '사진')}
+                              </button>
+                            )}
                           </div>
 
                           <div className="flex items-center justify-between gap-1 text-xs">
