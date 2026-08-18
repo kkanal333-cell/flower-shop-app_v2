@@ -3344,7 +3344,16 @@ export default function App() {
                                   )}
                                 </td>
                                 <td className="px-2" title={o.memo} style={cellPad}>
-                                  <span className={`block w-[73px] overflow-hidden text-ellipsis whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-600'}`}>
+                                  <span
+                                    style={{
+                                      display: 'block',
+                                      width: '73px',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      color: isPast ? '#cbd5e1' : '#475569'
+                                    }}
+                                  >
                                     {o.memo || '-'}
                                   </span>
                                 </td>
