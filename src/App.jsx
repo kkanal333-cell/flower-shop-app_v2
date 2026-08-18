@@ -3347,7 +3347,7 @@ export default function App() {
                                   <span
                                     style={{
                                       display: 'block',
-                                      width: '73px',
+                                      width: '146px',
                                       overflow: 'hidden',
                                       textOverflow: 'ellipsis',
                                       whiteSpace: 'nowrap',
