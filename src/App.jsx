@@ -420,6 +420,15 @@ export default function App() {
     receipt_date: initialKst.date,
     receipt_time: initialKst.time,
     payment_method: '신용카드',
+    is_delivery: false,
+    memo: ''
+  });
+
+  const [onsiteOrder, setOnsiteOrder] = useState({
+    product_name: '꽃다발',
+    amount_thousands: '55',
+    payment_method: '신용카드',
+    is_delivery: false,
     memo: ''
   });
 
@@ -462,6 +471,7 @@ export default function App() {
         receipt_date: kstNow.date,
         receipt_time: kstNow.time,
         payment_method: '신용카드',
+        is_delivery: false,
         memo: ''
       });
       setIsMemoAutofilled(false);
@@ -886,6 +896,19 @@ export default function App() {
     }
   };
 
+  // 고객에게 카카오 알림톡을 보냅니다. (Solapi 연동/사업자 인증 완료 후 실제 발송됨)
+  // eventType: '접수확인' | '픽업임박' - Edge Function 'notify-kakao'에서 이벤트별 템플릿을 골라 발송합니다.
+  // 실패해도 주문 저장 자체는 막지 않도록 항상 무시(fire-and-forget)합니다.
+  const notifyCustomerByKakao = async (eventType, orderInfo) => {
+    try {
+      await supabase.functions.invoke('notify-kakao', {
+        body: { eventType, ...orderInfo }
+      });
+    } catch (err) {
+      console.warn('카카오 알림톡 전송 실패(무시하고 계속 진행):', err.message);
+    }
+  };
+
   const handleCreateOrder = async (e) => {
     e.preventDefault();
     if (!newOrder.customer_name) return alert('고객 성명을 입력해주세요.');
@@ -933,7 +956,7 @@ export default function App() {
     const pickupDatetime = `${newOrder.pickup_date}T${newOrder.pickup_time}:00`;
     const receiptDatetime = `${newOrder.receipt_date}T${newOrder.receipt_time}:00`;
 
-    const { error: orderErr } = await supabase.from('orders').insert([{
+    const { data: insertedNewOrder, error: orderErr } = await supabase.from('orders').insert([{
       customer_id: customerId,
       product_name: newOrder.product_name,
       product: newOrder.product_name,
@@ -942,8 +965,10 @@ export default function App() {
       created_at: receiptDatetime,
       payment_method: newOrder.payment_method,
       status: newOrder.payment_method,
+      is_delivery: !!newOrder.is_delivery,
+      order_type: '예약',
       memo: newOrder.memo
-    }]);
+    }]).select().single();
 
     if (orderErr) {
       alert('주문 저장 실패: ' + orderErr.message);
@@ -957,7 +982,19 @@ export default function App() {
       amount: actualAmount,
       pickup_datetime: pickupDatetime,
       payment_method: newOrder.payment_method,
+      is_delivery: newOrder.is_delivery,
       memo: newOrder.memo
+    });
+
+    // 예약 접수 즉시 고객에게 카카오 알림톡 발송 (Solapi 연동 완료 후 실제 발송됨)
+    notifyCustomerByKakao('접수확인', {
+      order_id: insertedNewOrder?.id,
+      customer_name: finalCustomerName,
+      phone: newOrder.phone,
+      product_name: newOrder.product_name,
+      amount: actualAmount,
+      pickup_datetime: pickupDatetime,
+      is_delivery: newOrder.is_delivery
     });
 
     alert(`주문이 성공적으로 등록되었습니다! (고객명: ${finalCustomerName})`);
@@ -974,12 +1011,135 @@ export default function App() {
       receipt_date: kstNow.date,
       receipt_time: kstNow.time,
       payment_method: '신용카드',
+      is_delivery: false,
       memo: ''
     });
     setIsMemoAutofilled(false);
     setMatchedCustomerList([]);
     setIsCalendarOrderModalOpen(false);
     fetchData();
+  };
+
+  // 현장 즉시판매 저장: 고객정보/픽업시간 없이 상품명·금액·결제수단만으로 간단 등록
+  const handleCreateOnsiteOrder = async (e) => {
+    e.preventDefault();
+    const actualAmount = (Number(onsiteOrder.amount_thousands) || 0) * 1000;
+    if (!actualAmount) return alert('금액을 입력해주세요.');
+
+    const nowKst = getKoreaNowFormatted();
+    const nowDatetime = `${nowKst.date}T${nowKst.time}:00`;
+
+    const { error } = await supabase.from('orders').insert([{
+      customer_id: null,
+      product_name: onsiteOrder.product_name,
+      product: onsiteOrder.product_name,
+      amount: actualAmount,
+      pickup_datetime: nowDatetime,
+      created_at: nowDatetime,
+      payment_method: onsiteOrder.payment_method,
+      status: onsiteOrder.payment_method,
+      is_delivery: !!onsiteOrder.is_delivery,
+      order_type: '현장판매',
+      memo: onsiteOrder.memo
+    }]);
+
+    if (error) {
+      alert('현장판매 저장 실패: ' + error.message);
+      return;
+    }
+
+    alert(`현장판매가 등록되었습니다! (${onsiteOrder.product_name} / ${actualAmount.toLocaleString()}원)`);
+    setOnsiteOrder({
+      product_name: '꽃다발',
+      amount_thousands: '55',
+      payment_method: '신용카드',
+      is_delivery: false,
+      memo: ''
+    });
+    fetchData();
+  };
+
+  const [dashboardPeriod, setDashboardPeriod] = useState('month'); // today | week | month | all
+
+  // 매출 대시보드용 집계 (접수일시=created_at 기준. orders는 이미 로드된 상태를 재사용하므로 추가 트래픽 없음)
+  const dashboardStats = useMemo(() => {
+    const now = getKoreaNowFormatted();
+    const nowDate = now.kstDateObj;
+    const dayOfWeek = nowDate.getDay();
+    const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const monday = new Date(nowDate);
+    monday.setDate(nowDate.getDate() - mondayOffset);
+    const mondayStr = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+    const monthStr = now.date.slice(0, 7);
+
+    const validOrders = (orders || []).filter(o => !o.deleted_at);
+    const filtered = validOrders.filter(o => {
+      const d = (o.created_at || '').replace(' ', 'T').split('T')[0];
+      if (!d) return false;
+      if (dashboardPeriod === 'today') return d === now.date;
+      if (dashboardPeriod === 'week') return d >= mondayStr;
+      if (dashboardPeriod === 'month') return d.slice(0, 7) === monthStr;
+      return true;
+    });
+
+    let totalRevenue = 0, reservationRevenue = 0, onsiteRevenue = 0;
+    let reservationCount = 0, onsiteCount = 0;
+    const byPayment = {};
+    const byProduct = {};
+    const byDate = {};
+
+    filtered.forEach(o => {
+      const amt = Number(o.amount) || 0;
+      totalRevenue += amt;
+      if (o.order_type === '현장판매') { onsiteRevenue += amt; onsiteCount++; }
+      else { reservationRevenue += amt; reservationCount++; }
+      const pm = o.payment_method || '미지정';
+      byPayment[pm] = (byPayment[pm] || 0) + amt;
+      const pn = o.product_name || '기타';
+      byProduct[pn] = (byProduct[pn] || 0) + amt;
+      const d = (o.created_at || '').replace(' ', 'T').split('T')[0];
+      if (d) byDate[d] = (byDate[d] || 0) + amt;
+    });
+
+    const paymentBreakdown = Object.entries(byPayment).sort((a, b) => b[1] - a[1]);
+    const productRanking = Object.entries(byProduct).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const dailyTrend = Object.entries(byDate).sort((a, b) => a[0].localeCompare(b[0])).slice(-14);
+    const maxDaily = dailyTrend.reduce((m, [, v]) => Math.max(m, v), 0) || 1;
+    const maxPayment = paymentBreakdown.reduce((m, [, v]) => Math.max(m, v), 0) || 1;
+    const maxProduct = productRanking.reduce((m, [, v]) => Math.max(m, v), 0) || 1;
+
+    return {
+      totalRevenue, reservationRevenue, onsiteRevenue,
+      reservationCount, onsiteCount, totalCount: filtered.length,
+      paymentBreakdown, productRanking, dailyTrend,
+      maxDaily, maxPayment, maxProduct
+    };
+  }, [orders, dashboardPeriod]);
+
+  // 날짜별 매출 요약을 CSV로 내보냅니다. (기간 필터와 무관하게 전체 데이터 기준)
+  const handleExportSalesSummaryCSV = () => {
+    const validOrders = (orders || []).filter(o => !o.deleted_at);
+    const byDate = {};
+    validOrders.forEach(o => {
+      const d = (o.created_at || '').replace(' ', 'T').split('T')[0];
+      if (!d) return;
+      if (!byDate[d]) byDate[d] = { reservation: 0, onsite: 0, count: 0 };
+      const amt = Number(o.amount) || 0;
+      if (o.order_type === '현장판매') byDate[d].onsite += amt;
+      else byDate[d].reservation += amt;
+      byDate[d].count += 1;
+    });
+    const dates = Object.keys(byDate).sort();
+    const headers = ['날짜', '예약매출', '현장매출', '합계매출', '건수'];
+    const rows = dates.map(d => [
+      d,
+      byDate[d].reservation,
+      byDate[d].onsite,
+      byDate[d].reservation + byDate[d].onsite,
+      byDate[d].count
+    ]);
+    const today = getKoreaNowFormatted().date;
+    downloadCSV(headers, rows, `export_sales_summary_${today}.csv`);
   };
 
   const startEditOrder = (order) => {
@@ -999,6 +1159,8 @@ export default function App() {
       receipt_date: receipt.date,
       receipt_time: receipt.time,
       payment_method: order.payment_method || '신용카드',
+      is_delivery: !!order.is_delivery,
+      order_type: order.order_type || '예약',
       memo: order.memo || ''
     });
   };
@@ -1030,6 +1192,7 @@ export default function App() {
       created_at: receiptDatetime,
       payment_method: editingOrder.payment_method,
       status: editingOrder.payment_method,
+      is_delivery: !!editingOrder.is_delivery,
       memo: editingOrder.memo
     }).eq('id', editingOrder.id);
 
@@ -1040,6 +1203,7 @@ export default function App() {
       amount: actualAmount,
       pickup_datetime: pickupDatetime,
       payment_method: editingOrder.payment_method,
+      is_delivery: editingOrder.is_delivery,
       memo: editingOrder.memo
     });
 
@@ -1615,7 +1779,7 @@ export default function App() {
     const countsByDate = {};
 
     orders.forEach(o => {
-      if (o.pickup_datetime) {
+      if (o.order_type !== '현장판매' && o.pickup_datetime) {
         const dateStr = o.pickup_datetime.replace(' ', 'T').split('T')[0];
         if (dateStr) {
           countsByDate[dateStr] = (countsByDate[dateStr] || 0) + 1;
@@ -1642,7 +1806,7 @@ export default function App() {
 
   const selectedDayOrders = selectedDate
     ? orders
-        .filter(o => o.pickup_datetime && o.pickup_datetime.replace(' ', 'T').startsWith(selectedDate))
+        .filter(o => o.order_type !== '현장판매' && o.pickup_datetime && o.pickup_datetime.replace(' ', 'T').startsWith(selectedDate))
         .sort((a, b) => {
           const timeA = a.pickup_datetime?.replace(' ', 'T').split('T')[1] || '00:00';
           const timeB = b.pickup_datetime?.replace(' ', 'T').split('T')[1] || '00:00';
@@ -1695,7 +1859,9 @@ export default function App() {
 
   const menuList = [
     { id: 'new', icon: '📝', text: '신규주문' },
+    { id: 'onsite', icon: '🏪', text: '현장판매' },
     { id: 'orders', icon: '📋', text: '주문/달력' },
+    { id: 'dashboard', icon: '📊', text: '매출대시보드' },
     { id: 'customers', icon: '🎂', text: '고객' },
     { id: 'notifications', icon: '🔔', text: '알림' },
     { id: 'backup', icon: '💾', text: '백업/복원' },
@@ -2073,15 +2239,26 @@ export default function App() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700">결제 방식</label>
-                  <select
-                    value={editingOrder.payment_method}
-                    onChange={e => setEditingOrder({ ...editingOrder, payment_method: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
-                  >
-                    {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
-                  </select>
+                <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700">결제 방식</label>
+                    <select
+                      value={editingOrder.payment_method}
+                      onChange={e => setEditingOrder({ ...editingOrder, payment_method: e.target.value })}
+                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                    >
+                      {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
+                    </select>
+                  </div>
+                  <label className="flex items-center gap-1 px-2 py-2 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={!!editingOrder.is_delivery}
+                      onChange={e => setEditingOrder({ ...editingOrder, is_delivery: e.target.checked })}
+                      className="w-4 h-4 accent-sky-500 cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-slate-700">🚚 배달</span>
+                  </label>
                 </div>
 
                 <div>
@@ -2224,15 +2401,26 @@ export default function App() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700">결제 방식 *</label>
-                  <select
-                    value={newOrder.payment_method}
-                    onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
-                    className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium"
-                  >
-                    {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
-                  </select>
+                <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700">결제 방식 *</label>
+                    <select
+                      value={newOrder.payment_method}
+                      onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
+                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium"
+                    >
+                      {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
+                    </select>
+                  </div>
+                  <label className="flex items-center gap-1 px-2 py-2 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={!!newOrder.is_delivery}
+                      onChange={e => setNewOrder({...newOrder, is_delivery: e.target.checked})}
+                      className="w-4 h-4 accent-sky-500 cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-slate-700">🚚 배달</span>
+                  </label>
                 </div>
 
                 <div>
@@ -2414,16 +2602,27 @@ export default function App() {
                 </div>
               </div>
 
-              <div>
-                <label className="text-[11px] md:text-xs font-bold text-black">결제 방식 *</label>
-                <select
-                  value={newOrder.payment_method}
-                  onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
-                  className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
-                  style={{ backgroundColor: '#ffffff' }}
-                >
-                  {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
-                </select>
+              <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+                <div>
+                  <label className="text-[11px] md:text-xs font-bold text-black">결제 방식 *</label>
+                  <select
+                    value={newOrder.payment_method}
+                    onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
+                    style={{ backgroundColor: '#ffffff' }}
+                  >
+                    {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
+                  </select>
+                </div>
+                <label className="flex items-center gap-1.5 px-3 py-2 md:py-3 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap mt-1">
+                  <input
+                    type="checkbox"
+                    checked={!!newOrder.is_delivery}
+                    onChange={e => setNewOrder({...newOrder, is_delivery: e.target.checked})}
+                    className="w-4 h-4 accent-sky-500 cursor-pointer"
+                  />
+                  <span className="text-xs md:text-sm font-bold text-black">🚚 배달</span>
+                </label>
               </div>
 
               <div>
@@ -2453,6 +2652,84 @@ export default function App() {
                 className="w-full py-3 px-4 bg-white hover:bg-slate-100 text-black border border-black font-extrabold rounded-xl shadow-md transition-all text-sm md:text-base mt-4 cursor-pointer text-center block"
               >
                 주문 저장하기
+              </button>
+            </form>
+          </div>
+        )}
+
+        {activeMenu === 'onsite' && (
+          <div className="max-w-lg mx-auto bg-white p-4 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
+            <h2 className="text-base md:text-xl font-bold text-slate-900 mb-1 flex items-center gap-2">
+              <span>🏪</span> 현장 즉시판매 등록
+            </h2>
+            <p className="text-xs text-slate-500 mb-4 md:mb-6">
+              매장에서 바로 결제·수령하는 판매를 간단히 기록합니다. (고객정보·픽업시간 불필요, 픽업 달력에는 표시되지 않습니다)
+            </p>
+
+            <form onSubmit={handleCreateOnsiteOrder} className="space-y-3 md:space-y-4">
+              <div className="grid grid-cols-2 gap-2 md:gap-4">
+                <div>
+                  <label className="text-[11px] md:text-xs font-bold text-black">상품종류 *</label>
+                  <select
+                    value={onsiteOrder.product_name}
+                    onChange={e => setOnsiteOrder({ ...onsiteOrder, product_name: e.target.value })}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
+                  >
+                    {PRODUCT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] md:text-xs font-bold text-black">금액 (천원 단위) *</label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={onsiteOrder.amount_thousands}
+                    onChange={e => setOnsiteOrder({ ...onsiteOrder, amount_thousands: e.target.value })}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    = {((Number(onsiteOrder.amount_thousands) || 0) * 1000).toLocaleString()}원
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+                <div>
+                  <label className="text-[11px] md:text-xs font-bold text-black">결제 방식 *</label>
+                  <select
+                    value={onsiteOrder.payment_method}
+                    onChange={e => setOnsiteOrder({ ...onsiteOrder, payment_method: e.target.value })}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
+                  >
+                    {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
+                  </select>
+                </div>
+                <label className="flex items-center gap-1.5 px-3 py-2 md:py-3 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap mt-1">
+                  <input
+                    type="checkbox"
+                    checked={!!onsiteOrder.is_delivery}
+                    onChange={e => setOnsiteOrder({ ...onsiteOrder, is_delivery: e.target.checked })}
+                    className="w-4 h-4 accent-sky-500 cursor-pointer"
+                  />
+                  <span className="text-xs md:text-sm font-bold text-black">🚚 배달</span>
+                </label>
+              </div>
+
+              <div>
+                <label className="text-[11px] md:text-xs font-bold text-black">메모 (선택)</label>
+                <textarea
+                  value={onsiteOrder.memo}
+                  onChange={e => setOnsiteOrder({ ...onsiteOrder, memo: e.target.value })}
+                  className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
+                  rows={2}
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3 px-4 bg-amber-500 hover:bg-amber-600 text-white border border-amber-600 font-extrabold rounded-xl shadow-md transition-all text-sm md:text-base mt-2 cursor-pointer"
+              >
+                🏪 현장판매 저장
               </button>
             </form>
           </div>
@@ -2542,139 +2819,127 @@ export default function App() {
                     검색 결과: 총 <strong className="text-rose-600">{sortedAndFilteredOrders.length}</strong>건
                   </div>
 
-                  <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                    <table className="w-full text-left border-collapse table-fixed min-w-[780px]">
-                      <thead>
-                        <tr className="border-b border-slate-200 text-slate-700 text-xs md:text-sm bg-slate-100 font-bold">
-                          <th className="px-0.5 w-24" style={{ paddingTop: '3px', paddingBottom: '3px' }}>픽업일시</th>
-                          <th className="px-0.5 w-14" style={{ paddingTop: '3px', paddingBottom: '3px' }}>고객명</th>
-                          <th className="px-0.5 w-24" style={{ paddingTop: '3px', paddingBottom: '3px' }}>연락처</th>
-                          <th className="px-0.5 w-16" style={{ paddingTop: '3px', paddingBottom: '3px' }}>상품명</th>
-                          <th className="px-0.5 w-16" style={{ paddingTop: '3px', paddingBottom: '3px' }}>금액</th>
-                          <th className="px-0.5 w-16" style={{ paddingTop: '3px', paddingBottom: '3px' }}>결제수단</th>
-                          <th className="px-0.5 w-28" style={{ paddingTop: '3px', paddingBottom: '3px' }}>메모</th>
-                          <th className="px-0.5 w-20" style={{ paddingTop: '3px', paddingBottom: '3px' }}>접수일시</th>
-                          <th className="px-0.5 w-20 text-center" style={{ paddingTop: '3px', paddingBottom: '3px' }}>관리 / 출력</th>
-                          <th className="px-0.5 w-12 text-center" style={{ paddingTop: '3px', paddingBottom: '3px' }}>사진(3p)</th>
-                          <th className="px-0.5 w-8 text-center" style={{ paddingTop: '3px', paddingBottom: '3px' }}>
-                            <input
-                              type="checkbox"
-                              onChange={handleToggleSelectAllOrders}
-                              checked={sortedAndFilteredOrders.length > 0 && selectedOrderIds.length === sortedAndFilteredOrders.length}
-                              className="accent-rose-600 cursor-pointer w-4 h-4"
-                            />
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sortedAndFilteredOrders.length === 0 ? (
-                          <tr>
-                            <td colSpan={11} className="py-6 text-center text-slate-500 text-xs md:text-sm">
-                              검색 결과가 없습니다.
-                            </td>
-                          </tr>
-                        ) : (
-                          sortedAndFilteredOrders.map(o => {
-                            const pickupDate = o.pickup_datetime ? o.pickup_datetime.replace(' ', 'T').split('T')[0] : '';
-                            const isPast = pickupDate !== '' && pickupDate < todayDateStr;
-                            const cellPad = { paddingTop: '4.5px', paddingBottom: '4.5px' };
+                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 bg-slate-100 border-b border-slate-200 text-xs font-bold text-slate-700">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          onChange={handleToggleSelectAllOrders}
+                          checked={sortedAndFilteredOrders.length > 0 && selectedOrderIds.length === sortedAndFilteredOrders.length}
+                          className="accent-rose-600 cursor-pointer w-4 h-4"
+                        />
+                        전체 선택
+                      </label>
+                      <span className="text-slate-500 font-medium">픽업일시 · 고객정보 · 금액 / 유형 · 결제 · 메모 · 관리</span>
+                    </div>
 
-                            return (
-                              <tr 
-                                key={o.id} 
-                                className={`border-b border-slate-100 transition-colors text-xs md:text-sm ${
-                                  isPast 
-                                    ? 'text-slate-300 opacity-40 bg-slate-100/50 hover:bg-slate-100' 
-                                    : 'text-slate-900 hover:bg-slate-50'
-                                }`}
-                              >
-                                <td className={`px-0.5 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`} style={cellPad}>
+                    {sortedAndFilteredOrders.length === 0 ? (
+                      <div className="py-6 text-center text-slate-500 text-xs md:text-sm">검색 결과가 없습니다.</div>
+                    ) : (
+                      <div className="divide-y divide-slate-100">
+                        {sortedAndFilteredOrders.map(o => {
+                          const pickupDate = o.pickup_datetime ? o.pickup_datetime.replace(' ', 'T').split('T')[0] : '';
+                          const isPast = pickupDate !== '' && pickupDate < todayDateStr;
+                          const isOnsite = o.order_type === '현장판매';
+
+                          return (
+                            <div
+                              key={o.id}
+                              className={`px-2.5 py-2 md:px-3 md:py-2.5 transition-colors ${
+                                isPast ? 'bg-slate-100/50 opacity-40' : 'hover:bg-slate-50'
+                              }`}
+                            >
+                              {/* 1줄: 체크박스 · 픽업일시 · 고객명 · 연락처 · 상품명 · 금액 */}
+                              <div className="flex items-center gap-1.5 flex-wrap text-xs md:text-sm">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedOrderIds.includes(o.id)}
+                                  onChange={() => handleToggleSelectOrder(o.id)}
+                                  className="accent-rose-600 cursor-pointer w-4 h-4 shrink-0"
+                                />
+                                <span className={`font-bold whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
                                   {formatShortDateTime(o.pickup_datetime)}
-                                </td>
-                                <td className={`px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-slate-900'}`} style={cellPad}>
+                                </span>
+                                <span className={`font-bold truncate max-w-[70px] ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
                                   {o.customers?.name || '-'}
-                                </td>
-                                <td className={`px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-slate-700'}`} style={cellPad}>
+                                </span>
+                                <span className={`truncate max-w-[100px] ${isPast ? 'text-slate-300' : 'text-slate-600'}`}>
                                   {o.customers?.phone || '-'}
-                                </td>
-                                <td className={`px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-slate-800'}`} style={cellPad}>
+                                </span>
+                                <span className={`truncate max-w-[100px] ${isPast ? 'text-slate-300' : 'text-slate-800'}`}>
                                   {o.product_name}
-                                </td>
-                                <td className={`px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-rose-600'}`} style={cellPad}>
+                                </span>
+                                <span className={`font-bold whitespace-nowrap ml-auto ${isPast ? 'text-slate-300' : 'text-rose-600'}`}>
                                   {o.amount?.toLocaleString()}원
-                                </td>
-                                <td className="px-0.5" style={cellPad}>
-                                  <span className={`px-1 py-0.5 border rounded text-[11px] block text-center truncate ${
-                                    isPast ? 'bg-slate-100 border-slate-200 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-800'
-                                  }`}>
-                                    {o.payment_method}
+                                </span>
+                              </div>
+
+                              {/* 2줄: 유형 · 배달 · 결제수단 · 메모 · 접수일시 · 관리버튼 · 사진버튼 */}
+                              <div className="flex items-center gap-1 flex-wrap mt-1.5 text-[11px] md:text-xs">
+                                <span className={`px-1.5 py-0.5 rounded border font-bold whitespace-nowrap shrink-0 ${
+                                  isOnsite ? 'bg-amber-100 border-amber-300 text-amber-800' : 'bg-indigo-100 border-indigo-300 text-indigo-800'
+                                }`}>
+                                  {isOnsite ? '🏪현장' : '📅예약'}
+                                </span>
+                                {o.is_delivery && (
+                                  <span className="px-1.5 py-0.5 rounded bg-sky-500 text-white font-bold whitespace-nowrap shrink-0">
+                                    🚚배달
                                   </span>
-                                </td>
-                                <td className={`px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo} style={cellPad}>
+                                )}
+                                <span className={`px-1.5 py-0.5 border rounded whitespace-nowrap shrink-0 ${
+                                  isPast ? 'bg-slate-100 border-slate-200 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-800'
+                                }`}>
+                                  {o.payment_method}
+                                </span>
+                                <span className={`truncate max-w-[110px] ${isPast ? 'text-slate-300' : 'text-slate-500'}`} title={o.memo}>
                                   {o.memo || '-'}
-                                </td>
-                                <td className={`px-0.5 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-500'}`} style={cellPad}>
-                                  {formatShortDateTime(o.created_at)}
-                                </td>
-                                
-                                <td className="px-0.5 text-center" style={cellPad}>
-                                  <div className="flex items-center justify-center gap-0.5">
-                                    <button
-                                      onClick={() => startEditOrder(o)}
-                                      className={`text-[11px] bg-white hover:bg-slate-100 border px-1 py-0.5 rounded cursor-pointer shadow-2xs ${
-                                        isPast ? 'text-slate-400 border-slate-300' : 'text-slate-900 border-slate-800'
-                                      }`}
-                                    >
-                                      수정
-                                    </button>
-                                    <button
-                                      onClick={() => handlePrintSingleOrder(o)}
-                                      className="text-[11px] bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 px-1 py-0.5 rounded cursor-pointer shadow-2xs"
-                                      title="주문서 출력"
-                                    >
-                                      출력
-                                    </button>
-                                  </div>
-                                </td>
+                                </span>
+                                <span className={`whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-400'}`}>
+                                  접수 {formatShortDateTime(o.created_at)}
+                                </span>
 
-                                <td className="px-0.5 text-center" style={cellPad}>
-                                  <div className="flex items-center justify-center gap-1">
-                                    {(photoMap[String(o.id)]?.length || 0) > 0 && (
-                                      <button
-                                        onClick={() => { setPhotoViewer(o.id); setPhotoViewerIndex(0); }}
-                                        className="text-[11px] bg-lime-100 hover:bg-lime-200 border border-lime-400 text-lime-900 px-1 py-0.5 rounded cursor-pointer whitespace-nowrap font-bold"
-                                        title="작품 사진 보기"
-                                      >
-                                        보기 {photoMap[String(o.id)].length}
-                                      </button>
-                                    )}
-                                    {(photoMap[String(o.id)]?.length || 0) < MAX_ORDER_PHOTOS && (
-                                      <button
-                                        onClick={() => handleOrderPhotoUpload(o)}
-                                        disabled={photoUploadingOrderId === o.id}
-                                        className="text-[11px] bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 px-1 py-0.5 rounded cursor-pointer whitespace-nowrap"
-                                        title={(photoMap[String(o.id)]?.length || 0) > 0 ? '사진 추가' : '사진 등록'}
-                                      >
-                                        {photoUploadingOrderId === o.id ? '업로드…' : ((photoMap[String(o.id)]?.length || 0) > 0 ? '+' : '사진')}
-                                      </button>
-                                    )}
-                                  </div>
-                                </td>
-
-                                <td className="px-0.5 text-center" style={cellPad}>
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedOrderIds.includes(o.id)}
-                                    onChange={() => handleToggleSelectOrder(o.id)}
-                                    className="accent-rose-600 cursor-pointer w-4 h-4"
-                                  />
-                                </td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                    </table>
+                                <div className="flex items-center gap-1 ml-auto shrink-0">
+                                  <button
+                                    onClick={() => startEditOrder(o)}
+                                    className={`bg-white hover:bg-slate-100 border px-1 py-0.5 rounded cursor-pointer shadow-2xs ${
+                                      isPast ? 'text-slate-400 border-slate-300' : 'text-slate-900 border-slate-800'
+                                    }`}
+                                  >
+                                    수정
+                                  </button>
+                                  <button
+                                    onClick={() => handlePrintSingleOrder(o)}
+                                    className="bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 px-1 py-0.5 rounded cursor-pointer shadow-2xs"
+                                    title="주문서 출력"
+                                  >
+                                    출력
+                                  </button>
+                                  {(photoMap[String(o.id)]?.length || 0) > 0 && (
+                                    <button
+                                      onClick={() => { setPhotoViewer(o.id); setPhotoViewerIndex(0); }}
+                                      className="bg-lime-100 hover:bg-lime-200 border border-lime-400 text-lime-900 px-1 py-0.5 rounded cursor-pointer whitespace-nowrap font-bold"
+                                      title="작품 사진 보기"
+                                    >
+                                      보기 {photoMap[String(o.id)].length}
+                                    </button>
+                                  )}
+                                  {(photoMap[String(o.id)]?.length || 0) < MAX_ORDER_PHOTOS && (
+                                    <button
+                                      onClick={() => handleOrderPhotoUpload(o)}
+                                      disabled={photoUploadingOrderId === o.id}
+                                      className="bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 px-1 py-0.5 rounded cursor-pointer whitespace-nowrap"
+                                      title={(photoMap[String(o.id)]?.length || 0) > 0 ? '사진 추가' : '사진 등록'}
+                                    >
+                                      {photoUploadingOrderId === o.id ? '업로드…' : ((photoMap[String(o.id)]?.length || 0) > 0 ? '+' : '사진')}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -2701,6 +2966,7 @@ export default function App() {
                         receipt_date: kstNow.date,
                         receipt_time: kstNow.time,
                         payment_method: '신용카드',
+                        is_delivery: false,
                         memo: ''
                       });
                       setIsMemoAutofilled(false);
@@ -2736,6 +3002,11 @@ export default function App() {
                             <span className="text-xs text-slate-600 font-medium">
                               {o.customers?.phone || ''}
                             </span>
+                            {o.is_delivery && (
+                              <span className="px-1.5 py-0.5 bg-sky-500 text-white font-bold text-[10px] rounded-md whitespace-nowrap shrink-0">
+                                🚚 배달
+                              </span>
+                            )}
                             {(photoMap[String(o.id)]?.length || 0) > 0 && (
                               <button
                                 onClick={() => { setPhotoViewer(o.id); setPhotoViewerIndex(0); }}
@@ -2801,6 +3072,155 @@ export default function App() {
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {activeMenu === 'dashboard' && (
+          <div className="max-w-3xl mx-auto space-y-4">
+            <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
+              <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+                <h2 className="text-base md:text-xl font-bold text-slate-900 flex items-center gap-2">
+                  <span>📊</span> 매출 대시보드
+                </h2>
+                <button
+                  onClick={handleExportSalesSummaryCSV}
+                  className="text-xs font-bold bg-white hover:bg-slate-100 border border-slate-800 text-slate-900 px-3 py-1.5 rounded-lg cursor-pointer"
+                >
+                  📥 매출 요약 CSV 내보내기
+                </button>
+              </div>
+
+              <div className="flex gap-1.5 mb-4">
+                {[
+                  { id: 'today', label: '오늘' },
+                  { id: 'week', label: '이번주' },
+                  { id: 'month', label: '이번달' },
+                  { id: 'all', label: '전체' },
+                ].map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => setDashboardPeriod(p.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border ${
+                      dashboardPeriod === p.id
+                        ? 'bg-rose-600 text-white border-rose-600'
+                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+
+              <p className="text-[11px] text-slate-500 mb-3">※ 접수일시(주문 등록 시각) 기준 집계입니다. 삭제(휴지통)된 주문은 제외됩니다.</p>
+
+              {/* 요약 카드 */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200">
+                  <div className="text-[11px] font-bold text-rose-700">총매출</div>
+                  <div className="text-base md:text-xl font-extrabold text-rose-700 mt-1">
+                    {dashboardStats.totalRevenue.toLocaleString()}원
+                  </div>
+                  <div className="text-[10px] text-rose-500 mt-0.5">{dashboardStats.totalCount}건</div>
+                </div>
+                <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200">
+                  <div className="text-[11px] font-bold text-indigo-700">📅 예약매출</div>
+                  <div className="text-base md:text-xl font-extrabold text-indigo-700 mt-1">
+                    {dashboardStats.reservationRevenue.toLocaleString()}원
+                  </div>
+                  <div className="text-[10px] text-indigo-500 mt-0.5">{dashboardStats.reservationCount}건</div>
+                </div>
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200">
+                  <div className="text-[11px] font-bold text-amber-700">🏪 현장매출</div>
+                  <div className="text-base md:text-xl font-extrabold text-amber-700 mt-1">
+                    {dashboardStats.onsiteRevenue.toLocaleString()}원
+                  </div>
+                  <div className="text-[10px] text-amber-500 mt-0.5">{dashboardStats.onsiteCount}건</div>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="text-[11px] font-bold text-slate-700">건당 평균</div>
+                  <div className="text-base md:text-xl font-extrabold text-slate-700 mt-1">
+                    {dashboardStats.totalCount > 0 ? Math.round(dashboardStats.totalRevenue / dashboardStats.totalCount).toLocaleString() : 0}원
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 최근 14일 매출 추이 */}
+            <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
+              <h3 className="text-sm md:text-base font-bold text-slate-900 mb-3">📈 최근 14일 매출 추이</h3>
+              {dashboardStats.dailyTrend.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-6">표시할 데이터가 없습니다.</p>
+              ) : (
+                <div className="flex items-end gap-1.5 h-32 md:h-40">
+                  {dashboardStats.dailyTrend.map(([date, amt]) => (
+                    <div key={date} className="flex-1 flex flex-col items-center justify-end h-full group relative">
+                      <div className="text-[9px] text-slate-500 font-bold mb-0.5 opacity-0 group-hover:opacity-100 transition-opacity absolute -top-4 whitespace-nowrap">
+                        {amt.toLocaleString()}원
+                      </div>
+                      <div
+                        className="w-full bg-rose-400 hover:bg-rose-500 rounded-t transition-colors"
+                        style={{ height: `${Math.max(4, (amt / dashboardStats.maxDaily) * 100)}%` }}
+                      />
+                      <div className="text-[9px] text-slate-400 mt-1 whitespace-nowrap">
+                        {date.slice(5).replace('-', '/')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              {/* 결제수단별 분포 */}
+              <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <h3 className="text-sm md:text-base font-bold text-slate-900 mb-3">💳 결제수단별 매출</h3>
+                {dashboardStats.paymentBreakdown.length === 0 ? (
+                  <p className="text-xs text-slate-400 text-center py-6">표시할 데이터가 없습니다.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {dashboardStats.paymentBreakdown.map(([pm, amt]) => (
+                      <div key={pm}>
+                        <div className="flex justify-between text-[11px] font-bold text-slate-700 mb-0.5">
+                          <span>{pm}</span>
+                          <span>{amt.toLocaleString()}원</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-sky-400 rounded-full"
+                            style={{ width: `${(amt / dashboardStats.maxPayment) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 상품별 판매 순위 */}
+              <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <h3 className="text-sm md:text-base font-bold text-slate-900 mb-3">🌸 상품별 판매 Top 5</h3>
+                {dashboardStats.productRanking.length === 0 ? (
+                  <p className="text-xs text-slate-400 text-center py-6">표시할 데이터가 없습니다.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {dashboardStats.productRanking.map(([pn, amt], idx) => (
+                      <div key={pn}>
+                        <div className="flex justify-between text-[11px] font-bold text-slate-700 mb-0.5">
+                          <span>{idx + 1}. {pn}</span>
+                          <span>{amt.toLocaleString()}원</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-amber-400 rounded-full"
+                            style={{ width: `${(amt / dashboardStats.maxProduct) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
