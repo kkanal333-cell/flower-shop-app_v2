@@ -1224,51 +1224,91 @@ export default function App() {
 
   const handleUpdateOrder = async (e) => {
     e.preventDefault();
-    
-    const rawNums = editingOrder.phone.replace(/[^0-9]/g, '');
-    if (!editingOrder.phone || rawNums.length < 10) {
-      return alert('올바른 휴대폰 번호를 입력해주세요.');
-    }
+    const isOnsite = editingOrder.order_type === '현장판매';
 
-    if (editingOrder.customer_id) {
-      await supabase.from('customers').update({
-        name: editingOrder.customer_name,
-        phone: editingOrder.phone
-      }).eq('id', editingOrder.customer_id);
+    if (!isOnsite) {
+      const rawNums = editingOrder.phone.replace(/[^0-9]/g, '');
+      if (!editingOrder.phone || rawNums.length < 10) {
+        return alert('올바른 휴대폰 번호를 입력해주세요.');
+      }
     }
 
     if (editingOrder.is_delivery && (!editingOrder.delivery_date || !editingOrder.delivery_time)) {
       return alert('배송 날짜와 시간을 입력해주세요.');
     }
 
-    const actualAmount = (Number(editingOrder.amount_thousands) || 0) * 1000;
-    const pickupDatetime = `${editingOrder.pickup_date}T${editingOrder.pickup_time}:00`;
-    const receiptDatetime = `${editingOrder.receipt_date}T${editingOrder.receipt_time}:00`;
+    let customerIdToLink = editingOrder.customer_id || null;
+    const trimmedName = (editingOrder.customer_name || '').trim();
+    const trimmedPhone = (editingOrder.phone || '').trim();
 
-    await supabase.from('orders').update({
+    if (editingOrder.customer_id) {
+      // 기존에 연결된 고객이 있으면 정보만 갱신
+      await supabase.from('customers').update({
+        name: editingOrder.customer_name,
+        phone: editingOrder.phone
+      }).eq('id', editingOrder.customer_id);
+    } else if (isOnsite && trimmedName && trimmedPhone) {
+      // 현장판매 수정 중 고객정보를 새로 입력한 경우: 매칭/신규등록 후 연결
+      const { data: custByPhone } = await supabase
+        .from('customers')
+        .select('id, name')
+        .eq('phone', trimmedPhone)
+        .maybeSingle();
+
+      if (custByPhone) {
+        customerIdToLink = custByPhone.id;
+      } else {
+        const { data: newCust, error: custErr } = await supabase
+          .from('customers')
+          .insert([{ name: trimmedName, phone: trimmedPhone }])
+          .select()
+          .single();
+        if (custErr) {
+          alert('고객 정보 저장 실패: ' + custErr.message);
+          return;
+        }
+        customerIdToLink = newCust?.id;
+      }
+    }
+
+    const actualAmount = (Number(editingOrder.amount_thousands) || 0) * 1000;
+
+    const updatePayload = {
+      customer_id: customerIdToLink,
       product_name: editingOrder.product_name,
       product: editingOrder.product_name,
       amount: actualAmount,
-      pickup_datetime: pickupDatetime,
-      created_at: receiptDatetime,
       payment_method: editingOrder.payment_method,
       status: editingOrder.payment_method,
       is_delivery: !!editingOrder.is_delivery,
       delivery_date: editingOrder.is_delivery ? editingOrder.delivery_date : null,
       delivery_time: editingOrder.is_delivery ? editingOrder.delivery_time : null,
       memo: editingOrder.memo
-    }).eq('id', editingOrder.id);
+    };
 
-    notifyOrderByEmail('주문수정', {
-      customer_name: editingOrder.customer_name,
-      phone: editingOrder.phone,
-      product_name: editingOrder.product_name,
-      amount: actualAmount,
-      pickup_datetime: pickupDatetime,
-      payment_method: editingOrder.payment_method,
-      is_delivery: editingOrder.is_delivery,
-      memo: editingOrder.memo
-    });
+    let pickupDatetime = null;
+    if (!isOnsite) {
+      // 현장판매는 픽업 날짜/시간 개념이 없으므로 기존 값을 그대로 둡니다.
+      pickupDatetime = `${editingOrder.pickup_date}T${editingOrder.pickup_time}:00`;
+      const receiptDatetime = `${editingOrder.receipt_date}T${editingOrder.receipt_time}:00`;
+      updatePayload.pickup_datetime = pickupDatetime;
+      updatePayload.created_at = receiptDatetime;
+    }
+
+    await supabase.from('orders').update(updatePayload).eq('id', editingOrder.id);
+
+    if (!isOnsite) {
+      notifyOrderByEmail('주문수정', {
+        customer_name: editingOrder.customer_name,
+        phone: editingOrder.phone,
+        product_name: editingOrder.product_name,
+        amount: actualAmount,
+        pickup_datetime: pickupDatetime,
+        payment_method: editingOrder.payment_method,
+        is_delivery: editingOrder.is_delivery,
+        memo: editingOrder.memo
+      });
+    }
 
     alert('✅ 모든 수정사항이 저장되었습니다!');
     setEditingOrder(null);
@@ -2119,7 +2159,7 @@ export default function App() {
         </nav>
       </aside>
 
-      <main className="flex-1 p-2 lg:p-5 max-w-6xl mx-auto w-full">
+      <main className="flex-1 p-2 lg:p-5 max-w-[1600px] mx-auto w-full">
         {photoViewer && viewerPhoto && (
           <div
             className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 overflow-y-auto"
@@ -2227,10 +2267,149 @@ export default function App() {
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 z-50">
             <div className="bg-white rounded-2xl p-4 md:p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-xl border border-slate-200">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-base md:text-lg font-bold text-slate-900">✏️ 주문 수정</h3>
+                <h3 className="text-base md:text-lg font-bold text-slate-900">
+                  {editingOrder.order_type === '현장판매' ? '✏️ 현장판매 수정' : '✏️ 주문 수정'}
+                </h3>
                 <button onClick={() => setEditingOrder(null)} className="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer">✕</button>
               </div>
 
+              {editingOrder.order_type === '현장판매' ? (
+                <form onSubmit={handleUpdateOrder} className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700">상품종류</label>
+                      <select
+                        value={editingOrder.product_name}
+                        onChange={e => setEditingOrder({ ...editingOrder, product_name: e.target.value })}
+                        className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                      >
+                        {PRODUCT_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700">금액 (천원 단위)</label>
+                      <input
+                        type="number"
+                        value={editingOrder.amount_thousands}
+                        onChange={e => setEditingOrder({ ...editingOrder, amount_thousands: e.target.value })}
+                        className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700">결제 방식</label>
+                      <select
+                        value={editingOrder.payment_method}
+                        onChange={e => setEditingOrder({ ...editingOrder, payment_method: e.target.value })}
+                        className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                      >
+                        {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
+                      </select>
+                    </div>
+                    <label className="flex items-center gap-1.5 px-2 py-2 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap h-fit self-end">
+                      <input
+                        type="checkbox"
+                        checked={!!editingOrder.is_delivery}
+                        onChange={e => {
+                          if (e.target.checked) {
+                            const nextQ = getNextQuarterHourDateTime();
+                            setEditingOrder({
+                              ...editingOrder,
+                              is_delivery: true,
+                              delivery_date: editingOrder.delivery_date || getKoreaNowFormatted().date,
+                              delivery_time: editingOrder.delivery_time || nextQ.time
+                            });
+                          } else {
+                            setEditingOrder({ ...editingOrder, is_delivery: false, delivery_date: '', delivery_time: '' });
+                          }
+                        }}
+                        className="w-4 h-4 accent-sky-500 cursor-pointer"
+                      />
+                      <span className="text-xs font-bold text-slate-700">🚚 배송</span>
+                    </label>
+                  </div>
+
+                  {editingOrder.is_delivery && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700">배송 날짜</label>
+                        <input
+                          type="date"
+                          value={editingOrder.delivery_date || ''}
+                          onChange={e => setEditingOrder({ ...editingOrder, delivery_date: e.target.value })}
+                          className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700">배송 시간</label>
+                        <TimePickerCustom
+                          value={editingOrder.delivery_time || ''}
+                          onChange={val => setEditingOrder({ ...editingOrder, delivery_time: val })}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700">고객 성명 (선택)</label>
+                      <input
+                        type="text"
+                        lang="ko"
+                        autoCapitalize="off"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        value={editingOrder.customer_name}
+                        onChange={e => setEditingOrder({ ...editingOrder, customer_name: e.target.value })}
+                        className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700">휴대폰 번호 (선택)</label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={editingOrder.phone}
+                        onChange={e => setEditingOrder({ ...editingOrder, phone: formatPhone(e.target.value) })}
+                        className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700">메모</label>
+                    <textarea
+                      lang="ko"
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      value={editingOrder.memo}
+                      onChange={e => setEditingOrder({ ...editingOrder, memo: e.target.value })}
+                      onFocus={e => e.target.select()}
+                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                      rows={2}
+                    />
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <button 
+                      type="submit" 
+                      className="flex-1 py-2 bg-white hover:bg-slate-100 text-black border border-black font-extrabold rounded-xl text-xs cursor-pointer transition-colors"
+                    >
+                      저장하기
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={() => setEditingOrder(null)} 
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs border border-slate-300 font-bold cursor-pointer"
+                    >
+                      취소
+                    </button>
+                  </div>
+                </form>
+              ) : (
               <form onSubmit={handleUpdateOrder} className="space-y-3">
                 <div className="grid grid-cols-2 gap-2">
                   <div>
@@ -2335,7 +2514,7 @@ export default function App() {
                   </label>
                 </div>
                 {editingOrder.is_delivery && (
-                  <div className="grid grid-cols-2 gap-2 p-2 rounded-xl bg-sky-50 border border-sky-200">
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-[11px] font-bold text-slate-700">배송 날짜</label>
                       <input
@@ -2347,16 +2526,13 @@ export default function App() {
                     </div>
                     <div>
                       <label className="text-[11px] font-bold text-slate-700">배송 시간</label>
-                      <input
-                        type="time"
+                      <TimePickerCustom
                         value={editingOrder.delivery_time || ''}
-                        onChange={e => setEditingOrder({ ...editingOrder, delivery_time: e.target.value })}
-                        className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                        onChange={val => setEditingOrder({ ...editingOrder, delivery_time: val })}
                       />
                     </div>
                   </div>
                 )}
-
 
                 <div>
                   <label className="text-[11px] font-bold text-slate-700">메모</label>
@@ -2389,6 +2565,7 @@ export default function App() {
                   </button>
                 </div>
               </form>
+              )}
             </div>
           </div>
         )}
@@ -2532,7 +2709,7 @@ export default function App() {
                   </label>
                 </div>
                 {newOrder.is_delivery && (
-                  <div className="grid grid-cols-2 gap-2 p-2 rounded-xl bg-sky-50 border border-sky-200">
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-[11px] font-bold text-slate-700">배송 날짜</label>
                       <input
@@ -2544,11 +2721,9 @@ export default function App() {
                     </div>
                     <div>
                       <label className="text-[11px] font-bold text-slate-700">배송 시간</label>
-                      <input
-                        type="time"
+                      <TimePickerCustom
                         value={newOrder.delivery_time || ''}
-                        onChange={e => setNewOrder({...newOrder, delivery_time: e.target.value})}
-                        className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                        onChange={val => setNewOrder({...newOrder, delivery_time: val})}
                       />
                     </div>
                   </div>
@@ -2607,10 +2782,10 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setNewOrderTab('reservation')}
-                className={`flex-1 py-2 rounded-xl text-xs md:text-sm font-bold cursor-pointer border transition-colors ${
+                className={`flex-1 py-2 rounded-xl text-xs md:text-sm font-bold cursor-pointer border-2 transition-colors ${
                   newOrderTab === 'reservation'
-                    ? 'bg-rose-100 text-rose-700 border-rose-300'
-                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                    ? 'bg-rose-100 border-rose-400 shadow-sm'
+                    : 'bg-slate-50 border-transparent hover:bg-slate-100'
                 }`}
               >
                 📅 예약주문
@@ -2618,10 +2793,10 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setNewOrderTab('onsite')}
-                className={`flex-1 py-2 rounded-xl text-xs md:text-sm font-bold cursor-pointer border transition-colors ${
+                className={`flex-1 py-2 rounded-xl text-xs md:text-sm font-bold cursor-pointer border-2 transition-colors ${
                   newOrderTab === 'onsite'
-                    ? 'bg-rose-100 text-rose-700 border-rose-300'
-                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                    ? 'bg-rose-100 border-rose-400 shadow-sm'
+                    : 'bg-slate-50 border-transparent hover:bg-slate-100'
                 }`}
               >
                 🏪 현장판매
@@ -2795,7 +2970,7 @@ export default function App() {
                 </label>
               </div>
               {newOrder.is_delivery && (
-                <div className="grid grid-cols-2 gap-2 md:gap-4 p-2.5 rounded-xl bg-sky-50 border border-sky-200">
+                <div className="grid grid-cols-2 gap-2 md:gap-4">
                   <div>
                     <label className="text-[11px] md:text-xs font-bold text-black">배송 날짜</label>
                     <input
@@ -2807,11 +2982,9 @@ export default function App() {
                   </div>
                   <div>
                     <label className="text-[11px] md:text-xs font-bold text-black">배송 시간</label>
-                    <input
-                      type="time"
+                    <TimePickerCustom
                       value={newOrder.delivery_time || ''}
-                      onChange={e => setNewOrder({...newOrder, delivery_time: e.target.value})}
-                      className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black"
+                      onChange={val => setNewOrder({...newOrder, delivery_time: val})}
                     />
                   </div>
                 </div>
@@ -2921,7 +3094,7 @@ export default function App() {
               </div>
 
               {onsiteOrder.is_delivery && (
-                <div className="grid grid-cols-2 gap-2 md:gap-4 p-2.5 rounded-xl bg-sky-50 border border-sky-200">
+                <div className="grid grid-cols-2 gap-2 md:gap-4">
                   <div>
                     <label className="text-[11px] md:text-xs font-bold text-black">배송 날짜</label>
                     <input
@@ -2933,11 +3106,9 @@ export default function App() {
                   </div>
                   <div>
                     <label className="text-[11px] md:text-xs font-bold text-black">배송 시간</label>
-                    <input
-                      type="time"
+                    <TimePickerCustom
                       value={onsiteOrder.delivery_time || ''}
-                      onChange={e => setOnsiteOrder({ ...onsiteOrder, delivery_time: e.target.value })}
-                      className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black"
+                      onChange={val => setOnsiteOrder({ ...onsiteOrder, delivery_time: val })}
                     />
                   </div>
                 </div>
@@ -3078,22 +3249,22 @@ export default function App() {
                   </div>
 
                   <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                    <table className="w-full text-left border-collapse table-fixed min-w-[1180px]">
+                    <table className="w-full text-left border-collapse table-fixed min-w-[980px]">
                       <thead>
                         <tr className="border-b border-slate-200 text-slate-700 text-xs md:text-sm bg-slate-100 font-bold">
-                          <th className="px-1 w-16 text-center" style={{ paddingTop: '4px', paddingBottom: '4px' }}>유형</th>
-                          <th className="px-1 w-28" style={{ paddingTop: '4px', paddingBottom: '4px' }}>픽업일시</th>
-                          <th className="px-1 w-20" style={{ paddingTop: '4px', paddingBottom: '4px' }}>고객명</th>
-                          <th className="px-1 w-32" style={{ paddingTop: '4px', paddingBottom: '4px' }}>연락처</th>
-                          <th className="px-1 w-24" style={{ paddingTop: '4px', paddingBottom: '4px' }}>상품명</th>
-                          <th className="px-1 w-24" style={{ paddingTop: '4px', paddingBottom: '4px' }}>금액</th>
-                          <th className="px-1 w-20" style={{ paddingTop: '4px', paddingBottom: '4px' }}>결제수단</th>
-                          <th className="px-1 w-24" style={{ paddingTop: '4px', paddingBottom: '4px' }}>배송</th>
-                          <th className="px-1 w-32" style={{ paddingTop: '4px', paddingBottom: '4px' }}>메모</th>
-                          <th className="px-1 w-28" style={{ paddingTop: '4px', paddingBottom: '4px' }}>접수일시</th>
-                          <th className="px-1 w-24 text-center" style={{ paddingTop: '4px', paddingBottom: '4px' }}>관리 / 출력</th>
-                          <th className="px-1 w-24 text-center" style={{ paddingTop: '4px', paddingBottom: '4px' }}>사진(3p)</th>
-                          <th className="px-1 w-9 text-center" style={{ paddingTop: '4px', paddingBottom: '4px' }}>
+                          <th className="px-1 text-center" style={{ paddingTop: '4px', paddingBottom: '4px', width: '4%' }}>유형</th>
+                          <th className="px-1" style={{ paddingTop: '4px', paddingBottom: '4px', width: '10%' }}>픽업일시</th>
+                          <th className="px-1" style={{ paddingTop: '4px', paddingBottom: '4px', width: '8%' }}>고객명</th>
+                          <th className="px-1" style={{ paddingTop: '4px', paddingBottom: '4px', width: '11%' }}>연락처</th>
+                          <th className="px-1" style={{ paddingTop: '4px', paddingBottom: '4px', width: '8%' }}>상품명</th>
+                          <th className="px-1" style={{ paddingTop: '4px', paddingBottom: '4px', width: '8%' }}>금액</th>
+                          <th className="px-1" style={{ paddingTop: '4px', paddingBottom: '4px', width: '8%' }}>결제수단</th>
+                          <th className="px-1 text-center" style={{ paddingTop: '4px', paddingBottom: '4px', width: '5%' }}>배송</th>
+                          <th className="px-1" style={{ paddingTop: '4px', paddingBottom: '4px', width: '13%' }}>메모</th>
+                          <th className="px-1" style={{ paddingTop: '4px', paddingBottom: '4px', width: '10%' }}>접수일시</th>
+                          <th className="px-1 text-center" style={{ paddingTop: '4px', paddingBottom: '4px', width: '8%' }}>관리 / 출력</th>
+                          <th className="px-1 text-center" style={{ paddingTop: '4px', paddingBottom: '4px', width: '8%' }}>사진(3p)</th>
+                          <th className="px-1 text-center" style={{ paddingTop: '4px', paddingBottom: '4px', width: '3%' }}>
                             <input
                               type="checkbox"
                               onChange={handleToggleSelectAllOrders}
@@ -3116,9 +3287,6 @@ export default function App() {
                             const isPast = pickupDate !== '' && pickupDate < todayDateStr;
                             const isOnsite = o.order_type === '현장판매';
                             const cellPad = { paddingTop: '5px', paddingBottom: '5px' };
-                            const deliveryLabel = o.is_delivery
-                              ? `🚚 ${o.delivery_date && o.delivery_date !== todayDateStr ? o.delivery_date.slice(5).replace('-', '/') + ' ' : ''}${o.delivery_time || ''}`
-                              : '-';
 
                             return (
                               <tr 
@@ -3130,10 +3298,10 @@ export default function App() {
                                 }`}
                               >
                                 <td className="px-1 text-center" style={cellPad}>
-                                  <span className={`inline-block px-1.5 py-0.5 rounded-md text-[10px] font-extrabold whitespace-nowrap text-white ${
+                                  <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-xs ${
                                     isPast ? 'opacity-40' : ''
-                                  } ${isOnsite ? 'bg-orange-500' : 'bg-indigo-600'}`}>
-                                    {isOnsite ? '🏪현장' : '📅예약'}
+                                  } ${isOnsite ? 'bg-orange-500' : 'bg-indigo-600'}`} title={isOnsite ? '현장판매' : '예약주문'}>
+                                    {isOnsite ? '🏪' : '📅'}
                                   </span>
                                 </td>
                                 <td className={`px-1 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`} style={cellPad}>
@@ -3158,14 +3326,14 @@ export default function App() {
                                     {o.payment_method}
                                   </span>
                                 </td>
-                                <td className="px-1" style={cellPad}>
-                                  <span className={`px-1.5 py-0.5 rounded text-[11px] block text-center truncate whitespace-nowrap ${
-                                    o.is_delivery
-                                      ? (isPast ? 'bg-sky-50 text-slate-300 border border-sky-100' : 'bg-sky-100 text-sky-800 border border-sky-300 font-bold')
-                                      : (isPast ? 'text-slate-300' : 'text-slate-400')
-                                  }`}>
-                                    {deliveryLabel}
-                                  </span>
+                                <td className="px-1 text-center" style={cellPad}>
+                                  {o.is_delivery ? (
+                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-sky-100 border border-sky-300 text-sm" title={`배송 (${o.delivery_date || ''} ${o.delivery_time || ''})`}>
+                                      🚚
+                                    </span>
+                                  ) : (
+                                    <span className={`text-xs ${isPast ? 'text-slate-200' : 'text-slate-300'}`}>-</span>
+                                  )}
                                 </td>
                                 <td className={`px-1 truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo} style={cellPad}>
                                   {o.memo || '-'}
