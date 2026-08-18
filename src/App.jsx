@@ -3255,24 +3255,24 @@ export default function App() {
                     검색 결과: 총 <strong className="text-rose-600">{sortedAndFilteredOrders.length}</strong>건
                   </div>
 
-                  {/* 모바일·PC 공통: 고정폭 표. 화면이 좁으면 가로 스크롤로 전체 항목을 확인합니다. */}
-                  <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                    <table className="border-collapse table-fixed min-w-[1220px] w-full">
+                  {/* 모바일·PC 공통: 자동 레이아웃 표. 내용에 맞춰 칸 너비가 자동으로 정해지고, 화면보다 넓으면 가로 스크롤됩니다. */}
+                  <div className="overflow-x-auto border border-slate-200 rounded-xl" style={{ WebkitOverflowScrolling: 'touch' }}>
+                    <table className="border-collapse" style={{ width: 'max-content', minWidth: '100%' }}>
                       <thead>
                         <tr className="border-b border-slate-200 text-slate-700 text-sm bg-slate-100 font-bold">
-                          <th className="px-1 w-14 text-center overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>유형</th>
-                          <th className="px-1 w-28 overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>픽업일시</th>
-                          <th className="px-1 w-[84px] overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>고객명</th>
-                          <th className="px-1 w-32 overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>연락처</th>
-                          <th className="px-1 w-24 overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>상품명</th>
-                          <th className="px-1 w-24 overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>금액</th>
-                          <th className="px-1 w-[88px] overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>결제수단</th>
-                          <th className="px-1 w-14 text-center overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>배송</th>
-                          <th className="px-1 w-40 overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>메모</th>
-                          <th className="px-1 w-28 overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>접수일시</th>
-                          <th className="px-1 w-24 text-center overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>관리 / 출력</th>
-                          <th className="px-1 w-[100px] text-center overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>사진(3p)</th>
-                          <th className="px-1 w-10 text-center overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>
+                          <th className="px-2 text-center whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>유형</th>
+                          <th className="px-2 whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>픽업일시</th>
+                          <th className="px-2 whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>고객명</th>
+                          <th className="px-2 whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>연락처</th>
+                          <th className="px-2 whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>상품명</th>
+                          <th className="px-2 whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>금액</th>
+                          <th className="px-2 whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>결제수단</th>
+                          <th className="px-2 text-center whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>배송</th>
+                          <th className="px-2 whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>메모</th>
+                          <th className="px-2 whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>접수일시</th>
+                          <th className="px-2 text-center whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>관리 / 출력</th>
+                          <th className="px-2 text-center whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>사진(3p)</th>
+                          <th className="px-2 text-center whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>
                             <input
                               type="checkbox"
                               onChange={handleToggleSelectAllOrders}
@@ -3285,7 +3285,7 @@ export default function App() {
                       <tbody>
                         {sortedAndFilteredOrders.length === 0 ? (
                           <tr>
-                            <td colSpan={13} className="py-6 text-center text-slate-500 text-sm">
+                            <td colSpan={13} className="py-6 text-center text-slate-500 text-sm whitespace-nowrap">
                               검색 결과가 없습니다.
                             </td>
                           </tr>
@@ -3294,7 +3294,7 @@ export default function App() {
                             const pickupDate = o.pickup_datetime ? o.pickup_datetime.replace(' ', 'T').split('T')[0] : '';
                             const isPast = pickupDate !== '' && pickupDate < todayDateStr;
                             const isOnsite = o.order_type === '현장판매';
-                            const cellPad = { paddingTop: '5px', paddingBottom: '5px' };
+                            const cellPad = { paddingTop: '6px', paddingBottom: '6px' };
 
                             return (
                               <tr 
@@ -3305,36 +3305,36 @@ export default function App() {
                                     : 'text-slate-900 hover:bg-slate-50'
                                 }`}
                               >
-                                <td className="px-1 text-center overflow-hidden" style={cellPad}>
+                                <td className="px-2 text-center whitespace-nowrap" style={cellPad}>
                                   <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-xs ${
                                     isPast ? 'opacity-40' : ''
                                   } ${isOnsite ? 'bg-orange-500' : 'bg-indigo-600'}`} title={isOnsite ? '현장판매' : '예약주문'}>
                                     {isOnsite ? '🏪' : '📅'}
                                   </span>
                                 </td>
-                                <td className={`px-1 whitespace-nowrap overflow-hidden text-ellipsis ${isPast ? 'text-slate-300' : 'text-slate-900'}`} style={cellPad}>
+                                <td className={`px-2 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`} style={cellPad}>
                                   {formatShortDateTime(o.pickup_datetime)}
                                 </td>
-                                <td className={`px-1 truncate ${isPast ? 'text-slate-300' : 'text-slate-900'}`} style={cellPad}>
+                                <td className={`px-2 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`} style={cellPad}>
                                   {o.customers?.name || '-'}
                                 </td>
-                                <td className={`px-1 truncate ${isPast ? 'text-slate-300' : 'text-slate-700'}`} style={cellPad}>
+                                <td className={`px-2 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-700'}`} style={cellPad}>
                                   {o.customers?.phone || '-'}
                                 </td>
-                                <td className={`px-1 truncate ${isPast ? 'text-slate-300' : 'text-slate-800'}`} style={cellPad}>
+                                <td className={`px-2 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-800'}`} style={cellPad}>
                                   {o.product_name}
                                 </td>
-                                <td className={`px-1 truncate ${isPast ? 'text-slate-300' : 'text-rose-600'}`} style={cellPad}>
+                                <td className={`px-2 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-rose-600'}`} style={cellPad}>
                                   {o.amount?.toLocaleString()}원
                                 </td>
-                                <td className="px-1 overflow-hidden" style={cellPad}>
-                                  <span className={`px-1.5 py-0.5 border rounded text-[11px] block text-center truncate ${
+                                <td className="px-2 whitespace-nowrap" style={cellPad}>
+                                  <span className={`px-1.5 py-0.5 border rounded text-[11px] whitespace-nowrap ${
                                     isPast ? 'bg-slate-100 border-slate-200 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-800'
                                   }`}>
                                     {o.payment_method}
                                   </span>
                                 </td>
-                                <td className="px-1 text-center overflow-hidden" style={cellPad}>
+                                <td className="px-2 text-center whitespace-nowrap" style={cellPad}>
                                   {o.is_delivery ? (
                                     <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-sky-100 border border-sky-300 text-sm" title={`배송 (${o.delivery_date || ''} ${o.delivery_time || ''})`}>
                                       🚚
@@ -3343,18 +3343,18 @@ export default function App() {
                                     <span className={`text-xs ${isPast ? 'text-slate-200' : 'text-slate-300'}`}>-</span>
                                   )}
                                 </td>
-                                <td className={`px-1 truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo} style={cellPad}>
+                                <td className={`px-2 max-w-[220px] truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo} style={cellPad}>
                                   {o.memo || '-'}
                                 </td>
-                                <td className={`px-1 whitespace-nowrap overflow-hidden text-ellipsis ${isPast ? 'text-slate-300' : 'text-slate-500'}`} style={cellPad}>
+                                <td className={`px-2 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-500'}`} style={cellPad}>
                                   {formatShortDateTime(o.created_at)}
                                 </td>
                                 
-                                <td className="px-1 text-center overflow-hidden" style={cellPad}>
+                                <td className="px-2 text-center whitespace-nowrap" style={cellPad}>
                                   <div className="flex items-center justify-center gap-1">
                                     <button
                                       onClick={() => startEditOrder(o)}
-                                      className={`text-[11px] bg-white hover:bg-slate-100 border px-1.5 py-0.5 rounded cursor-pointer shadow-2xs ${
+                                      className={`text-[11px] bg-white hover:bg-slate-100 border px-1.5 py-0.5 rounded cursor-pointer shadow-2xs whitespace-nowrap ${
                                         isPast ? 'text-slate-400 border-slate-300' : 'text-slate-900 border-slate-800'
                                       }`}
                                     >
@@ -3362,7 +3362,7 @@ export default function App() {
                                     </button>
                                     <button
                                       onClick={() => handlePrintSingleOrder(o)}
-                                      className="text-[11px] bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 px-1.5 py-0.5 rounded cursor-pointer shadow-2xs"
+                                      className="text-[11px] bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 px-1.5 py-0.5 rounded cursor-pointer shadow-2xs whitespace-nowrap"
                                       title="주문서 출력"
                                     >
                                       출력
@@ -3370,7 +3370,7 @@ export default function App() {
                                   </div>
                                 </td>
 
-                                <td className="px-1 text-center overflow-hidden" style={cellPad}>
+                                <td className="px-2 text-center whitespace-nowrap" style={cellPad}>
                                   <div className="flex items-center justify-center gap-1">
                                     {(photoMap[String(o.id)]?.length || 0) > 0 && (
                                       <button
@@ -3394,7 +3394,7 @@ export default function App() {
                                   </div>
                                 </td>
 
-                                <td className="px-1 text-center overflow-hidden" style={cellPad}>
+                                <td className="px-2 text-center whitespace-nowrap" style={cellPad}>
                                   <input
                                     type="checkbox"
                                     checked={selectedOrderIds.includes(o.id)}
