@@ -3255,8 +3255,8 @@ export default function App() {
                     검색 결과: 총 <strong className="text-rose-600">{sortedAndFilteredOrders.length}</strong>건
                   </div>
 
-                  {/* PC(lg 이상) 전용: 고정폭 표. 화면이 좁아지면(모바일/좁은 창) 아래 카드형 리스트로 전환됩니다. */}
-                  <div className="hidden lg:block overflow-x-auto border border-slate-200 rounded-xl">
+                  {/* 모바일·PC 공통: 고정폭 표. 화면이 좁으면 가로 스크롤로 전체 항목을 확인합니다. */}
+                  <div className="overflow-x-auto border border-slate-200 rounded-xl">
                     <table className="border-collapse table-fixed min-w-[1220px] w-full">
                       <thead>
                         <tr className="border-b border-slate-200 text-slate-700 text-sm bg-slate-100 font-bold">
@@ -3410,130 +3410,6 @@ export default function App() {
                     </table>
                   </div>
 
-                  {/* lg 미만(모바일/좁은 창) 전용: 겹침 없는 카드형 리스트 */}
-                  <div className="lg:hidden border border-slate-200 rounded-xl overflow-hidden">
-                    <div className="flex items-center justify-between px-3 py-2 bg-slate-100 border-b border-slate-200 text-xs font-bold text-slate-700">
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          onChange={handleToggleSelectAllOrders}
-                          checked={sortedAndFilteredOrders.length > 0 && selectedOrderIds.length === sortedAndFilteredOrders.length}
-                          className="accent-rose-600 cursor-pointer w-4 h-4"
-                        />
-                        전체 선택
-                      </label>
-                      <span className="text-slate-500 font-medium">{sortedAndFilteredOrders.length}건</span>
-                    </div>
-
-                    {sortedAndFilteredOrders.length === 0 ? (
-                      <div className="py-6 text-center text-slate-500 text-xs">검색 결과가 없습니다.</div>
-                    ) : (
-                      <div className="divide-y divide-slate-100">
-                        {sortedAndFilteredOrders.map(o => {
-                          const pickupDate = o.pickup_datetime ? o.pickup_datetime.replace(' ', 'T').split('T')[0] : '';
-                          const isPast = pickupDate !== '' && pickupDate < todayDateStr;
-                          const isOnsite = o.order_type === '현장판매';
-
-                          return (
-                            <div
-                              key={o.id}
-                              className={`px-2.5 py-2 transition-colors ${
-                                isPast ? 'bg-slate-100/50 opacity-40' : 'hover:bg-slate-50'
-                              }`}
-                            >
-                              <div className="flex items-center gap-1.5 flex-wrap text-xs">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedOrderIds.includes(o.id)}
-                                  onChange={() => handleToggleSelectOrder(o.id)}
-                                  className="accent-rose-600 cursor-pointer w-4 h-4 shrink-0"
-                                />
-                                <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] shrink-0 ${isOnsite ? 'bg-orange-500' : 'bg-indigo-600'}`}>
-                                  {isOnsite ? '🏪' : '📅'}
-                                </span>
-                                <span className={`font-bold whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
-                                  {formatShortDateTime(o.pickup_datetime)}
-                                </span>
-                                <span className={`font-bold truncate max-w-[64px] ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
-                                  {o.customers?.name || '-'}
-                                </span>
-                                <span className={`font-bold whitespace-nowrap ml-auto ${isPast ? 'text-slate-300' : 'text-rose-600'}`}>
-                                  {o.amount?.toLocaleString()}원
-                                </span>
-                              </div>
-
-                              <div className="flex items-center gap-1 flex-wrap mt-1.5 text-[11px]">
-                                <span className={`truncate max-w-[90px] ${isPast ? 'text-slate-300' : 'text-slate-600'}`}>
-                                  {o.customers?.phone || '-'}
-                                </span>
-                                <span className={`truncate max-w-[80px] ${isPast ? 'text-slate-300' : 'text-slate-800'}`}>
-                                  {o.product_name}
-                                </span>
-                                <span className={`px-1.5 py-0.5 border rounded whitespace-nowrap shrink-0 ${
-                                  isPast ? 'bg-slate-100 border-slate-200 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-800'
-                                }`}>
-                                  {o.payment_method}
-                                </span>
-                                {o.is_delivery && (
-                                  <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-sky-100 border border-sky-300 shrink-0" title={`배송 (${o.delivery_date || ''} ${o.delivery_time || ''})`}>
-                                    🚚
-                                  </span>
-                                )}
-                              </div>
-
-                              {o.memo && (
-                                <div className={`mt-1 text-[11px] truncate ${isPast ? 'text-slate-300' : 'text-slate-500'}`} title={o.memo}>
-                                  📝 {o.memo}
-                                </div>
-                              )}
-
-                              <div className="flex items-center gap-1 flex-wrap mt-1.5">
-                                <span className={`text-[10px] whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-400'}`}>
-                                  접수 {formatShortDateTime(o.created_at)}
-                                </span>
-                                <div className="flex items-center gap-1 ml-auto shrink-0">
-                                  <button
-                                    onClick={() => startEditOrder(o)}
-                                    className={`text-[11px] bg-white hover:bg-slate-100 border px-1.5 py-0.5 rounded cursor-pointer shadow-2xs ${
-                                      isPast ? 'text-slate-400 border-slate-300' : 'text-slate-900 border-slate-800'
-                                    }`}
-                                  >
-                                    수정
-                                  </button>
-                                  <button
-                                    onClick={() => handlePrintSingleOrder(o)}
-                                    className="text-[11px] bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 px-1.5 py-0.5 rounded cursor-pointer shadow-2xs"
-                                    title="주문서 출력"
-                                  >
-                                    출력
-                                  </button>
-                                  {(photoMap[String(o.id)]?.length || 0) > 0 && (
-                                    <button
-                                      onClick={() => { setPhotoViewer(o.id); setPhotoViewerIndex(0); }}
-                                      className="text-[11px] bg-lime-100 hover:bg-lime-200 border border-lime-400 text-lime-900 px-1.5 py-0.5 rounded cursor-pointer whitespace-nowrap font-bold"
-                                      title="작품 사진 보기"
-                                    >
-                                      보기 {photoMap[String(o.id)].length}
-                                    </button>
-                                  )}
-                                  {(photoMap[String(o.id)]?.length || 0) < MAX_ORDER_PHOTOS && (
-                                    <button
-                                      onClick={() => handleOrderPhotoUpload(o)}
-                                      disabled={photoUploadingOrderId === o.id}
-                                      className="text-[11px] bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 px-1.5 py-0.5 rounded cursor-pointer whitespace-nowrap"
-                                      title={(photoMap[String(o.id)]?.length || 0) > 0 ? '사진 추가' : '사진 등록'}
-                                    >
-                                      {photoUploadingOrderId === o.id ? '업로드…' : ((photoMap[String(o.id)]?.length || 0) > 0 ? '+' : '사진')}
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
                 </div>
               )}
             </div>
