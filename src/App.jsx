@@ -3343,8 +3343,10 @@ export default function App() {
                                     <span className={`text-xs ${isPast ? 'text-slate-200' : 'text-slate-300'}`}>-</span>
                                   )}
                                 </td>
-                                <td className={`px-2 max-w-[73px] truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo} style={cellPad}>
-                                  {o.memo || '-'}
+                                <td className="px-2" title={o.memo} style={cellPad}>
+                                  <span className={`block w-[73px] truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`}>
+                                      {o.memo || '-'}
+                                  </span>
                                 </td>
                                 <td className={`px-2 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-500'}`} style={cellPad}>
                                   {formatShortDateTime(o.created_at)}
