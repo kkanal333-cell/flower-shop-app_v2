@@ -421,14 +421,20 @@ export default function App() {
     receipt_time: initialKst.time,
     payment_method: '신용카드',
     is_delivery: false,
+    delivery_time: '',
     memo: ''
   });
 
+  const [newOrderTab, setNewOrderTab] = useState('reservation'); // 'reservation' | 'onsite'
+
   const [onsiteOrder, setOnsiteOrder] = useState({
+    customer_name: '',
+    phone: '',
     product_name: '꽃다발',
     amount_thousands: '55',
     payment_method: '신용카드',
     is_delivery: false,
+    delivery_time: '',
     memo: ''
   });
 
@@ -472,6 +478,7 @@ export default function App() {
         receipt_time: kstNow.time,
         payment_method: '신용카드',
         is_delivery: false,
+        delivery_time: '',
         memo: ''
       });
       setIsMemoAutofilled(false);
@@ -953,6 +960,10 @@ export default function App() {
     }
 
     const actualAmount = (Number(newOrder.amount_thousands) || 0) * 1000;
+    if (newOrder.is_delivery && !newOrder.delivery_time) {
+      return alert('배달시간을 입력해주세요.');
+    }
+
     const pickupDatetime = `${newOrder.pickup_date}T${newOrder.pickup_time}:00`;
     const receiptDatetime = `${newOrder.receipt_date}T${newOrder.receipt_time}:00`;
 
@@ -966,6 +977,7 @@ export default function App() {
       payment_method: newOrder.payment_method,
       status: newOrder.payment_method,
       is_delivery: !!newOrder.is_delivery,
+      delivery_time: newOrder.is_delivery ? newOrder.delivery_time : null,
       order_type: '예약',
       memo: newOrder.memo
     }]).select().single();
@@ -1012,6 +1024,7 @@ export default function App() {
       receipt_time: kstNow.time,
       payment_method: '신용카드',
       is_delivery: false,
+      delivery_time: '',
       memo: ''
     });
     setIsMemoAutofilled(false);
@@ -1021,16 +1034,47 @@ export default function App() {
   };
 
   // 현장 즉시판매 저장: 고객정보/픽업시간 없이 상품명·금액·결제수단만으로 간단 등록
+  // 현장 즉시판매 저장: 고객성명/연락처는 선택 입력. 둘 다 입력된 경우에만 고객으로 등록/매칭합니다.
   const handleCreateOnsiteOrder = async (e) => {
     e.preventDefault();
     const actualAmount = (Number(onsiteOrder.amount_thousands) || 0) * 1000;
     if (!actualAmount) return alert('금액을 입력해주세요.');
+    if (onsiteOrder.is_delivery && !onsiteOrder.delivery_time) {
+      return alert('배달시간을 입력해주세요.');
+    }
 
     const nowKst = getKoreaNowFormatted();
     const nowDatetime = `${nowKst.date}T${nowKst.time}:00`;
 
+    let customerId = null;
+    const trimmedName = (onsiteOrder.customer_name || '').trim();
+    const trimmedPhone = (onsiteOrder.phone || '').trim();
+
+    if (trimmedName && trimmedPhone) {
+      const { data: custByPhone } = await supabase
+        .from('customers')
+        .select('id, name')
+        .eq('phone', trimmedPhone)
+        .maybeSingle();
+
+      if (custByPhone) {
+        customerId = custByPhone.id;
+      } else {
+        const { data: newCust, error: custErr } = await supabase
+          .from('customers')
+          .insert([{ name: trimmedName, phone: trimmedPhone }])
+          .select()
+          .single();
+        if (custErr) {
+          alert('고객 정보 저장 실패: ' + custErr.message);
+          return;
+        }
+        customerId = newCust?.id;
+      }
+    }
+
     const { error } = await supabase.from('orders').insert([{
-      customer_id: null,
+      customer_id: customerId,
       product_name: onsiteOrder.product_name,
       product: onsiteOrder.product_name,
       amount: actualAmount,
@@ -1039,6 +1083,7 @@ export default function App() {
       payment_method: onsiteOrder.payment_method,
       status: onsiteOrder.payment_method,
       is_delivery: !!onsiteOrder.is_delivery,
+      delivery_time: onsiteOrder.is_delivery ? onsiteOrder.delivery_time : null,
       order_type: '현장판매',
       memo: onsiteOrder.memo
     }]);
@@ -1050,10 +1095,13 @@ export default function App() {
 
     alert(`현장판매가 등록되었습니다! (${onsiteOrder.product_name} / ${actualAmount.toLocaleString()}원)`);
     setOnsiteOrder({
+      customer_name: '',
+      phone: '',
       product_name: '꽃다발',
       amount_thousands: '55',
       payment_method: '신용카드',
       is_delivery: false,
+      delivery_time: '',
       memo: ''
     });
     fetchData();
@@ -1160,6 +1208,7 @@ export default function App() {
       receipt_time: receipt.time,
       payment_method: order.payment_method || '신용카드',
       is_delivery: !!order.is_delivery,
+      delivery_time: order.delivery_time || '',
       order_type: order.order_type || '예약',
       memo: order.memo || ''
     });
@@ -1180,6 +1229,10 @@ export default function App() {
       }).eq('id', editingOrder.customer_id);
     }
 
+    if (editingOrder.is_delivery && !editingOrder.delivery_time) {
+      return alert('배달시간을 입력해주세요.');
+    }
+
     const actualAmount = (Number(editingOrder.amount_thousands) || 0) * 1000;
     const pickupDatetime = `${editingOrder.pickup_date}T${editingOrder.pickup_time}:00`;
     const receiptDatetime = `${editingOrder.receipt_date}T${editingOrder.receipt_time}:00`;
@@ -1193,6 +1246,7 @@ export default function App() {
       payment_method: editingOrder.payment_method,
       status: editingOrder.payment_method,
       is_delivery: !!editingOrder.is_delivery,
+      delivery_time: editingOrder.is_delivery ? editingOrder.delivery_time : null,
       memo: editingOrder.memo
     }).eq('id', editingOrder.id);
 
@@ -1859,9 +1913,8 @@ export default function App() {
 
   const menuList = [
     { id: 'new', icon: '📝', text: '신규주문' },
-    { id: 'onsite', icon: '🏪', text: '현장판매' },
     { id: 'orders', icon: '📋', text: '주문/달력' },
-    { id: 'dashboard', icon: '📊', text: '매출대시보드' },
+    { id: 'dashboard', icon: '📊', text: '매출' },
     { id: 'customers', icon: '🎂', text: '고객' },
     { id: 'notifications', icon: '🔔', text: '알림' },
     { id: 'backup', icon: '💾', text: '백업/복원' },
@@ -2239,7 +2292,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+                <div className="grid grid-cols-[1fr_auto_auto] gap-2 items-end">
                   <div>
                     <label className="text-[11px] font-bold text-slate-700">결제 방식</label>
                     <select
@@ -2254,11 +2307,22 @@ export default function App() {
                     <input
                       type="checkbox"
                       checked={!!editingOrder.is_delivery}
-                      onChange={e => setEditingOrder({ ...editingOrder, is_delivery: e.target.checked })}
+                      onChange={e => setEditingOrder({ ...editingOrder, is_delivery: e.target.checked, delivery_time: e.target.checked ? editingOrder.delivery_time : '' })}
                       className="w-4 h-4 accent-sky-500 cursor-pointer"
                     />
                     <span className="text-xs font-bold text-slate-700">🚚 배달</span>
                   </label>
+                  {editingOrder.is_delivery && (
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700">배달시간</label>
+                      <input
+                        type="time"
+                        value={editingOrder.delivery_time || ''}
+                        onChange={e => setEditingOrder({ ...editingOrder, delivery_time: e.target.value })}
+                        className="p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -2401,7 +2465,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+                <div className="grid grid-cols-[1fr_auto_auto] gap-2 items-end">
                   <div>
                     <label className="text-[11px] font-bold text-slate-700">결제 방식 *</label>
                     <select
@@ -2416,11 +2480,22 @@ export default function App() {
                     <input
                       type="checkbox"
                       checked={!!newOrder.is_delivery}
-                      onChange={e => setNewOrder({...newOrder, is_delivery: e.target.checked})}
+                      onChange={e => setNewOrder({...newOrder, is_delivery: e.target.checked, delivery_time: e.target.checked ? newOrder.delivery_time : ''})}
                       className="w-4 h-4 accent-sky-500 cursor-pointer"
                     />
                     <span className="text-xs font-bold text-slate-700">🚚 배달</span>
                   </label>
+                  {newOrder.is_delivery && (
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700">배달시간</label>
+                      <input
+                        type="time"
+                        value={newOrder.delivery_time || ''}
+                        onChange={e => setNewOrder({...newOrder, delivery_time: e.target.value})}
+                        className="p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -2472,6 +2547,33 @@ export default function App() {
               />
             </div>
 
+            <div className="flex gap-1.5 mb-4 md:mb-6 border-b border-slate-200 pb-3">
+              <button
+                type="button"
+                onClick={() => setNewOrderTab('reservation')}
+                className={`flex-1 py-2 rounded-xl text-xs md:text-sm font-bold cursor-pointer border transition-colors ${
+                  newOrderTab === 'reservation'
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                }`}
+              >
+                📅 예약주문
+              </button>
+              <button
+                type="button"
+                onClick={() => setNewOrderTab('onsite')}
+                className={`flex-1 py-2 rounded-xl text-xs md:text-sm font-bold cursor-pointer border transition-colors ${
+                  newOrderTab === 'onsite'
+                    ? 'bg-amber-500 text-white border-amber-500'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                }`}
+              >
+                🏪 현장판매
+              </button>
+            </div>
+
+            {newOrderTab === 'reservation' && (
+            <>
             <h2 className="text-base md:text-xl font-bold text-slate-900 mb-4 md:mb-6 flex items-center gap-2">
               <span>📝</span> 신규 주문 및 고객 등록
             </h2>
@@ -2618,11 +2720,22 @@ export default function App() {
                   <input
                     type="checkbox"
                     checked={!!newOrder.is_delivery}
-                    onChange={e => setNewOrder({...newOrder, is_delivery: e.target.checked})}
+                    onChange={e => setNewOrder({...newOrder, is_delivery: e.target.checked, delivery_time: e.target.checked ? newOrder.delivery_time : ''})}
                     className="w-4 h-4 accent-sky-500 cursor-pointer"
                   />
                   <span className="text-xs md:text-sm font-bold text-black">🚚 배달</span>
                 </label>
+                {newOrder.is_delivery && (
+                  <div>
+                    <label className="text-[11px] md:text-xs font-bold text-black">배달시간</label>
+                    <input
+                      type="time"
+                      value={newOrder.delivery_time || ''}
+                      onChange={e => setNewOrder({...newOrder, delivery_time: e.target.value})}
+                      className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
+                    />
+                  </div>
+                )}
               </div>
 
               <div>
@@ -2654,19 +2767,47 @@ export default function App() {
                 주문 저장하기
               </button>
             </form>
-          </div>
-        )}
+            </>
+            )}
 
-        {activeMenu === 'onsite' && (
-          <div className="max-w-lg mx-auto bg-white p-4 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
+            {newOrderTab === 'onsite' && (
+            <>
             <h2 className="text-base md:text-xl font-bold text-slate-900 mb-1 flex items-center gap-2">
               <span>🏪</span> 현장 즉시판매 등록
             </h2>
             <p className="text-xs text-slate-500 mb-4 md:mb-6">
-              매장에서 바로 결제·수령하는 판매를 간단히 기록합니다. (고객정보·픽업시간 불필요, 픽업 달력에는 표시되지 않습니다)
+              매장에서 바로 결제·수령하는 판매를 간단히 기록합니다. (픽업 달력에는 표시되지 않습니다)
             </p>
 
             <form onSubmit={handleCreateOnsiteOrder} className="space-y-3 md:space-y-4">
+              <div className="grid grid-cols-2 gap-2 md:gap-4">
+                <div>
+                  <label className="text-[11px] md:text-xs font-bold text-black">고객 성명 (선택)</label>
+                  <input
+                    type="text"
+                    lang="ko"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    value={onsiteOrder.customer_name}
+                    onChange={e => setOnsiteOrder({ ...onsiteOrder, customer_name: e.target.value })}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
+                    placeholder="입력 안 해도 됩니다"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] md:text-xs font-bold text-black">휴대폰 번호 (선택)</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={onsiteOrder.phone}
+                    onChange={e => setOnsiteOrder({ ...onsiteOrder, phone: formatPhone(e.target.value) })}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
+                    placeholder="010-0000-0000"
+                  />
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
                   <label className="text-[11px] md:text-xs font-bold text-black">상품종류 *</label>
@@ -2693,7 +2834,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+              <div className="grid grid-cols-[1fr_auto_auto] gap-2 items-end">
                 <div>
                   <label className="text-[11px] md:text-xs font-bold text-black">결제 방식 *</label>
                   <select
@@ -2708,11 +2849,22 @@ export default function App() {
                   <input
                     type="checkbox"
                     checked={!!onsiteOrder.is_delivery}
-                    onChange={e => setOnsiteOrder({ ...onsiteOrder, is_delivery: e.target.checked })}
+                    onChange={e => setOnsiteOrder({ ...onsiteOrder, is_delivery: e.target.checked, delivery_time: e.target.checked ? onsiteOrder.delivery_time : '' })}
                     className="w-4 h-4 accent-sky-500 cursor-pointer"
                   />
                   <span className="text-xs md:text-sm font-bold text-black">🚚 배달</span>
                 </label>
+                {onsiteOrder.is_delivery && (
+                  <div>
+                    <label className="text-[11px] md:text-xs font-bold text-black">배달시간</label>
+                    <input
+                      type="time"
+                      value={onsiteOrder.delivery_time || ''}
+                      onChange={e => setOnsiteOrder({ ...onsiteOrder, delivery_time: e.target.value })}
+                      className="p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black"
+                    />
+                  </div>
+                )}
               </div>
 
               <div>
@@ -2732,6 +2884,8 @@ export default function App() {
                 🏪 현장판매 저장
               </button>
             </form>
+            </>
+            )}
           </div>
         )}
 
@@ -2819,127 +2973,141 @@ export default function App() {
                     검색 결과: 총 <strong className="text-rose-600">{sortedAndFilteredOrders.length}</strong>건
                   </div>
 
-                  <div className="border border-slate-200 rounded-xl overflow-hidden">
-                    <div className="flex items-center justify-between px-3 py-2 bg-slate-100 border-b border-slate-200 text-xs font-bold text-slate-700">
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          onChange={handleToggleSelectAllOrders}
-                          checked={sortedAndFilteredOrders.length > 0 && selectedOrderIds.length === sortedAndFilteredOrders.length}
-                          className="accent-rose-600 cursor-pointer w-4 h-4"
-                        />
-                        전체 선택
-                      </label>
-                      <span className="text-slate-500 font-medium">픽업일시 · 고객정보 · 금액 / 유형 · 결제 · 메모 · 관리</span>
-                    </div>
+                  <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                    <table className="w-full text-left border-collapse table-fixed min-w-[820px]">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-slate-700 text-xs md:text-sm bg-slate-100 font-bold">
+                          <th className="px-0.5 w-24" style={{ paddingTop: '3px', paddingBottom: '3px' }}>픽업일시</th>
+                          <th className="px-0.5 w-14" style={{ paddingTop: '3px', paddingBottom: '3px' }}>고객명</th>
+                          <th className="px-0.5 w-24" style={{ paddingTop: '3px', paddingBottom: '3px' }}>연락처</th>
+                          <th className="px-0.5 w-16" style={{ paddingTop: '3px', paddingBottom: '3px' }}>상품명</th>
+                          <th className="px-0.5 w-16" style={{ paddingTop: '3px', paddingBottom: '3px' }}>금액</th>
+                          <th className="px-0.5 w-16" style={{ paddingTop: '3px', paddingBottom: '3px' }}>결제/배달</th>
+                          <th className="px-0.5 w-24" style={{ paddingTop: '3px', paddingBottom: '3px' }}>메모</th>
+                          <th className="px-0.5 w-20" style={{ paddingTop: '3px', paddingBottom: '3px' }}>접수일시</th>
+                          <th className="px-0.5 w-20 text-center" style={{ paddingTop: '3px', paddingBottom: '3px' }}>관리 / 출력</th>
+                          <th className="px-0.5 w-12 text-center" style={{ paddingTop: '3px', paddingBottom: '3px' }}>사진(3p)</th>
+                          <th className="px-0.5 w-8 text-center" style={{ paddingTop: '3px', paddingBottom: '3px' }}>
+                            <input
+                              type="checkbox"
+                              onChange={handleToggleSelectAllOrders}
+                              checked={sortedAndFilteredOrders.length > 0 && selectedOrderIds.length === sortedAndFilteredOrders.length}
+                              className="accent-rose-600 cursor-pointer w-4 h-4"
+                            />
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedAndFilteredOrders.length === 0 ? (
+                          <tr>
+                            <td colSpan={11} className="py-6 text-center text-slate-500 text-xs md:text-sm">
+                              검색 결과가 없습니다.
+                            </td>
+                          </tr>
+                        ) : (
+                          sortedAndFilteredOrders.map(o => {
+                            const pickupDate = o.pickup_datetime ? o.pickup_datetime.replace(' ', 'T').split('T')[0] : '';
+                            const isPast = pickupDate !== '' && pickupDate < todayDateStr;
+                            const isOnsite = o.order_type === '현장판매';
+                            const cellPad = { paddingTop: '4.5px', paddingBottom: '4.5px' };
 
-                    {sortedAndFilteredOrders.length === 0 ? (
-                      <div className="py-6 text-center text-slate-500 text-xs md:text-sm">검색 결과가 없습니다.</div>
-                    ) : (
-                      <div className="divide-y divide-slate-100">
-                        {sortedAndFilteredOrders.map(o => {
-                          const pickupDate = o.pickup_datetime ? o.pickup_datetime.replace(' ', 'T').split('T')[0] : '';
-                          const isPast = pickupDate !== '' && pickupDate < todayDateStr;
-                          const isOnsite = o.order_type === '현장판매';
-
-                          return (
-                            <div
-                              key={o.id}
-                              className={`px-2.5 py-2 md:px-3 md:py-2.5 transition-colors ${
-                                isPast ? 'bg-slate-100/50 opacity-40' : 'hover:bg-slate-50'
-                              }`}
-                            >
-                              {/* 1줄: 체크박스 · 픽업일시 · 고객명 · 연락처 · 상품명 · 금액 */}
-                              <div className="flex items-center gap-1.5 flex-wrap text-xs md:text-sm">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedOrderIds.includes(o.id)}
-                                  onChange={() => handleToggleSelectOrder(o.id)}
-                                  className="accent-rose-600 cursor-pointer w-4 h-4 shrink-0"
-                                />
-                                <span className={`font-bold whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
+                            return (
+                              <tr 
+                                key={o.id} 
+                                className={`border-b border-slate-100 transition-colors text-xs md:text-sm ${
+                                  isPast 
+                                    ? 'text-slate-300 opacity-40 bg-slate-100/50 hover:bg-slate-100' 
+                                    : 'text-slate-900 hover:bg-slate-50'
+                                }`}
+                              >
+                                <td className={`px-0.5 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`} style={cellPad} title={isOnsite ? '현장판매' : '예약주문'}>
+                                  <span className="mr-0.5">{isOnsite ? '🏪' : '📅'}</span>
                                   {formatShortDateTime(o.pickup_datetime)}
-                                </span>
-                                <span className={`font-bold truncate max-w-[70px] ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
+                                </td>
+                                <td className={`px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-slate-900'}`} style={cellPad}>
                                   {o.customers?.name || '-'}
-                                </span>
-                                <span className={`truncate max-w-[100px] ${isPast ? 'text-slate-300' : 'text-slate-600'}`}>
+                                </td>
+                                <td className={`px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-slate-700'}`} style={cellPad}>
                                   {o.customers?.phone || '-'}
-                                </span>
-                                <span className={`truncate max-w-[100px] ${isPast ? 'text-slate-300' : 'text-slate-800'}`}>
+                                </td>
+                                <td className={`px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-slate-800'}`} style={cellPad}>
                                   {o.product_name}
-                                </span>
-                                <span className={`font-bold whitespace-nowrap ml-auto ${isPast ? 'text-slate-300' : 'text-rose-600'}`}>
+                                </td>
+                                <td className={`px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-rose-600'}`} style={cellPad}>
                                   {o.amount?.toLocaleString()}원
-                                </span>
-                              </div>
-
-                              {/* 2줄: 유형 · 배달 · 결제수단 · 메모 · 접수일시 · 관리버튼 · 사진버튼 */}
-                              <div className="flex items-center gap-1 flex-wrap mt-1.5 text-[11px] md:text-xs">
-                                <span className={`px-1.5 py-0.5 rounded border font-bold whitespace-nowrap shrink-0 ${
-                                  isOnsite ? 'bg-amber-100 border-amber-300 text-amber-800' : 'bg-indigo-100 border-indigo-300 text-indigo-800'
-                                }`}>
-                                  {isOnsite ? '🏪현장' : '📅예약'}
-                                </span>
-                                {o.is_delivery && (
-                                  <span className="px-1.5 py-0.5 rounded bg-sky-500 text-white font-bold whitespace-nowrap shrink-0">
-                                    🚚배달
+                                </td>
+                                <td className="px-0.5" style={cellPad}>
+                                  <span className={`px-1 py-0.5 border rounded text-[11px] block text-center truncate ${
+                                    isPast ? 'bg-slate-100 border-slate-200 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-800'
+                                  }`}>
+                                    {o.payment_method}{o.is_delivery ? ' 🚚' : ''}
                                   </span>
-                                )}
-                                <span className={`px-1.5 py-0.5 border rounded whitespace-nowrap shrink-0 ${
-                                  isPast ? 'bg-slate-100 border-slate-200 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-800'
-                                }`}>
-                                  {o.payment_method}
-                                </span>
-                                <span className={`truncate max-w-[110px] ${isPast ? 'text-slate-300' : 'text-slate-500'}`} title={o.memo}>
+                                </td>
+                                <td className={`px-0.5 truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo} style={cellPad}>
                                   {o.memo || '-'}
-                                </span>
-                                <span className={`whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-400'}`}>
-                                  접수 {formatShortDateTime(o.created_at)}
-                                </span>
+                                </td>
+                                <td className={`px-0.5 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-500'}`} style={cellPad}>
+                                  {formatShortDateTime(o.created_at)}
+                                </td>
+                                
+                                <td className="px-0.5 text-center" style={cellPad}>
+                                  <div className="flex items-center justify-center gap-0.5">
+                                    <button
+                                      onClick={() => startEditOrder(o)}
+                                      className={`text-[11px] bg-white hover:bg-slate-100 border px-1 py-0.5 rounded cursor-pointer shadow-2xs ${
+                                        isPast ? 'text-slate-400 border-slate-300' : 'text-slate-900 border-slate-800'
+                                      }`}
+                                    >
+                                      수정
+                                    </button>
+                                    <button
+                                      onClick={() => handlePrintSingleOrder(o)}
+                                      className="text-[11px] bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 px-1 py-0.5 rounded cursor-pointer shadow-2xs"
+                                      title="주문서 출력"
+                                    >
+                                      출력
+                                    </button>
+                                  </div>
+                                </td>
 
-                                <div className="flex items-center gap-1 ml-auto shrink-0">
-                                  <button
-                                    onClick={() => startEditOrder(o)}
-                                    className={`bg-white hover:bg-slate-100 border px-1 py-0.5 rounded cursor-pointer shadow-2xs ${
-                                      isPast ? 'text-slate-400 border-slate-300' : 'text-slate-900 border-slate-800'
-                                    }`}
-                                  >
-                                    수정
-                                  </button>
-                                  <button
-                                    onClick={() => handlePrintSingleOrder(o)}
-                                    className="bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 px-1 py-0.5 rounded cursor-pointer shadow-2xs"
-                                    title="주문서 출력"
-                                  >
-                                    출력
-                                  </button>
-                                  {(photoMap[String(o.id)]?.length || 0) > 0 && (
-                                    <button
-                                      onClick={() => { setPhotoViewer(o.id); setPhotoViewerIndex(0); }}
-                                      className="bg-lime-100 hover:bg-lime-200 border border-lime-400 text-lime-900 px-1 py-0.5 rounded cursor-pointer whitespace-nowrap font-bold"
-                                      title="작품 사진 보기"
-                                    >
-                                      보기 {photoMap[String(o.id)].length}
-                                    </button>
-                                  )}
-                                  {(photoMap[String(o.id)]?.length || 0) < MAX_ORDER_PHOTOS && (
-                                    <button
-                                      onClick={() => handleOrderPhotoUpload(o)}
-                                      disabled={photoUploadingOrderId === o.id}
-                                      className="bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 px-1 py-0.5 rounded cursor-pointer whitespace-nowrap"
-                                      title={(photoMap[String(o.id)]?.length || 0) > 0 ? '사진 추가' : '사진 등록'}
-                                    >
-                                      {photoUploadingOrderId === o.id ? '업로드…' : ((photoMap[String(o.id)]?.length || 0) > 0 ? '+' : '사진')}
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                                <td className="px-0.5 text-center" style={cellPad}>
+                                  <div className="flex items-center justify-center gap-1">
+                                    {(photoMap[String(o.id)]?.length || 0) > 0 && (
+                                      <button
+                                        onClick={() => { setPhotoViewer(o.id); setPhotoViewerIndex(0); }}
+                                        className="text-[11px] bg-lime-100 hover:bg-lime-200 border border-lime-400 text-lime-900 px-1 py-0.5 rounded cursor-pointer whitespace-nowrap font-bold"
+                                        title="작품 사진 보기"
+                                      >
+                                        보기 {photoMap[String(o.id)].length}
+                                      </button>
+                                    )}
+                                    {(photoMap[String(o.id)]?.length || 0) < MAX_ORDER_PHOTOS && (
+                                      <button
+                                        onClick={() => handleOrderPhotoUpload(o)}
+                                        disabled={photoUploadingOrderId === o.id}
+                                        className="text-[11px] bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 px-1 py-0.5 rounded cursor-pointer whitespace-nowrap"
+                                        title={(photoMap[String(o.id)]?.length || 0) > 0 ? '사진 추가' : '사진 등록'}
+                                      >
+                                        {photoUploadingOrderId === o.id ? '업로드…' : ((photoMap[String(o.id)]?.length || 0) > 0 ? '+' : '사진')}
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+
+                                <td className="px-0.5 text-center" style={cellPad}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedOrderIds.includes(o.id)}
+                                    onChange={() => handleToggleSelectOrder(o.id)}
+                                    className="accent-rose-600 cursor-pointer w-4 h-4"
+                                  />
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
@@ -2967,6 +3135,7 @@ export default function App() {
                         receipt_time: kstNow.time,
                         payment_method: '신용카드',
                         is_delivery: false,
+                        delivery_time: '',
                         memo: ''
                       });
                       setIsMemoAutofilled(false);
@@ -3004,7 +3173,7 @@ export default function App() {
                             </span>
                             {o.is_delivery && (
                               <span className="px-1.5 py-0.5 bg-sky-500 text-white font-bold text-[10px] rounded-md whitespace-nowrap shrink-0">
-                                🚚 배달
+                                🚚 배달{o.delivery_time ? ` ${o.delivery_time}` : ''}
                               </span>
                             )}
                             {(photoMap[String(o.id)]?.length || 0) > 0 && (
