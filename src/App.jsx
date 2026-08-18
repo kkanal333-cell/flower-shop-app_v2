@@ -1887,6 +1887,8 @@ export default function App() {
         if (dateStr) {
           countsByDate[dateStr] = (countsByDate[dateStr] || 0) + 1;
         }
+      } else if (o.order_type === '현장판매' && o.is_delivery && o.delivery_date) {
+        countsByDate[o.delivery_date] = (countsByDate[o.delivery_date] || 0) + 1;
       }
     });
 
@@ -1909,10 +1911,15 @@ export default function App() {
 
   const selectedDayOrders = selectedDate
     ? orders
-        .filter(o => o.order_type !== '현장판매' && o.pickup_datetime && o.pickup_datetime.replace(' ', 'T').startsWith(selectedDate))
+        .filter(o => {
+          if (o.order_type === '현장판매') {
+            return o.is_delivery && o.delivery_date === selectedDate;
+          }
+          return o.pickup_datetime && o.pickup_datetime.replace(' ', 'T').startsWith(selectedDate);
+        })
         .sort((a, b) => {
-          const timeA = a.pickup_datetime?.replace(' ', 'T').split('T')[1] || '00:00';
-          const timeB = b.pickup_datetime?.replace(' ', 'T').split('T')[1] || '00:00';
+          const timeA = a.order_type === '현장판매' ? (a.delivery_time || '00:00') : (a.pickup_datetime?.replace(' ', 'T').split('T')[1] || '00:00');
+          const timeB = b.order_type === '현장판매' ? (b.delivery_time || '00:00') : (b.pickup_datetime?.replace(' ', 'T').split('T')[1] || '00:00');
           return timeA.localeCompare(timeB);
         })
     : [];
@@ -3248,23 +3255,24 @@ export default function App() {
                     검색 결과: 총 <strong className="text-rose-600">{sortedAndFilteredOrders.length}</strong>건
                   </div>
 
-                  <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                    <table className="w-full text-left border-collapse table-fixed min-w-[980px]">
+                  {/* PC(lg 이상) 전용: 고정폭 표. 화면이 좁아지면(모바일/좁은 창) 아래 카드형 리스트로 전환됩니다. */}
+                  <div className="hidden lg:block overflow-x-auto border border-slate-200 rounded-xl">
+                    <table className="border-collapse table-fixed min-w-[1220px] w-full">
                       <thead>
-                        <tr className="border-b border-slate-200 text-slate-700 text-xs md:text-sm bg-slate-100 font-bold">
-                          <th className="px-1 text-center" style={{ paddingTop: '4px', paddingBottom: '4px', width: '4%' }}>유형</th>
-                          <th className="px-1" style={{ paddingTop: '4px', paddingBottom: '4px', width: '10%' }}>픽업일시</th>
-                          <th className="px-1" style={{ paddingTop: '4px', paddingBottom: '4px', width: '8%' }}>고객명</th>
-                          <th className="px-1" style={{ paddingTop: '4px', paddingBottom: '4px', width: '11%' }}>연락처</th>
-                          <th className="px-1" style={{ paddingTop: '4px', paddingBottom: '4px', width: '8%' }}>상품명</th>
-                          <th className="px-1" style={{ paddingTop: '4px', paddingBottom: '4px', width: '8%' }}>금액</th>
-                          <th className="px-1" style={{ paddingTop: '4px', paddingBottom: '4px', width: '8%' }}>결제수단</th>
-                          <th className="px-1 text-center" style={{ paddingTop: '4px', paddingBottom: '4px', width: '5%' }}>배송</th>
-                          <th className="px-1" style={{ paddingTop: '4px', paddingBottom: '4px', width: '13%' }}>메모</th>
-                          <th className="px-1" style={{ paddingTop: '4px', paddingBottom: '4px', width: '10%' }}>접수일시</th>
-                          <th className="px-1 text-center" style={{ paddingTop: '4px', paddingBottom: '4px', width: '8%' }}>관리 / 출력</th>
-                          <th className="px-1 text-center" style={{ paddingTop: '4px', paddingBottom: '4px', width: '8%' }}>사진(3p)</th>
-                          <th className="px-1 text-center" style={{ paddingTop: '4px', paddingBottom: '4px', width: '3%' }}>
+                        <tr className="border-b border-slate-200 text-slate-700 text-sm bg-slate-100 font-bold">
+                          <th className="px-1 w-14 text-center overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>유형</th>
+                          <th className="px-1 w-28 overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>픽업일시</th>
+                          <th className="px-1 w-[84px] overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>고객명</th>
+                          <th className="px-1 w-32 overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>연락처</th>
+                          <th className="px-1 w-24 overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>상품명</th>
+                          <th className="px-1 w-24 overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>금액</th>
+                          <th className="px-1 w-[88px] overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>결제수단</th>
+                          <th className="px-1 w-14 text-center overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>배송</th>
+                          <th className="px-1 w-40 overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>메모</th>
+                          <th className="px-1 w-28 overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>접수일시</th>
+                          <th className="px-1 w-24 text-center overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>관리 / 출력</th>
+                          <th className="px-1 w-[100px] text-center overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>사진(3p)</th>
+                          <th className="px-1 w-10 text-center overflow-hidden" style={{ paddingTop: '4px', paddingBottom: '4px' }}>
                             <input
                               type="checkbox"
                               onChange={handleToggleSelectAllOrders}
@@ -3277,7 +3285,7 @@ export default function App() {
                       <tbody>
                         {sortedAndFilteredOrders.length === 0 ? (
                           <tr>
-                            <td colSpan={13} className="py-6 text-center text-slate-500 text-xs md:text-sm">
+                            <td colSpan={13} className="py-6 text-center text-slate-500 text-sm">
                               검색 결과가 없습니다.
                             </td>
                           </tr>
@@ -3291,20 +3299,20 @@ export default function App() {
                             return (
                               <tr 
                                 key={o.id} 
-                                className={`border-b border-slate-100 transition-colors text-xs md:text-sm ${
+                                className={`border-b border-slate-100 transition-colors text-sm ${
                                   isPast 
                                     ? 'text-slate-300 opacity-40 bg-slate-100/50 hover:bg-slate-100' 
                                     : 'text-slate-900 hover:bg-slate-50'
                                 }`}
                               >
-                                <td className="px-1 text-center" style={cellPad}>
+                                <td className="px-1 text-center overflow-hidden" style={cellPad}>
                                   <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-xs ${
                                     isPast ? 'opacity-40' : ''
                                   } ${isOnsite ? 'bg-orange-500' : 'bg-indigo-600'}`} title={isOnsite ? '현장판매' : '예약주문'}>
                                     {isOnsite ? '🏪' : '📅'}
                                   </span>
                                 </td>
-                                <td className={`px-1 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`} style={cellPad}>
+                                <td className={`px-1 whitespace-nowrap overflow-hidden text-ellipsis ${isPast ? 'text-slate-300' : 'text-slate-900'}`} style={cellPad}>
                                   {formatShortDateTime(o.pickup_datetime)}
                                 </td>
                                 <td className={`px-1 truncate ${isPast ? 'text-slate-300' : 'text-slate-900'}`} style={cellPad}>
@@ -3319,14 +3327,14 @@ export default function App() {
                                 <td className={`px-1 truncate ${isPast ? 'text-slate-300' : 'text-rose-600'}`} style={cellPad}>
                                   {o.amount?.toLocaleString()}원
                                 </td>
-                                <td className="px-1" style={cellPad}>
+                                <td className="px-1 overflow-hidden" style={cellPad}>
                                   <span className={`px-1.5 py-0.5 border rounded text-[11px] block text-center truncate ${
                                     isPast ? 'bg-slate-100 border-slate-200 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-800'
                                   }`}>
                                     {o.payment_method}
                                   </span>
                                 </td>
-                                <td className="px-1 text-center" style={cellPad}>
+                                <td className="px-1 text-center overflow-hidden" style={cellPad}>
                                   {o.is_delivery ? (
                                     <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-sky-100 border border-sky-300 text-sm" title={`배송 (${o.delivery_date || ''} ${o.delivery_time || ''})`}>
                                       🚚
@@ -3338,11 +3346,11 @@ export default function App() {
                                 <td className={`px-1 truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`} title={o.memo} style={cellPad}>
                                   {o.memo || '-'}
                                 </td>
-                                <td className={`px-1 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-500'}`} style={cellPad}>
+                                <td className={`px-1 whitespace-nowrap overflow-hidden text-ellipsis ${isPast ? 'text-slate-300' : 'text-slate-500'}`} style={cellPad}>
                                   {formatShortDateTime(o.created_at)}
                                 </td>
                                 
-                                <td className="px-1 text-center" style={cellPad}>
+                                <td className="px-1 text-center overflow-hidden" style={cellPad}>
                                   <div className="flex items-center justify-center gap-1">
                                     <button
                                       onClick={() => startEditOrder(o)}
@@ -3362,7 +3370,7 @@ export default function App() {
                                   </div>
                                 </td>
 
-                                <td className="px-1 text-center" style={cellPad}>
+                                <td className="px-1 text-center overflow-hidden" style={cellPad}>
                                   <div className="flex items-center justify-center gap-1">
                                     {(photoMap[String(o.id)]?.length || 0) > 0 && (
                                       <button
@@ -3386,7 +3394,7 @@ export default function App() {
                                   </div>
                                 </td>
 
-                                <td className="px-1 text-center" style={cellPad}>
+                                <td className="px-1 text-center overflow-hidden" style={cellPad}>
                                   <input
                                     type="checkbox"
                                     checked={selectedOrderIds.includes(o.id)}
@@ -3401,6 +3409,131 @@ export default function App() {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* lg 미만(모바일/좁은 창) 전용: 겹침 없는 카드형 리스트 */}
+                  <div className="lg:hidden border border-slate-200 rounded-xl overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 bg-slate-100 border-b border-slate-200 text-xs font-bold text-slate-700">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          onChange={handleToggleSelectAllOrders}
+                          checked={sortedAndFilteredOrders.length > 0 && selectedOrderIds.length === sortedAndFilteredOrders.length}
+                          className="accent-rose-600 cursor-pointer w-4 h-4"
+                        />
+                        전체 선택
+                      </label>
+                      <span className="text-slate-500 font-medium">{sortedAndFilteredOrders.length}건</span>
+                    </div>
+
+                    {sortedAndFilteredOrders.length === 0 ? (
+                      <div className="py-6 text-center text-slate-500 text-xs">검색 결과가 없습니다.</div>
+                    ) : (
+                      <div className="divide-y divide-slate-100">
+                        {sortedAndFilteredOrders.map(o => {
+                          const pickupDate = o.pickup_datetime ? o.pickup_datetime.replace(' ', 'T').split('T')[0] : '';
+                          const isPast = pickupDate !== '' && pickupDate < todayDateStr;
+                          const isOnsite = o.order_type === '현장판매';
+
+                          return (
+                            <div
+                              key={o.id}
+                              className={`px-2.5 py-2 transition-colors ${
+                                isPast ? 'bg-slate-100/50 opacity-40' : 'hover:bg-slate-50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 flex-wrap text-xs">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedOrderIds.includes(o.id)}
+                                  onChange={() => handleToggleSelectOrder(o.id)}
+                                  className="accent-rose-600 cursor-pointer w-4 h-4 shrink-0"
+                                />
+                                <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] shrink-0 ${isOnsite ? 'bg-orange-500' : 'bg-indigo-600'}`}>
+                                  {isOnsite ? '🏪' : '📅'}
+                                </span>
+                                <span className={`font-bold whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
+                                  {formatShortDateTime(o.pickup_datetime)}
+                                </span>
+                                <span className={`font-bold truncate max-w-[64px] ${isPast ? 'text-slate-300' : 'text-slate-900'}`}>
+                                  {o.customers?.name || '-'}
+                                </span>
+                                <span className={`font-bold whitespace-nowrap ml-auto ${isPast ? 'text-slate-300' : 'text-rose-600'}`}>
+                                  {o.amount?.toLocaleString()}원
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1 flex-wrap mt-1.5 text-[11px]">
+                                <span className={`truncate max-w-[90px] ${isPast ? 'text-slate-300' : 'text-slate-600'}`}>
+                                  {o.customers?.phone || '-'}
+                                </span>
+                                <span className={`truncate max-w-[80px] ${isPast ? 'text-slate-300' : 'text-slate-800'}`}>
+                                  {o.product_name}
+                                </span>
+                                <span className={`px-1.5 py-0.5 border rounded whitespace-nowrap shrink-0 ${
+                                  isPast ? 'bg-slate-100 border-slate-200 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-800'
+                                }`}>
+                                  {o.payment_method}
+                                </span>
+                                {o.is_delivery && (
+                                  <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-sky-100 border border-sky-300 shrink-0" title={`배송 (${o.delivery_date || ''} ${o.delivery_time || ''})`}>
+                                    🚚
+                                  </span>
+                                )}
+                              </div>
+
+                              {o.memo && (
+                                <div className={`mt-1 text-[11px] truncate ${isPast ? 'text-slate-300' : 'text-slate-500'}`} title={o.memo}>
+                                  📝 {o.memo}
+                                </div>
+                              )}
+
+                              <div className="flex items-center gap-1 flex-wrap mt-1.5">
+                                <span className={`text-[10px] whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-400'}`}>
+                                  접수 {formatShortDateTime(o.created_at)}
+                                </span>
+                                <div className="flex items-center gap-1 ml-auto shrink-0">
+                                  <button
+                                    onClick={() => startEditOrder(o)}
+                                    className={`text-[11px] bg-white hover:bg-slate-100 border px-1.5 py-0.5 rounded cursor-pointer shadow-2xs ${
+                                      isPast ? 'text-slate-400 border-slate-300' : 'text-slate-900 border-slate-800'
+                                    }`}
+                                  >
+                                    수정
+                                  </button>
+                                  <button
+                                    onClick={() => handlePrintSingleOrder(o)}
+                                    className="text-[11px] bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 px-1.5 py-0.5 rounded cursor-pointer shadow-2xs"
+                                    title="주문서 출력"
+                                  >
+                                    출력
+                                  </button>
+                                  {(photoMap[String(o.id)]?.length || 0) > 0 && (
+                                    <button
+                                      onClick={() => { setPhotoViewer(o.id); setPhotoViewerIndex(0); }}
+                                      className="text-[11px] bg-lime-100 hover:bg-lime-200 border border-lime-400 text-lime-900 px-1.5 py-0.5 rounded cursor-pointer whitespace-nowrap font-bold"
+                                      title="작품 사진 보기"
+                                    >
+                                      보기 {photoMap[String(o.id)].length}
+                                    </button>
+                                  )}
+                                  {(photoMap[String(o.id)]?.length || 0) < MAX_ORDER_PHOTOS && (
+                                    <button
+                                      onClick={() => handleOrderPhotoUpload(o)}
+                                      disabled={photoUploadingOrderId === o.id}
+                                      className="text-[11px] bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 px-1.5 py-0.5 rounded cursor-pointer whitespace-nowrap"
+                                      title={(photoMap[String(o.id)]?.length || 0) > 0 ? '사진 추가' : '사진 등록'}
+                                    >
+                                      {photoUploadingOrderId === o.id ? '업로드…' : ((photoMap[String(o.id)]?.length || 0) > 0 ? '+' : '사진')}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -3409,7 +3542,7 @@ export default function App() {
               <div className="bg-white p-3 md:p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-2">
                   <h3 className="text-sm md:text-lg font-bold text-slate-900 flex items-center gap-2">
-                    <span>📅</span> <span className="text-sky-600">{selectedDate}</span> 픽업 주문 ({selectedDayOrders.length}건)
+                    <span>📅</span> <span className="text-sky-600">{selectedDate}</span> 픽업·배송 ({selectedDayOrders.length}건)
                   </h3>
 
                   <button
@@ -3443,20 +3576,28 @@ export default function App() {
 
                 {selectedDayOrders.length === 0 ? (
                   <div className="bg-slate-50 text-slate-500 p-4 rounded-xl text-xs md:text-sm text-center border border-slate-200 flex flex-col items-center justify-center gap-2">
-                    <p>해당 날짜에 예정된 픽업 주문이 없습니다.</p>
+                    <p>해당 날짜에 예정된 픽업·배송 건이 없습니다.</p>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">
                     {selectedDayOrders.map(o => {
-                      const timeOnly = o.pickup_datetime ? o.pickup_datetime.replace(' ', 'T').split('T')[1]?.slice(0, 5) : '--:--';
+                      const isOnsiteDelivery = o.order_type === '현장판매';
+                      const timeOnly = isOnsiteDelivery
+                        ? (o.delivery_time || '--:--')
+                        : (o.pickup_datetime ? o.pickup_datetime.replace(' ', 'T').split('T')[1]?.slice(0, 5) : '--:--');
                       return (
                         <div
                           key={o.id}
                           className="p-2.5 md:p-3 rounded-xl border border-slate-200 bg-white flex flex-col gap-1.5 shadow-2xs"
                         >
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="px-2 py-0.5 bg-sky-100 text-sky-900 font-extrabold text-xs rounded-md whitespace-nowrap border border-sky-300 shrink-0">
-                              ⏰ {timeOnly}
+                            <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] shrink-0 ${isOnsiteDelivery ? 'bg-orange-500' : 'bg-indigo-600'}`} title={isOnsiteDelivery ? '현장판매' : '예약주문'}>
+                              {isOnsiteDelivery ? '🏪' : '📅'}
+                            </span>
+                            <span className={`px-2 py-0.5 font-extrabold text-xs rounded-md whitespace-nowrap border shrink-0 ${
+                              isOnsiteDelivery ? 'bg-sky-100 text-sky-900 border-sky-300' : 'bg-sky-100 text-sky-900 border-sky-300'
+                            }`}>
+                              {isOnsiteDelivery ? '🚚' : '⏰'} {timeOnly}
                             </span>
                             <span className="font-bold text-slate-900 text-sm md:text-base">
                               {o.customers?.name || '익명'}
@@ -3464,7 +3605,7 @@ export default function App() {
                             <span className="text-xs text-slate-600 font-medium">
                               {o.customers?.phone || ''}
                             </span>
-                            {o.is_delivery && (
+                            {o.is_delivery && !isOnsiteDelivery && (
                               <span className="px-1.5 py-0.5 bg-sky-500 text-white font-bold text-[10px] rounded-md whitespace-nowrap shrink-0">
                                 🚚 배송{o.delivery_time ? ` ${o.delivery_time}` : ''}
                               </span>
