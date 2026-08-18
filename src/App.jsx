@@ -3344,8 +3344,8 @@ export default function App() {
                                   )}
                                 </td>
                                 <td className="px-2" title={o.memo} style={cellPad}>
-                                  <span className={`block w-[73px] truncate ${isPast ? 'text-slate-300' : 'text-slate-600'}`}>
-                                      {o.memo || '-'}
+                                  <span className={`block w-[73px] overflow-hidden text-ellipsis whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-600'}`}>
+                                    {o.memo || '-'}
                                   </span>
                                 </td>
                                 <td className={`px-2 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-500'}`} style={cellPad}>
