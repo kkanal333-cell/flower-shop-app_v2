@@ -1352,7 +1352,7 @@ export default function App() {
           body { font-family: 'Arial', sans-serif; margin: 0; padding: 2mm; width: 74mm; box-sizing: border-box; font-size: 13px; line-height: 1.4; color: #000; background: #fff; }
           .center { text-align: center; }
           .title { font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
-          .row { margin-bottom: 5px; } .row .label { display: inline-block; width: 44px; }
+          .row { margin-bottom: 5px; } .row .label { display: inline-block; width: 52px; vertical-align: top; }
           .label { font-weight: bold; white-space: nowrap; }
           .value { font-weight: bold; }
           .big-text { font-size: 26px !important; font-weight: bold; }
@@ -1368,8 +1368,8 @@ export default function App() {
       <body>
         <div class="center title">화사한 하루 주문서</div>
         <div class="row"><span class="label">번호:</span><span>#${o.id}</span></div>
-        <div style="margin-bottom: 6px;"><span class="label" style="display:block; font-size: 12px;">성명:</span><span class="big-text" style="display:block; word-break: break-all;">${o.customers?.name || '-'}</span></div>
-        <div style="margin-bottom: 6px;"><span class="label" style="display:block; font-size: 12px;">연락처:</span><span class="big-text" style="display:block; word-break: break-all;">${o.customers?.phone || '-'}</span></div>
+        <div class="row"><span class="label">성명:</span><span class="big-text">${o.customers?.name || '-'}</span></div>
+        <div class="row"><span class="label">연락처:</span><span class="big-text">${o.customers?.phone || '-'}</span></div>
         <div class="row"><span class="label">품목:</span><span>${o.product_name || '-'}</span></div>
         <div class="row"><span class="label">금액:</span><span>${o.amount?.toLocaleString()}원</span></div>
         <div class="row"><span class="label">결제:</span><span>${o.payment_method || '-'}</span></div>
@@ -1407,8 +1407,8 @@ export default function App() {
       <div class="ticket-page">
         <div class="center title">화사한 하루 주문서 (${index + 1}/${targetOrders.length})</div>
         <div class="row"><span class="label">번호:</span><span>#${o.id}</span></div>
-        <div style="margin-bottom: 6px;"><span class="label" style="display:block; font-size: 12px;">성명:</span><span class="big-text" style="display:block; word-break: break-all;">${o.customers?.name || '-'}</span></div>
-        <div style="margin-bottom: 6px;"><span class="label" style="display:block; font-size: 12px;">연락처:</span><span class="big-text" style="display:block; word-break: break-all;">${o.customers?.phone || '-'}</span></div>
+        <div class="row"><span class="label">성명:</span><span class="big-text">${o.customers?.name || '-'}</span></div>
+        <div class="row"><span class="label">연락처:</span><span class="big-text">${o.customers?.phone || '-'}</span></div>
         <div class="row"><span class="label">품목:</span><span>${o.product_name || '-'}</span></div>
         <div class="row"><span class="label">금액:</span><span>${o.amount?.toLocaleString()}원</span></div>
         <div class="row"><span class="label">결제:</span><span>${o.payment_method || '-'}</span></div>
@@ -1432,7 +1432,7 @@ export default function App() {
           body { font-family: 'Arial', sans-serif; margin: 0; padding: 2mm; width: 74mm; box-sizing: border-box; font-size: 13px; line-height: 1.4; color: #000; background: #fff; }
           .center { text-align: center; }
           .title { font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
-          .row { margin-bottom: 5px; } .row .label { display: inline-block; width: 44px; }
+          .row { margin-bottom: 5px; } .row .label { display: inline-block; width: 52px; vertical-align: top; }
           .label { font-weight: bold; white-space: nowrap; }
           .big-text { font-size: 26px !important; font-weight: bold; }
           .memo { margin-top: 10px; padding-top: 5px; border-top: 1px dashed #000; margin-bottom: 10px; }
