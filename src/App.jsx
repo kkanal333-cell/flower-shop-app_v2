@@ -1330,17 +1330,20 @@ export default function App() {
         <meta charset="UTF-8">
         <title>영수증</title>
         <style>
-          body { font-family: 'Arial', sans-serif; margin: 0; padding: 5px; width: 360px; font-size: 13px; line-height: 1.4; color: #000; }
+          @page { size: 80mm auto; margin: 0; }
+          html, body { background: #e5e5e5; }
+          body { font-family: 'Arial', sans-serif; margin: 0 auto; padding: 3mm; width: 74mm; box-sizing: border-box; font-size: 13px; line-height: 1.4; color: #000; background: #fff; }
           .center { text-align: center; }
           .title { font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
-          .row { display: flex; justify-content: space-between; margin-bottom: 4px; align-items: baseline; }
-          .label { font-weight: bold; }
+          .row { display: flex; justify-content: space-between; margin-bottom: 4px; align-items: baseline; gap: 8px; }
+          .label { font-weight: bold; white-space: nowrap; }
           .value { font-weight: bold; }
-          .big-text { font-size: 26px !important; font-weight: bold; }
+          .big-text { font-size: 26px !important; font-weight: bold; text-align: right; }
           .memo { margin-top: 10px; padding-top: 5px; border-top: 1px dashed #000; }
           .footer { margin-top: 20px; text-align: center; font-size: 12px; }
           @media print {
-            body { width: 100%; margin: 0; padding: 0; }
+            html, body { background: #fff; }
+            body { margin: 0; padding: 3mm; width: 74mm; }
             button { display: none; }
           }
         </style>
@@ -1408,12 +1411,13 @@ export default function App() {
         <meta charset="UTF-8">
         <title>선택 주문서 일괄 출력</title>
         <style>
-          body { font-family: 'Arial', sans-serif; margin: 0; padding: 5px; width: 360px; font-size: 13px; line-height: 1.4; color: #000; }
+          html, body { background: #e5e5e5; }
+          body { font-family: 'Arial', sans-serif; margin: 0 auto; padding: 3mm; width: 74mm; box-sizing: border-box; font-size: 13px; line-height: 1.4; color: #000; background: #fff; }
           .center { text-align: center; }
           .title { font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
-          .row { display: flex; justify-content: space-between; margin-bottom: 4px; align-items: baseline; }
-          .label { font-weight: bold; }
-          .big-text { font-size: 26px !important; font-weight: bold; }
+          .row { display: flex; justify-content: space-between; margin-bottom: 4px; align-items: baseline; gap: 8px; }
+          .label { font-weight: bold; white-space: nowrap; }
+          .big-text { font-size: 26px !important; font-weight: bold; text-align: right; }
           .memo { margin-top: 10px; padding-top: 5px; border-top: 1px dashed #000; margin-bottom: 10px; }
           .footer { margin-top: 15px; text-align: center; font-size: 12px; }
           
@@ -1434,7 +1438,8 @@ export default function App() {
               size: 80mm auto;
               margin: 0;
             }
-            body { width: 100%; margin: 0; padding: 0; }
+            html, body { background: #fff; }
+            body { margin: 0; padding: 3mm; width: 74mm; }
             .no-print { display: none; }
           }
         </style>
@@ -3347,7 +3352,7 @@ export default function App() {
                                   <span
                                     style={{
                                       display: 'block',
-                                      width: '146px',
+                                      width: '73px',
                                       overflow: 'hidden',
                                       textOverflow: 'ellipsis',
                                       whiteSpace: 'nowrap',
