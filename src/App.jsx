@@ -1352,10 +1352,10 @@ export default function App() {
           body { font-family: 'Arial', sans-serif; margin: 0; padding: 2mm; width: 74mm; box-sizing: border-box; font-size: 13px; line-height: 1.4; color: #000; background: #fff; }
           .center { text-align: center; }
           .title { font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
-          .row { display: flex; justify-content: space-between; margin-bottom: 4px; align-items: baseline; gap: 8px; } .row > span:last-child { min-width: 0; overflow-wrap: break-word; text-align: right; }
+          .row { margin-bottom: 5px; } .row .label { display: inline-block; width: 44px; }
           .label { font-weight: bold; white-space: nowrap; }
           .value { font-weight: bold; }
-          .big-text { font-size: 26px !important; font-weight: bold; text-align: right; }
+          .big-text { font-size: 26px !important; font-weight: bold; }
           .memo { margin-top: 10px; padding-top: 5px; border-top: 1px dashed #000; }
           .footer { margin-top: 20px; text-align: center; font-size: 12px; }
           @media print {
@@ -1432,9 +1432,9 @@ export default function App() {
           body { font-family: 'Arial', sans-serif; margin: 0; padding: 2mm; width: 74mm; box-sizing: border-box; font-size: 13px; line-height: 1.4; color: #000; background: #fff; }
           .center { text-align: center; }
           .title { font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
-          .row { display: flex; justify-content: space-between; margin-bottom: 4px; align-items: baseline; gap: 8px; } .row > span:last-child { min-width: 0; overflow-wrap: break-word; text-align: right; }
+          .row { margin-bottom: 5px; } .row .label { display: inline-block; width: 44px; }
           .label { font-weight: bold; white-space: nowrap; }
-          .big-text { font-size: 26px !important; font-weight: bold; text-align: right; }
+          .big-text { font-size: 26px !important; font-weight: bold; }
           .memo { margin-top: 10px; padding-top: 5px; border-top: 1px dashed #000; margin-bottom: 10px; }
           .footer { margin-top: 15px; text-align: center; font-size: 12px; }
           
