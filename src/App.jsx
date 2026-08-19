@@ -66,6 +66,23 @@ const formatShortDateTime = (datetimeStr) => {
   return `${yy}-${mm}-${dd} ${time}`;
 };
 
+// 주문서 출력용: "MM-DD (요일) HH:mm" 형식 (예: 08-20 (목) 12:00)
+const formatPickupWithDay = (datetimeStr) => {
+  if (!datetimeStr) return '-';
+  const cleanStr = datetimeStr.replace(' ', 'T');
+  const [datePart, timePart] = cleanStr.split('T');
+  if (!datePart) return '-';
+
+  const [y, m, d] = datePart.split('-').map(Number);
+  if (!y || !m || !d) return datetimeStr;
+
+  const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+  const dayOfWeek = dayNames[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  const time = timePart ? timePart.slice(0, 5) : '00:00';
+
+  return `${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')} (${dayOfWeek}) ${time}`;
+};
+
 // 15분 단위 픽업 시간 파싱 함수
 const parseTimeToParts = (timeStr) => {
   if (!timeStr) return { ampm: "오후", hour: "02", minute: "00" };
@@ -1356,7 +1373,7 @@ export default function App() {
         <div class="row"><span class="label">품목:</span><span>${o.product_name || '-'}</span></div>
         <div class="row"><span class="label">금액:</span><span>${o.amount?.toLocaleString()}원</span></div>
         <div class="row"><span class="label">결제:</span><span>${o.payment_method || '-'}</span></div>
-        <div class="row"><span class="label">픽업:</span><span>${formatShortDateTime(o.pickup_datetime)}</span></div>
+        <div class="row"><span class="label">픽업:</span><span>${formatPickupWithDay(o.pickup_datetime)}</span></div>
         <div class="memo">
           <strong>요청사항:</strong><br/>
           ${o.memo || '없음'}
@@ -1395,7 +1412,7 @@ export default function App() {
         <div class="row"><span class="label">품목:</span><span>${o.product_name || '-'}</span></div>
         <div class="row"><span class="label">금액:</span><span>${o.amount?.toLocaleString()}원</span></div>
         <div class="row"><span class="label">결제:</span><span>${o.payment_method || '-'}</span></div>
-        <div class="row"><span class="label">픽업:</span><span>${formatShortDateTime(o.pickup_datetime)}</span></div>
+        <div class="row"><span class="label">픽업:</span><span>${formatPickupWithDay(o.pickup_datetime)}</span></div>
         <div class="memo">
           <strong>요청사항:</strong><br/>
           ${o.memo || '없음'}
