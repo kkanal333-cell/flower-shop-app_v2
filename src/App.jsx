@@ -3402,7 +3402,7 @@ export default function App() {
                                   <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-xs ${
                                     isPast ? 'opacity-40' : ''
                                   } ${
-                                    (isOnsite && o.is_delivery) ? 'bg-sky-500 badge-blink' : (isOnsite ? 'bg-orange-500' : 'bg-indigo-600')
+                                    (isOnsite && o.is_delivery) ? 'badge-blink' : (isOnsite ? '' : 'bg-indigo-50')
                                   }`} title={(isOnsite && o.is_delivery) ? '배송' : (isOnsite ? '현장판매' : '예약주문')}>
                                     {(isOnsite && o.is_delivery) ? '🚚' : (isOnsite ? '🏪' : '📅')}
                                   </span>
@@ -3564,7 +3564,7 @@ export default function App() {
                           className="p-2.5 md:p-3 rounded-xl border border-slate-200 bg-white flex flex-col gap-1.5 shadow-2xs"
                         >
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] shrink-0 ${isOnsiteDelivery ? 'bg-sky-500 badge-blink' : 'bg-indigo-600'}`} title={isOnsiteDelivery ? '배송' : '예약주문'}>
+                            <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] shrink-0 ${isOnsiteDelivery ? 'badge-blink' : 'bg-indigo-50'}`} title={isOnsiteDelivery ? '배송' : '예약주문'}>
                               {isOnsiteDelivery ? '🚚' : '📅'}
                             </span>
                             <span className={`px-2 py-0.5 font-extrabold text-xs rounded-md whitespace-nowrap border shrink-0 ${
@@ -3782,8 +3782,8 @@ export default function App() {
                             style={{
                               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                               width: '20px', height: '20px', borderRadius: '4px', fontSize: '13px',
-                              backgroundColor: isDeliveryRow ? '#0ea5e9' : (isOnsite ? 'transparent' : '#4f46e5'),
-                              color: isDeliveryRow ? '#fff' : (isOnsite ? undefined : '#fff')
+                              backgroundColor: isDeliveryRow ? 'transparent' : (isOnsite ? 'transparent' : '#eef2ff'),
+                              color: undefined
                             }}
                             title={isDeliveryRow ? '배송' : (isOnsite ? '현장판매' : '예약주문')}
                           >
