@@ -3739,19 +3739,62 @@ export default function App() {
                   <div className="text-xs font-bold text-rose-600 mb-2">
                     합계: {dashboardDateOrders.reduce((s, o) => s + (Number(o.amount) || 0), 0).toLocaleString()}원 ({dashboardDateOrders.length}건)
                   </div>
-                  <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
+                  <div style={{ maxHeight: '260px', overflowY: 'auto' }}>
+                    {/* 헤더 행 */}
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '28px 48px 1fr 1fr 90px',
+                        gap: '8px',
+                        alignItems: 'center',
+                        padding: '4px 2px',
+                        borderBottom: '1px solid #e2e8f0',
+                        fontSize: '10px',
+                        fontWeight: 'bold',
+                        color: '#94a3b8'
+                      }}
+                    >
+                      <div></div>
+                      <div>시간</div>
+                      <div>고객명</div>
+                      <div>상품명</div>
+                      <div style={{ textAlign: 'right' }}>금액</div>
+                    </div>
                     {dashboardDateOrders.map(o => {
                       const isOnsite = o.order_type === '현장판매';
                       const timeOnly = (o.created_at || '').replace(' ', 'T').split('T')[1]?.slice(0, 5) || '--:--';
                       return (
-                        <div key={o.id} className="flex items-center gap-2 py-1.5 text-xs">
-                          <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] shrink-0 ${isOnsite ? 'bg-orange-500' : 'bg-indigo-600'}`}>
+                        <div
+                          key={o.id}
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: '28px 48px 1fr 1fr 90px',
+                            gap: '8px',
+                            alignItems: 'center',
+                            padding: '6px 2px',
+                            borderBottom: '1px solid #f1f5f9',
+                            fontSize: '12px'
+                          }}
+                        >
+                          <span
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              width: '20px', height: '20px', borderRadius: '4px', fontSize: '10px',
+                              backgroundColor: isOnsite ? '#f97316' : '#4f46e5', color: '#fff'
+                            }}
+                          >
                             {isOnsite ? '🏪' : '📅'}
                           </span>
-                          <span className="text-slate-400 whitespace-nowrap">{timeOnly}</span>
-                          <span className="font-bold text-slate-800 truncate max-w-[80px]">{o.customers?.name || '-'}</span>
-                          <span className="text-slate-600 truncate max-w-[90px]">{o.product_name}</span>
-                          <span className="font-bold text-rose-600 whitespace-nowrap ml-auto">{Number(o.amount || 0).toLocaleString()}원</span>
+                          <span style={{ color: '#94a3b8', whiteSpace: 'nowrap' }}>{timeOnly}</span>
+                          <span style={{ fontWeight: 'bold', color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {o.customers?.name || '-'}
+                          </span>
+                          <span style={{ color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {o.product_name}
+                          </span>
+                          <span style={{ fontWeight: 'bold', color: '#e11d48', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                            {Number(o.amount || 0).toLocaleString()}원
+                          </span>
                         </div>
                       );
                     })}
