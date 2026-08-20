@@ -1094,6 +1094,18 @@ export default function App() {
         }
         customerId = newCust?.id;
       }
+    } else if (trimmedName && !trimmedPhone) {
+      // 연락처 없이 이름만 입력한 경우: 전화번호로 매칭할 수 없으므로 이름만으로 새 고객을 등록합니다.
+      const { data: newCust, error: custErr } = await supabase
+        .from('customers')
+        .insert([{ name: trimmedName, phone: null }])
+        .select()
+        .single();
+      if (custErr) {
+        alert('고객 정보 저장 실패: ' + custErr.message);
+        return;
+      }
+      customerId = newCust?.id;
     }
 
     const { error } = await supabase.from('orders').insert([{
@@ -1172,34 +1184,82 @@ export default function App() {
       byProduct[pn] = (byProduct[pn] || 0) + amt;
     });
 
-    // 최근 14일 매출 추이는 기간 선택(오늘/이번주/이번달/전체)과 무관하게 항상 고정으로 계산합니다.
-    // (빈 날짜도 0원 막대로 표시되도록 14일 전체를 미리 채워둡니다)
-    const byDateAll = {};
-    validOrders.forEach(o => {
-      const d = (o.created_at || '').replace(' ', 'T').split('T')[0];
-      if (d) byDateAll[d] = (byDateAll[d] || 0) + (Number(o.amount) || 0);
-    });
-    const dailyTrend = [];
-    for (let i = 13; i >= 0; i--) {
-      const dt = new Date(nowDate);
-      dt.setDate(nowDate.getDate() - i);
-      const dStr = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
-      dailyTrend.push([dStr, byDateAll[dStr] || 0]);
-    }
-
+    // 매출 추이(일/주/월/년 그래프)는 별도의 trendData useMemo에서 계산합니다.
     const paymentBreakdown = Object.entries(byPayment).sort((a, b) => b[1] - a[1]);
     const productRanking = Object.entries(byProduct).sort((a, b) => b[1] - a[1]).slice(0, 5);
-    const maxDaily = dailyTrend.reduce((m, [, v]) => Math.max(m, v), 0) || 1;
     const maxPayment = paymentBreakdown.reduce((m, [, v]) => Math.max(m, v), 0) || 1;
     const maxProduct = productRanking.reduce((m, [, v]) => Math.max(m, v), 0) || 1;
 
     return {
       totalRevenue, reservationRevenue, onsiteRevenue,
       reservationCount, onsiteCount, totalCount: filtered.length,
-      paymentBreakdown, productRanking, dailyTrend,
-      maxDaily, maxPayment, maxProduct
+      paymentBreakdown, productRanking,
+      maxPayment, maxProduct
     };
   }, [orders, dashboardPeriod]);
+
+  const [trendGranularity, setTrendGranularity] = useState('daily'); // daily | weekly | monthly | yearly
+
+  // 매출 추이 그래프 데이터 (일/주/월/년 단위 선택, 기간 필터 버튼과 무관하게 항상 "지금부터 N개" 고정)
+  const trendData = useMemo(() => {
+    const now = getKoreaNowFormatted();
+    const nowDate = now.kstDateObj;
+    const pad = n => String(n).padStart(2, '0');
+    const fmtDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+    const validOrders = (orders || []).filter(o => !o.deleted_at);
+    const byDateAll = {};
+    validOrders.forEach(o => {
+      const d = (o.created_at || '').replace(' ', 'T').split('T')[0];
+      if (d) byDateAll[d] = (byDateAll[d] || 0) + (Number(o.amount) || 0);
+    });
+    const dateEntries = Object.entries(byDateAll);
+
+    let points = [];
+
+    if (trendGranularity === 'daily') {
+      for (let i = 6; i >= 0; i--) {
+        const dt = new Date(nowDate);
+        dt.setDate(nowDate.getDate() - i);
+        const dStr = fmtDate(dt);
+        points.push({ key: dStr, label: `${pad(dt.getMonth() + 1)}/${pad(dt.getDate())}`, amt: byDateAll[dStr] || 0 });
+      }
+    } else if (trendGranularity === 'weekly') {
+      const dayOfWeek = nowDate.getDay();
+      const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      const thisMonday = new Date(nowDate);
+      thisMonday.setDate(nowDate.getDate() - mondayOffset);
+      for (let i = 6; i >= 0; i--) {
+        const start = new Date(thisMonday);
+        start.setDate(thisMonday.getDate() - i * 7);
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        const startStr = fmtDate(start);
+        const endStr = fmtDate(end);
+        let sum = 0;
+        dateEntries.forEach(([d, v]) => { if (d >= startStr && d <= endStr) sum += v; });
+        points.push({ key: startStr, label: `${pad(start.getMonth() + 1)}/${pad(start.getDate())}`, amt: sum });
+      }
+    } else if (trendGranularity === 'monthly') {
+      for (let i = 11; i >= 0; i--) {
+        const dt = new Date(nowDate.getFullYear(), nowDate.getMonth() - i, 1);
+        const ymStr = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}`;
+        let sum = 0;
+        dateEntries.forEach(([d, v]) => { if (d.slice(0, 7) === ymStr) sum += v; });
+        points.push({ key: ymStr, label: `${String(dt.getFullYear()).slice(2)}/${pad(dt.getMonth() + 1)}`, amt: sum });
+      }
+    } else if (trendGranularity === 'yearly') {
+      for (let i = 4; i >= 0; i--) {
+        const y = nowDate.getFullYear() - i;
+        let sum = 0;
+        dateEntries.forEach(([d, v]) => { if (d.slice(0, 4) === String(y)) sum += v; });
+        points.push({ key: String(y), label: `${y}`, amt: sum });
+      }
+    }
+
+    const maxAmt = points.reduce((m, p) => Math.max(m, p.amt), 0) || 1;
+    return { points, maxAmt };
+  }, [orders, trendGranularity]);
 
   // 선택한 특정 날짜의 매출 리스트 (접수일시 기준)
   const dashboardDateOrders = useMemo(() => {
@@ -3264,7 +3324,6 @@ export default function App() {
                           <th className="px-2 whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>상품명</th>
                           <th className="px-2 whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>금액</th>
                           <th className="px-2 whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>결제수단</th>
-                          <th className="px-2 text-center whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>배송</th>
                           <th className="px-2 whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>메모</th>
                           <th className="px-2 whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>접수일시</th>
                           <th className="px-2 text-center whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>관리 / 출력</th>
@@ -3282,7 +3341,7 @@ export default function App() {
                       <tbody>
                         {sortedAndFilteredOrders.length === 0 ? (
                           <tr>
-                            <td colSpan={13} className="py-6 text-center text-slate-500 text-sm whitespace-nowrap">
+                            <td colSpan={12} className="py-6 text-center text-slate-500 text-sm whitespace-nowrap">
                               검색 결과가 없습니다.
                             </td>
                           </tr>
@@ -3308,12 +3367,13 @@ export default function App() {
                                 <td className="px-2 text-center whitespace-nowrap" style={cellPad}>
                                   <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-xs ${
                                     isPast ? 'opacity-40' : ''
-                                  } ${isOnsite ? 'bg-orange-500' : 'bg-indigo-600'}`} title={isOnsite ? '현장판매' : '예약주문'}>
-                                    {isOnsite ? '🏪' : '📅'}
+                                  } ${
+                                    (isOnsite && o.is_delivery) ? 'bg-sky-500' : (isOnsite ? 'bg-orange-500' : 'bg-indigo-600')
+                                  }`} title={(isOnsite && o.is_delivery) ? '배송' : (isOnsite ? '현장판매' : '예약주문')}>
+                                    {(isOnsite && o.is_delivery) ? '🚚' : (isOnsite ? '🏪' : '📅')}
                                   </span>
                                 </td>
                                 <td className={`px-2 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`} style={cellPad} title={o.is_delivery ? '배송일시' : '픽업일시'}>
-                                  {o.is_delivery && <span className="mr-0.5">🚚</span>}
                                   {formatShortDateTime(displayDatetime)}
                                 </td>
                                 <td className={`px-2 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`} style={cellPad}>
@@ -3334,15 +3394,6 @@ export default function App() {
                                   }`}>
                                     {o.payment_method}
                                   </span>
-                                </td>
-                                <td className="px-2 text-center whitespace-nowrap" style={cellPad}>
-                                  {o.is_delivery ? (
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-sky-100 border border-sky-300 text-sm" title={`배송 (${o.delivery_date || ''} ${o.delivery_time || ''})`}>
-                                      🚚
-                                    </span>
-                                  ) : (
-                                    <span className={`text-xs ${isPast ? 'text-slate-200' : 'text-slate-300'}`}>-</span>
-                                  )}
                                 </td>
                                 <td className="px-2" title={o.memo} style={cellPad}>
                                   <span
@@ -3675,30 +3726,57 @@ export default function App() {
               )}
             </div>
 
-            {/* 최근 14일 매출 추이 */}
-            <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <h3 className="text-sm md:text-base font-bold text-slate-900 mb-3">📈 최근 14일 매출 추이</h3>
-              {dashboardStats.dailyTrend.length === 0 ? (
+            {/* 매출 추이 */}
+            <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                <h3 className="text-sm md:text-base font-bold text-slate-900">📈 매출 추이</h3>
+                <div className="flex gap-1 flex-wrap">
+                  {[
+                    { id: 'daily', label: '일간(7일)' },
+                    { id: 'weekly', label: '주간(7주)' },
+                    { id: 'monthly', label: '월간(12개월)' },
+                    { id: 'yearly', label: '년간(5년)' },
+                  ].map(g => (
+                    <button
+                      key={g.id}
+                      onClick={() => setTrendGranularity(g.id)}
+                      className={`px-2 py-1 rounded-lg text-[10px] md:text-xs font-bold cursor-pointer border-2 whitespace-nowrap ${
+                        trendGranularity === g.id
+                          ? 'bg-violet-100 border-violet-400 shadow-sm'
+                          : 'bg-white border-transparent hover:bg-slate-100'
+                      }`}
+                    >
+                      {g.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {trendData.points.every(p => p.amt === 0) ? (
                 <p className="text-xs text-slate-400 text-center py-6">표시할 데이터가 없습니다.</p>
               ) : (
-                <div className="flex items-end gap-1.5 h-32 md:h-40">
-                  {dashboardStats.dailyTrend.map(([date, amt]) => (
-                    <div key={date} className="flex-1 flex flex-col items-center justify-end h-full group relative">
-                      <div className="text-[9px] text-slate-500 font-bold mb-0.5 opacity-0 group-hover:opacity-100 transition-opacity absolute -top-4 whitespace-nowrap">
-                        {amt.toLocaleString()}원
+                <div className="flex items-end gap-1 md:gap-1.5 w-full" style={{ height: '150px' }}>
+                  {trendData.points.map(p => {
+                    const barPx = Math.max(3, Math.round((p.amt / trendData.maxAmt) * 110));
+                    return (
+                      <div key={p.key} className="flex-1 min-w-0 flex flex-col items-center justify-end h-full group relative">
+                        <div className="text-[8px] md:text-[9px] text-slate-500 font-bold mb-0.5 opacity-0 group-hover:opacity-100 transition-opacity absolute whitespace-nowrap bg-white px-0.5 rounded shadow-sm" style={{ bottom: `${barPx + 18}px` }}>
+                          {p.amt.toLocaleString()}원
+                        </div>
+                        <div
+                          className="w-full bg-rose-400 hover:bg-rose-500 rounded-t transition-colors"
+                          style={{ height: `${barPx}px` }}
+                        />
+                        <div className="text-[8px] md:text-[9px] text-slate-400 mt-1 whitespace-nowrap overflow-hidden text-ellipsis w-full text-center">
+                          {p.label}
+                        </div>
                       </div>
-                      <div
-                        className="w-full bg-rose-400 hover:bg-rose-500 rounded-t transition-colors"
-                        style={{ height: `${Math.max(4, (amt / dashboardStats.maxDaily) * 100)}%` }}
-                      />
-                      <div className="text-[9px] text-slate-400 mt-1 whitespace-nowrap">
-                        {date.slice(5).replace('-', '/')}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
+
 
             <div className="grid md:grid-cols-2 gap-4">
               {/* 결제수단별 분포 */}
