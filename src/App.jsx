@@ -448,7 +448,7 @@ export default function App() {
 
   const [onsiteOrder, setOnsiteOrder] = useState({
     customer_name: '',
-    phone: '',
+    phone: '010-',
     product_name: '꽃다발',
     amount_thousands: '55',
     payment_method: '신용카드',
@@ -1071,7 +1071,10 @@ export default function App() {
 
     let customerId = null;
     const trimmedName = (onsiteOrder.customer_name || '').trim();
-    const trimmedPhone = (onsiteOrder.phone || '').trim();
+    const rawPhoneDigits = (onsiteOrder.phone || '').replace(/[^0-9]/g, '');
+    // '010-'만 남아있고 그 뒤로 아무 숫자도 입력 안 한 경우(=010 3자리뿐)는 미입력으로 취급합니다.
+    const hasValidPhone = rawPhoneDigits.length >= 4;
+    const trimmedPhone = hasValidPhone ? (onsiteOrder.phone || '').trim() : '';
 
     if (trimmedName && trimmedPhone) {
       const { data: custByPhone } = await supabase
@@ -1132,7 +1135,7 @@ export default function App() {
     alert(`현장판매가 등록되었습니다! (${onsiteOrder.product_name} / ${actualAmount.toLocaleString()}원)`);
     setOnsiteOrder({
       customer_name: '',
-      phone: '',
+      phone: '010-',
       product_name: '꽃다발',
       amount_thousands: '55',
       payment_method: '신용카드',
@@ -3732,15 +3735,15 @@ export default function App() {
                 <h3 className="text-sm md:text-base font-bold text-slate-900">📈 매출 추이</h3>
                 <div className="flex gap-1 flex-wrap">
                   {[
-                    { id: 'daily', label: '일간(7일)' },
-                    { id: 'weekly', label: '주간(7주)' },
-                    { id: 'monthly', label: '월간(12개월)' },
-                    { id: 'yearly', label: '년간(5년)' },
+                    { id: 'daily', label: '일간' },
+                    { id: 'weekly', label: '주간' },
+                    { id: 'monthly', label: '월간' },
+                    { id: 'yearly', label: '년간' },
                   ].map(g => (
                     <button
                       key={g.id}
                       onClick={() => setTrendGranularity(g.id)}
-                      className={`px-2 py-1 rounded-lg text-[10px] md:text-xs font-bold cursor-pointer border-2 whitespace-nowrap ${
+                      className={`px-2.5 py-1 rounded-lg text-[11px] md:text-xs font-bold cursor-pointer border-2 whitespace-nowrap ${
                         trendGranularity === g.id
                           ? 'bg-violet-100 border-violet-400 shadow-sm'
                           : 'bg-white border-transparent hover:bg-slate-100'
@@ -3755,21 +3758,48 @@ export default function App() {
               {trendData.points.every(p => p.amt === 0) ? (
                 <p className="text-xs text-slate-400 text-center py-6">표시할 데이터가 없습니다.</p>
               ) : (
-                <div className="flex items-end gap-1 md:gap-1.5 w-full" style={{ height: '150px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', width: '100%', height: '160px' }}>
                   {trendData.points.map(p => {
-                    const barPx = Math.max(3, Math.round((p.amt / trendData.maxAmt) * 110));
+                    const barPx = Math.max(3, Math.round((p.amt / trendData.maxAmt) * 105));
+                    const [labelTop, labelBottom] = trendGranularity === 'monthly' ? p.label.split('/') : [null, null];
                     return (
-                      <div key={p.key} className="flex-1 min-w-0 flex flex-col items-center justify-end h-full group relative">
-                        <div className="text-[8px] md:text-[9px] text-slate-500 font-bold mb-0.5 opacity-0 group-hover:opacity-100 transition-opacity absolute whitespace-nowrap bg-white px-0.5 rounded shadow-sm" style={{ bottom: `${barPx + 18}px` }}>
-                          {p.amt.toLocaleString()}원
+                      <div
+                        key={p.key}
+                        style={{
+                          flex: '1 1 0%',
+                          minWidth: 0,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'flex-end',
+                          height: '100%'
+                        }}
+                      >
+                        <div style={{ fontSize: '8px', color: '#64748b', fontWeight: 'bold', marginBottom: '2px', whiteSpace: 'nowrap' }}>
+                          {p.amt > 0 ? (p.amt >= 10000 ? Math.round(p.amt / 1000) + '천' : p.amt.toLocaleString()) : ''}
                         </div>
                         <div
-                          className="w-full bg-rose-400 hover:bg-rose-500 rounded-t transition-colors"
-                          style={{ height: `${barPx}px` }}
+                          style={{
+                            width: '100%',
+                            height: `${barPx}px`,
+                            backgroundColor: '#fb7185',
+                            borderRadius: '3px 3px 0 0'
+                          }}
                         />
-                        <div className="text-[8px] md:text-[9px] text-slate-400 mt-1 whitespace-nowrap overflow-hidden text-ellipsis w-full text-center">
-                          {p.label}
-                        </div>
+                        {trendGranularity === 'monthly' ? (
+                          <div style={{ fontSize: '8px', color: '#94a3b8', marginTop: '4px', textAlign: 'center', lineHeight: '1.2' }}>
+                            <div>{labelTop}</div>
+                            <div>{labelBottom}</div>
+                          </div>
+                        ) : (
+                          <div style={{
+                            fontSize: '8px', color: '#94a3b8', marginTop: '4px',
+                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                            width: '100%', textAlign: 'center'
+                          }}>
+                            {p.label}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
