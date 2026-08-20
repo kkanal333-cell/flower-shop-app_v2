@@ -1109,6 +1109,29 @@ export default function App() {
         return;
       }
       customerId = newCust?.id;
+    } else if (!trimmedName && trimmedPhone) {
+      // 이름 없이 연락처만 입력한 경우: 기존에 같은 번호로 등록된 고객이 있으면 그대로 매칭하고,
+      // 없으면 이름 없이(연락처만) 새 고객을 등록합니다.
+      const { data: custByPhone } = await supabase
+        .from('customers')
+        .select('id, name')
+        .eq('phone', trimmedPhone)
+        .maybeSingle();
+
+      if (custByPhone) {
+        customerId = custByPhone.id;
+      } else {
+        const { data: newCust, error: custErr } = await supabase
+          .from('customers')
+          .insert([{ name: null, phone: trimmedPhone }])
+          .select()
+          .single();
+        if (custErr) {
+          alert('고객 정보 저장 실패: ' + custErr.message);
+          return;
+        }
+        customerId = newCust?.id;
+      }
     }
 
     const { error } = await supabase.from('orders').insert([{
@@ -2159,6 +2182,14 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-100/70 flex flex-col lg:flex-row pb-12 lg:pb-0">
       <style>{`
+        @keyframes blink-badge {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.4; transform: scale(0.92); }
+        }
+        .badge-blink {
+          animation: blink-badge 1s ease-in-out infinite;
+        }
+
         button,
         button *,
         [role="button"],
@@ -3371,7 +3402,7 @@ export default function App() {
                                   <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-xs ${
                                     isPast ? 'opacity-40' : ''
                                   } ${
-                                    (isOnsite && o.is_delivery) ? 'bg-sky-500' : (isOnsite ? 'bg-orange-500' : 'bg-indigo-600')
+                                    (isOnsite && o.is_delivery) ? 'bg-sky-500 badge-blink' : (isOnsite ? 'bg-orange-500' : 'bg-indigo-600')
                                   }`} title={(isOnsite && o.is_delivery) ? '배송' : (isOnsite ? '현장판매' : '예약주문')}>
                                     {(isOnsite && o.is_delivery) ? '🚚' : (isOnsite ? '🏪' : '📅')}
                                   </span>
@@ -3758,9 +3789,9 @@ export default function App() {
               {trendData.points.every(p => p.amt === 0) ? (
                 <p className="text-xs text-slate-400 text-center py-6">표시할 데이터가 없습니다.</p>
               ) : (
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', width: '100%', height: '160px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', width: '100%', height: '210px' }}>
                   {trendData.points.map(p => {
-                    const barPx = Math.max(3, Math.round((p.amt / trendData.maxAmt) * 105));
+                    const barPx = Math.max(3, Math.round((p.amt / trendData.maxAmt) * 90));
                     const [labelTop, labelBottom] = trendGranularity === 'monthly' ? p.label.split('/') : [null, null];
                     return (
                       <div
@@ -3775,25 +3806,25 @@ export default function App() {
                           height: '100%'
                         }}
                       >
-                        <div style={{ fontSize: '8px', color: '#64748b', fontWeight: 'bold', marginBottom: '2px', whiteSpace: 'nowrap' }}>
+                        <div style={{ fontSize: '16px', color: '#64748b', fontWeight: 'bold', marginBottom: '2px', whiteSpace: 'nowrap' }}>
                           {p.amt > 0 ? (p.amt >= 10000 ? Math.round(p.amt / 1000) + '천' : p.amt.toLocaleString()) : ''}
                         </div>
                         <div
                           style={{
-                            width: '100%',
+                            width: '66%',
                             height: `${barPx}px`,
                             backgroundColor: '#fb7185',
                             borderRadius: '3px 3px 0 0'
                           }}
                         />
                         {trendGranularity === 'monthly' ? (
-                          <div style={{ fontSize: '8px', color: '#94a3b8', marginTop: '4px', textAlign: 'center', lineHeight: '1.2' }}>
+                          <div style={{ fontSize: '16px', color: '#94a3b8', marginTop: '4px', textAlign: 'center', lineHeight: '1.2' }}>
                             <div>{labelTop}</div>
                             <div>{labelBottom}</div>
                           </div>
                         ) : (
                           <div style={{
-                            fontSize: '8px', color: '#94a3b8', marginTop: '4px',
+                            fontSize: '16px', color: '#94a3b8', marginTop: '4px',
                             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                             width: '100%', textAlign: 'center'
                           }}>
