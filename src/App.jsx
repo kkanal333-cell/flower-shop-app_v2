@@ -2367,12 +2367,6 @@ export default function App() {
                   완성 작품 사진 ({photoViewerIndex + 1}/{viewerPhotos.length})
                 </div>
                 <div className="flex gap-1.5">
-                  <button
-                    onClick={() => handleOrderPhotoDelete(viewerPhoto)}
-                    className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-100 text-black text-[11px] font-bold border border-black"
-                  >
-                    삭제
-                  </button>
                   {viewerPhotos.length < MAX_ORDER_PHOTOS && (
                     <button
                       onClick={() => handleOrderPhotoUpload({ id: photoViewer })}
@@ -2382,6 +2376,12 @@ export default function App() {
                       {photoUploadingOrderId === photoViewer ? '업로드…' : '추가'}
                     </button>
                   )}
+                  <button
+                    onClick={() => handleOrderPhotoDelete(viewerPhoto)}
+                    className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-100 text-black text-[11px] font-bold border border-black"
+                  >
+                    삭제
+                  </button>
                   <button
                     onClick={() => setPhotoViewer(null)}
                     className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-100 text-black text-[11px] font-bold border border-black"
@@ -3609,7 +3609,7 @@ export default function App() {
                             {(photoMap[String(o.id)]?.length || 0) > 0 && (
                               <button
                                 onClick={() => { setPhotoViewer(o.id); setPhotoViewerIndex(0); }}
-                                className="text-xs bg-lime-100 hover:bg-lime-200 border border-lime-400 text-lime-900 px-2 py-0.5 rounded cursor-pointer whitespace-nowrap shrink-0"
+                                className="text-xs font-bold bg-lime-100 hover:bg-lime-200 border border-lime-400 text-lime-900 px-2 py-0.5 rounded cursor-pointer whitespace-nowrap shrink-0"
                                 title="작품 사진 보기"
                               >
                                 보기 {photoMap[String(o.id)].length}
