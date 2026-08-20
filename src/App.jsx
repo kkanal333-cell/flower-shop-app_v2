@@ -3744,7 +3744,7 @@ export default function App() {
                     <div
                       style={{
                         display: 'grid',
-                        gridTemplateColumns: '28px 48px 1fr 1fr 90px',
+                        gridTemplateColumns: '28px 48px 1fr 90px',
                         gap: '8px',
                         alignItems: 'center',
                         padding: '4px 2px',
@@ -3756,8 +3756,7 @@ export default function App() {
                     >
                       <div></div>
                       <div>시간</div>
-                      <div>고객명</div>
-                      <div>상품명</div>
+                      <div>고객명 / 상품명</div>
                       <div style={{ textAlign: 'right' }}>금액</div>
                     </div>
                     {dashboardDateOrders.map(o => {
@@ -3768,7 +3767,7 @@ export default function App() {
                           key={o.id}
                           style={{
                             display: 'grid',
-                            gridTemplateColumns: '28px 48px 1fr 1fr 90px',
+                            gridTemplateColumns: '28px 48px 1fr 90px',
                             gap: '8px',
                             alignItems: 'center',
                             padding: '6px 2px',
@@ -3779,20 +3778,23 @@ export default function App() {
                           <span
                             style={{
                               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                              width: '20px', height: '20px', borderRadius: '4px', fontSize: '10px',
-                              backgroundColor: isOnsite ? '#f97316' : '#4f46e5', color: '#fff'
+                              width: '20px', height: '20px', borderRadius: '4px', fontSize: '13px',
+                              backgroundColor: isOnsite ? 'transparent' : '#4f46e5', color: isOnsite ? undefined : '#fff'
                             }}
                           >
                             {isOnsite ? '🏪' : '📅'}
                           </span>
                           <span style={{ color: '#94a3b8', whiteSpace: 'nowrap' }}>{timeOnly}</span>
-                          <span style={{ fontWeight: 'bold', color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {o.customers?.name || '-'}
+                          <span style={{ display: 'flex', alignItems: 'baseline', gap: '6px', minWidth: 0, overflow: 'hidden' }}>
+                            <span style={{ fontWeight: 'bold', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0, maxWidth: '55%' }}>
+                              {o.customers?.name || '-'}
+                            </span>
+                            <span style={{ color: '#94a3b8' }}>·</span>
+                            <span style={{ color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {o.product_name}
+                            </span>
                           </span>
-                          <span style={{ color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {o.product_name}
-                          </span>
-                          <span style={{ fontWeight: 'bold', color: '#e11d48', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                          <span style={{ color: '#000', fontWeight: 'normal', whiteSpace: 'nowrap', textAlign: 'right' }}>
                             {Number(o.amount || 0).toLocaleString()}원
                           </span>
                         </div>
