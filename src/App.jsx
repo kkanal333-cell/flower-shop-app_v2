@@ -1712,6 +1712,20 @@ export default function App() {
     }
   };
 
+  // 픽업 달력 하단 리스트에서 개별 주문 1건을 휴지통으로 이동 (확인 팝업 후 삭제)
+  const handleDeleteSingleOrderFromList = async (order) => {
+    const label = order.customers?.name ? `${order.customers.name}님의 주문` : '이 주문';
+    if (!window.confirm(`${label}을(를) 정말 삭제하시겠습니까? (휴지통으로 이동됩니다)`)) return;
+
+    const nowStr = `${getKoreaNowFormatted().date} ${getKoreaNowFormatted().time}`;
+    const { error } = await supabase.from('orders').update({ deleted_at: nowStr }).eq('id', order.id);
+    if (error) {
+      alert('주문 삭제 실패: ' + error.message);
+    } else {
+      fetchData();
+    }
+  };
+
   const handleToggleSelectAllCustomers = (e) => {
     if (e.target.checked) {
       setSelectedCustomerIds(filteredCustomers.map(c => c.id));
@@ -2359,6 +2373,15 @@ export default function App() {
                   >
                     삭제
                   </button>
+                  {viewerPhotos.length < MAX_ORDER_PHOTOS && (
+                    <button
+                      onClick={() => handleOrderPhotoUpload({ id: photoViewer })}
+                      disabled={photoUploadingOrderId === photoViewer}
+                      className="px-2.5 py-1 rounded-md bg-white hover:bg-rose-50 text-rose-700 text-[11px] font-bold border border-rose-400"
+                    >
+                      {photoUploadingOrderId === photoViewer ? '업로드…' : '추가'}
+                    </button>
+                  )}
                   <button
                     onClick={() => setPhotoViewer(null)}
                     className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-100 text-black text-[11px] font-bold border border-black"
@@ -3478,14 +3501,14 @@ export default function App() {
                                         보기 {photoMap[String(o.id)].length}
                                       </button>
                                     )}
-                                    {(photoMap[String(o.id)]?.length || 0) < MAX_ORDER_PHOTOS && (
+                                    {(photoMap[String(o.id)]?.length || 0) === 0 && (
                                       <button
                                         onClick={() => handleOrderPhotoUpload(o)}
                                         disabled={photoUploadingOrderId === o.id}
                                         className="text-[11px] bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 px-1.5 py-0.5 rounded cursor-pointer whitespace-nowrap"
-                                        title={(photoMap[String(o.id)]?.length || 0) > 0 ? '사진 추가' : '사진 등록'}
+                                        title="사진 등록"
                                       >
-                                        {photoUploadingOrderId === o.id ? '업로드…' : ((photoMap[String(o.id)]?.length || 0) > 0 ? '+' : '사진')}
+                                        {photoUploadingOrderId === o.id ? '업로드…' : '사진'}
                                       </button>
                                     )}
                                   </div>
@@ -3586,22 +3609,29 @@ export default function App() {
                             {(photoMap[String(o.id)]?.length || 0) > 0 && (
                               <button
                                 onClick={() => { setPhotoViewer(o.id); setPhotoViewerIndex(0); }}
-                                className="text-[11px] bg-lime-100 hover:bg-lime-200 border border-lime-400 text-lime-900 px-1 py-0.5 rounded cursor-pointer whitespace-nowrap font-bold shrink-0"
+                                className="text-xs bg-lime-100 hover:bg-lime-200 border border-lime-400 text-lime-900 px-2 py-0.5 rounded cursor-pointer whitespace-nowrap shrink-0"
                                 title="작품 사진 보기"
                               >
-                                보기 {photoMap[String(o.id)].length}/{MAX_ORDER_PHOTOS}
+                                보기 {photoMap[String(o.id)].length}
                               </button>
                             )}
-                            {(photoMap[String(o.id)]?.length || 0) < MAX_ORDER_PHOTOS && (
+                            {(photoMap[String(o.id)]?.length || 0) === 0 && (
                               <button
                                 onClick={() => handleOrderPhotoUpload(o)}
                                 disabled={photoUploadingOrderId === o.id}
-                                className="text-[11px] bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 px-1 py-0.5 rounded cursor-pointer whitespace-nowrap shrink-0"
-                                title={(photoMap[String(o.id)]?.length || 0) > 0 ? '사진 추가' : '사진 등록'}
+                                className="text-xs bg-white hover:bg-rose-50 border border-rose-300 text-rose-700 px-2 py-0.5 rounded cursor-pointer whitespace-nowrap shrink-0"
+                                title="사진 등록"
                               >
-                                {photoUploadingOrderId === o.id ? '업로드…' : ((photoMap[String(o.id)]?.length || 0) > 0 ? '+' : '사진')}
+                                {photoUploadingOrderId === o.id ? '업로드…' : '사진'}
                               </button>
                             )}
+                            <button
+                              onClick={() => handleDeleteSingleOrderFromList(o)}
+                              className="text-xs bg-white hover:bg-red-50 border border-red-400 text-red-600 px-2 py-0.5 rounded cursor-pointer whitespace-nowrap shrink-0"
+                              title="주문 삭제"
+                            >
+                              삭제
+                            </button>
                           </div>
 
                           <div className="flex items-center justify-between gap-1 text-xs">
