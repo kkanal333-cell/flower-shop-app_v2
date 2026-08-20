@@ -3564,8 +3564,8 @@ export default function App() {
                           className="p-2.5 md:p-3 rounded-xl border border-slate-200 bg-white flex flex-col gap-1.5 shadow-2xs"
                         >
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] shrink-0 ${isOnsiteDelivery ? 'bg-orange-500' : 'bg-indigo-600'}`} title={isOnsiteDelivery ? '현장판매' : '예약주문'}>
-                              {isOnsiteDelivery ? '🏪' : '📅'}
+                            <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] shrink-0 ${isOnsiteDelivery ? 'bg-sky-500 badge-blink' : 'bg-indigo-600'}`} title={isOnsiteDelivery ? '배송' : '예약주문'}>
+                              {isOnsiteDelivery ? '🚚' : '📅'}
                             </span>
                             <span className={`px-2 py-0.5 font-extrabold text-xs rounded-md whitespace-nowrap border shrink-0 ${
                               isOnsiteDelivery ? 'bg-sky-100 text-sky-900 border-sky-300' : 'bg-sky-100 text-sky-900 border-sky-300'
@@ -3762,6 +3762,7 @@ export default function App() {
                     </div>
                     {dashboardDateOrders.map(o => {
                       const isOnsite = o.order_type === '현장판매';
+                      const isDeliveryRow = isOnsite && o.is_delivery;
                       const timeOnly = (o.created_at || '').replace(' ', 'T').split('T')[1]?.slice(0, 5) || '--:--';
                       return (
                         <div
@@ -3777,13 +3778,16 @@ export default function App() {
                           }}
                         >
                           <span
+                            className={isDeliveryRow ? 'badge-blink' : ''}
                             style={{
                               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                               width: '20px', height: '20px', borderRadius: '4px', fontSize: '13px',
-                              backgroundColor: isOnsite ? 'transparent' : '#4f46e5', color: isOnsite ? undefined : '#fff'
+                              backgroundColor: isDeliveryRow ? '#0ea5e9' : (isOnsite ? 'transparent' : '#4f46e5'),
+                              color: isDeliveryRow ? '#fff' : (isOnsite ? undefined : '#fff')
                             }}
+                            title={isDeliveryRow ? '배송' : (isOnsite ? '현장판매' : '예약주문')}
                           >
-                            {isOnsite ? '🏪' : '📅'}
+                            {isDeliveryRow ? '🚚' : (isOnsite ? '🏪' : '📅')}
                           </span>
                           <span style={{ color: '#94a3b8', whiteSpace: 'nowrap' }}>{timeOnly}</span>
                           <span style={{ fontWeight: 'bold', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
