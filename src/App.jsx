@@ -11,7 +11,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // 옵션 목록
 const PAYMENT_OPTIONS = ["신용카드", "현금", "계좌이체", "전화예약입금", "네이버", "인스타", "미결제"];
-const PRODUCT_OPTIONS = ["꽃다발", "꽃바구니", "햇살콘플라워", "꽃묶음", "식물", "용품", "시즌한정", "기타"];
+const PRODUCT_OPTIONS = ["꽃다발", "꽃바구니", "햇살콘플라워", "꽃묶음", "한송이", "식물", "용품", "시즌한정", "기타"];
 
 // Supabase 무료 플랜 파일 저장 용량 한도 (MB). 유료 플랜으로 전환 시 이 값만 수정하면 됩니다.
 const SUPABASE_STORAGE_LIMIT_MB = 1024;
@@ -1170,7 +1170,7 @@ export default function App() {
     fetchData();
   };
 
-  const [dashboardPeriod, setDashboardPeriod] = useState('month'); // today | week | month | all
+  const [dashboardPeriod, setDashboardPeriod] = useState('today'); // today | week | month | all
   const [dashboardSelectedDate, setDashboardSelectedDate] = useState(() => getKoreaNowFormatted().date);
 
   // 매출 대시보드용 집계 (접수일시=created_at 기준. orders는 이미 로드된 상태를 재사용하므로 추가 트래픽 없음)
@@ -3245,6 +3245,10 @@ export default function App() {
               <div>
                 <label className="text-[11px] md:text-xs font-bold text-black">메모 (선택)</label>
                 <textarea
+                  lang="ko"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                   value={onsiteOrder.memo}
                   onChange={e => setOnsiteOrder({ ...onsiteOrder, memo: e.target.value })}
                   className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
