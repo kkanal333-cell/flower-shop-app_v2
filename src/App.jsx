@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import * as XLSX from 'xlsx';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -272,6 +273,8 @@ export default function App() {
 
   const [orderSearch, setOrderSearch] = useState('');
   const [orderTypeFilter, setOrderTypeFilter] = useState('all'); // all | reservation | onsite
+  const [payhereImportRows, setPayhereImportRows] = useState([]); // 미리보기 화면에 뜨는 파싱된 거래 목록
+  const [payhereImportLoading, setPayhereImportLoading] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
   const [matchedCustomerList, setMatchedCustomerList] = useState([]);
 
@@ -1884,6 +1887,138 @@ export default function App() {
     setSelectedTrashOrderIds([]);
     setSelectedTrashCustomerIds([]);
     alert('휴지통이 비워졌습니다.');
+    fetchData();
+  };
+
+  // 페이히어 "매출 내역" 엑셀을 파싱해서 미리보기 목록(payhereImportRows)을 만듭니다.
+  // 결제수단은 카드결제/현금결제/간편결제/기타결제/온라인스토어 중 값이 들어있는 컬럼으로 판단합니다.
+  // "온라인 스토어" 결제는 네이버페이(=이미 예약주문으로 등록됐을 가능성이 높음)로 보고 기본적으로 체크 해제합니다.
+  const handlePayhereFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPayhereImportLoading(true);
+    setPayhereImportRows([]);
+
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const sheetName = wb.SheetNames.find(n => n.includes('매출 내역')) || wb.SheetNames[0];
+      const sheet = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
+
+      const headerIdx = rows.findIndex(r => String(r[0]).trim() === '결제일');
+      if (headerIdx === -1) {
+        alert('페이히어 "매출 내역" 형식을 인식할 수 없습니다. 정확한 파일인지 확인해주세요.');
+        setPayhereImportLoading(false);
+        return;
+      }
+
+      const dataRows = rows.slice(headerIdx + 1).filter(r => /^\d{4}-\d{2}-\d{2}/.test(String(r[0]).trim()));
+
+      // 이미 등록된 주문(예약+현장판매)과 "같은 날짜 + 같은 금액"이면 중복 의심으로 표시합니다.
+      const existingDateAmountSet = new Set(
+        (orders || [])
+          .filter(o => !o.deleted_at)
+          .map(o => {
+            const d = (o.pickup_datetime || o.created_at || '').replace(' ', 'T').split('T')[0];
+            return `${d}_${o.amount}`;
+          })
+      );
+
+      // 예전에 "페이히어 가져오기"로 이미 등록했던 건은 결제일시(초 단위)로 정확히 기억해뒀다가,
+      // 페이히어가 매번 최근 1주일치를 통째로 다시 내려주더라도 겹치는 부분은 화면에 보여주지 않고 자동으로 조용히 제외합니다.
+      const alreadyImportedDatetimeSet = new Set(
+        (orders || [])
+          .filter(o => !o.deleted_at && o.order_type === '현장판매' && o.memo === '페이히어 가져오기')
+          .map(o => o.created_at)
+      );
+
+      const allParsed = dataRows.map((r, idx) => {
+        const date = String(r[0]).trim();
+        const time = String(r[1]).trim() || '00:00:00';
+        const desc = String(r[2] || '').trim() || '기타';
+        const amount = Number(r[3]) || 0;
+        const cardAmt = Number(r[6]) || 0;
+        const cashAmt = Number(r[7]) || 0;
+        const easyAmt = Number(r[8]) || 0;
+        const etcAmt = Number(r[9]) || 0;
+        const onlineAmt = Number(r[10]) || 0;
+        const refundAt = String(r[14] || '').trim();
+        const isRefund = refundAt !== '' && refundAt !== '0' && refundAt !== '0.0';
+        const alreadyImported = alreadyImportedDatetimeSet.has(`${date}T${time}`);
+
+        let paymentMethod = '기타';
+        let isOnline = false;
+        if (onlineAmt > 0) { paymentMethod = '네이버'; isOnline = true; }
+        else if (cardAmt > 0) paymentMethod = '신용카드';
+        else if (cashAmt > 0) paymentMethod = '현금';
+        else if (easyAmt > 0) paymentMethod = '계좌이체';
+        else if (etcAmt > 0) paymentMethod = '기타';
+
+        const isDuplicate = existingDateAmountSet.has(`${date}_${amount}`);
+        // 페이히어 단말기에서 상품명을 "예약-꽃다발", "배송-꽃다발"처럼 등록해두신 경우,
+        // 이 키워드가 있으면 금액이 같은 다른 건과 헷갈리지 않고 확실하게 "이미 예약주문으로 등록된 결제"로 판단합니다.
+        const hasReservationKeyword = /예약|배송/.test(desc);
+
+        return {
+          key: `${date}_${time}_${idx}`,
+          date, time, product_name: desc, amount,
+          payment_method: paymentMethod,
+          isOnline, isDuplicate, isRefund, hasReservationKeyword, alreadyImported,
+          selected: !isOnline && !isDuplicate && !isRefund && !hasReservationKeyword
+        };
+      }).filter(t => !t.isRefund && t.amount > 0); // 환불/0원 건은 애초에 유효 거래가 아니므로 완전히 제외
+
+      const skippedAlreadyImportedCount = allParsed.filter(t => t.alreadyImported).length;
+      const parsed = allParsed.filter(t => !t.alreadyImported);
+
+      if (parsed.length === 0) {
+        alert(skippedAlreadyImportedCount > 0
+          ? `새로 가져올 항목이 없습니다. (이전에 이미 가져온 ${skippedAlreadyImportedCount}건은 자동 제외됨)`
+          : '가져올 수 있는 거래 내역이 없습니다.');
+      } else if (skippedAlreadyImportedCount > 0) {
+        alert(`이전에 이미 가져온 ${skippedAlreadyImportedCount}건은 자동으로 제외하고, 새 항목 ${parsed.length}건을 불러왔습니다.`);
+      }
+      setPayhereImportRows(parsed);
+    } catch (err) {
+      alert('엑셀 파일을 읽는 중 오류가 발생했습니다: ' + err.message);
+    } finally {
+      setPayhereImportLoading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleTogglePayhereRow = (key) => {
+    setPayhereImportRows(prev => prev.map(r => r.key === key ? { ...r, selected: !r.selected } : r));
+  };
+
+  const handleConfirmPayhereImport = async () => {
+    const toImport = payhereImportRows.filter(r => r.selected);
+    if (toImport.length === 0) return alert('가져올 항목을 선택해주세요.');
+    if (!window.confirm(`선택한 ${toImport.length}건을 현장판매로 등록하시겠습니까?`)) return;
+
+    const payload = toImport.map(r => ({
+      customer_id: null,
+      product_name: r.product_name,
+      product: r.product_name,
+      amount: r.amount,
+      pickup_datetime: `${r.date}T${r.time}`,
+      created_at: `${r.date}T${r.time}`,
+      payment_method: r.payment_method,
+      status: r.payment_method,
+      is_delivery: false,
+      order_type: '현장판매',
+      memo: '페이히어 가져오기'
+    }));
+
+    const { error } = await supabase.from('orders').insert(payload);
+    if (error) {
+      alert('가져오기 실패: ' + error.message);
+      return;
+    }
+
+    alert(`${toImport.length}건이 현장판매로 등록되었습니다.`);
+    setPayhereImportRows([]);
     fetchData();
   };
 
@@ -4120,6 +4255,74 @@ export default function App() {
                 onChange={handleImportCSV}
                 className="w-full text-xs text-slate-700 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border file:border-slate-300 file:text-xs file:font-bold file:bg-white file:text-slate-800 hover:file:bg-slate-100 cursor-pointer"
               />
+            </div>
+            <div className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-3">
+              <h3 className="font-bold text-xs md:text-sm text-slate-800">3. 페이히어 매출 엑셀 가져오기</h3>
+              <p className="text-xs text-slate-500">
+                페이히어 앱에서 "매출 내역"을 이메일로 요청해서 받은 엑셀(.xlsx) 파일을 올려주세요.<br />
+                🌐 온라인 스토어(네이버페이) 결제는 예약주문과 중복일 가능성이 높아 기본적으로 체크가 꺼진 채로 표시됩니다.<br />
+                💡 팁: 페이히어에서 예약/배송 건을 결제하실 때 상품명에 <strong>"예약"</strong> 또는 <strong>"배송"</strong>이라는 글자를 넣어두시면(예: "예약-꽃다발"), 금액이 같은 다른 주문과 헷갈리지 않고 확실하게 걸러집니다.
+              </p>
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handlePayhereFileSelect}
+                disabled={payhereImportLoading}
+                className="w-full text-xs text-slate-700 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border file:border-slate-300 file:text-xs file:font-bold file:bg-white file:text-slate-800 hover:file:bg-slate-100 cursor-pointer"
+              />
+              {payhereImportLoading && <p className="text-xs text-slate-500">파일을 읽는 중...</p>}
+
+              {payhereImportRows.length > 0 && (
+                <div className="border border-slate-200 rounded-xl bg-white overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2 bg-slate-100 border-b border-slate-200 text-xs font-bold text-slate-700">
+                    <span>총 {payhereImportRows.length}건 · 선택됨 {payhereImportRows.filter(r => r.selected).length}건</span>
+                    <span className="text-rose-600">
+                      선택 합계 {payhereImportRows.filter(r => r.selected).reduce((s, r) => s + r.amount, 0).toLocaleString()}원
+                    </span>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                    {payhereImportRows.map(r => (
+                      <label
+                        key={r.key}
+                        className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer ${r.selected ? 'bg-white' : 'bg-slate-50'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={r.selected}
+                          onChange={() => handleTogglePayhereRow(r.key)}
+                          className="w-4 h-4 accent-rose-600 cursor-pointer shrink-0"
+                        />
+                        <span className="text-slate-400 whitespace-nowrap">{r.date.slice(5)} {r.time.slice(0, 5)}</span>
+                        <span className="font-bold text-slate-800 truncate flex-1">{r.product_name}</span>
+                        <span className={`px-1.5 py-0.5 rounded border whitespace-nowrap ${
+                          r.isOnline ? 'bg-sky-50 border-sky-300 text-sky-700' : 'bg-slate-100 border-slate-300 text-slate-700'
+                        }`}>
+                          {r.payment_method}
+                        </span>
+                        {r.hasReservationKeyword && (
+                          <span className="px-1.5 py-0.5 rounded bg-indigo-100 border border-indigo-300 text-indigo-800 whitespace-nowrap font-bold">
+                            예약표시
+                          </span>
+                        )}
+                        {r.isDuplicate && !r.hasReservationKeyword && (
+                          <span className="px-1.5 py-0.5 rounded bg-amber-100 border border-amber-300 text-amber-800 whitespace-nowrap">
+                            중복의심
+                          </span>
+                        )}
+                        <span className="font-bold text-black whitespace-nowrap">{r.amount.toLocaleString()}원</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="p-2 border-t border-slate-200">
+                    <button
+                      onClick={handleConfirmPayhereImport}
+                      className="w-full py-2 bg-rose-200 hover:bg-rose-300 text-slate-900 font-extrabold rounded-xl text-xs shadow-xs transition-colors cursor-pointer border border-rose-400"
+                    >
+                      ✅ 선택 항목 현장판매로 가져오기
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
