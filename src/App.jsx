@@ -12,7 +12,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // 옵션 목록
 const PAYMENT_OPTIONS = ["신용카드", "현금", "계좌이체", "전화예약입금", "네이버", "인스타", "미결제"];
-const PRODUCT_OPTIONS = ["꽃다발", "꽃바구니", "햇살콘플라워", "꽃묶음", "한송이", "식물", "용품", "시즌한정", "기타"];
+const PRODUCT_OPTIONS = ["꽃다발", "꽃바구니", "햇살콘플라워", "꽃묶음", "한송이", "식물", "용품", "화환", "시즌한정", "기타"];
 
 // Supabase 무료 플랜 파일 저장 용량 한도 (MB). 유료 플랜으로 전환 시 이 값만 수정하면 됩니다.
 const SUPABASE_STORAGE_LIMIT_MB = 1024;
@@ -273,6 +273,9 @@ export default function App() {
 
   const [orderSearch, setOrderSearch] = useState('');
   const [orderTypeFilter, setOrderTypeFilter] = useState('all'); // all | reservation | onsite
+  const [receiptSort, setReceiptSort] = useState(null); // null | 'desc' | 'asc' - 접수일시 정렬 (헤더 삼각형 클릭)
+  const [orderListPage, setOrderListPage] = useState(1); // 전체 주문 목록 페이지네이션 (40건/페이지)
+  const ORDERS_PER_PAGE = 40;
   const [payhereImportRows, setPayhereImportRows] = useState([]); // 미리보기 화면에 뜨는 파싱된 거래 목록
   const [payhereImportLoading, setPayhereImportLoading] = useState(false);
   const [kakaoSendLogs, setKakaoSendLogs] = useState([]);
@@ -281,6 +284,7 @@ export default function App() {
   const [kakaoSendLogsHasMore, setKakaoSendLogsHasMore] = useState(true);
   const [customerSearch, setCustomerSearch] = useState('');
   const [matchedCustomerList, setMatchedCustomerList] = useState([]);
+  const [onsiteMatchedCustomerList, setOnsiteMatchedCustomerList] = useState([]); // 현장판매 탭 성명 매칭 후보
 
   const [showBackupAlertModal, setShowBackupAlertModal] = useState(false);
   const [isMemoAutofilled, setIsMemoAutofilled] = useState(false);
@@ -464,6 +468,11 @@ export default function App() {
     delivery_time: '',
     memo: ''
   });
+
+  // 전체 주문 목록: 검색어/유형 필터/정렬 기준이 바뀌면 항상 1페이지로 되돌립니다.
+  useEffect(() => {
+    setOrderListPage(1);
+  }, [orderSearch, orderTypeFilter, receiptSort]);
 
   useEffect(() => {
     const checkBackupSchedule = () => {
@@ -936,6 +945,44 @@ export default function App() {
     setMatchedCustomerList(matches);
   };
 
+  // 현장판매 탭: 성명 입력 시 기존 고객 중 동일인 후보를 찾아 보여줍니다. (동명이인 대비 목록에서 선택)
+  const handleOnsiteCustomerNameChange = (nameInput) => {
+    setOnsiteOrder(prev => ({ ...prev, customer_name: nameInput }));
+
+    if (!nameInput.trim()) {
+      setOnsiteMatchedCustomerList([]);
+      return;
+    }
+
+    const cleanInput = nameInput.trim().toLowerCase();
+    const allKnownCustomers = [...customers];
+
+    orders.forEach(o => {
+      if (o.customers && !allKnownCustomers.some(c => c.id === o.customers.id)) {
+        allKnownCustomers.push(o.customers);
+      }
+    });
+
+    const matches = allKnownCustomers.filter(c => {
+      if (!c || !c.name) return false;
+      const cNameClean = c.name.toLowerCase();
+      const baseNameClean = cNameClean.replace(/[0-9]/g, '');
+      return cNameClean.includes(cleanInput) || baseNameClean.includes(cleanInput);
+    });
+
+    setOnsiteMatchedCustomerList(matches);
+  };
+
+  // 목록에서 고객을 선택하면 성명은 확정하고 휴대폰 번호만 자동으로 채웁니다. (전화번호는 이후에도 자유롭게 수정 가능)
+  const selectCustomerForOnsiteOrder = (cust) => {
+    setOnsiteOrder(prev => ({
+      ...prev,
+      customer_name: cust.name,
+      phone: cust.phone || '010-'
+    }));
+    setOnsiteMatchedCustomerList([]);
+  };
+
   const selectCustomerForNewOrder = (cust) => {
     let hasAutofilledMemo = false;
 
@@ -1038,6 +1085,9 @@ export default function App() {
     }
 
     const actualAmount = (Number(newOrder.amount_thousands) || 0) * 1000;
+    if (newOrder.is_delivery && (!newOrder.delivery_date || !newOrder.delivery_time)) {
+      return alert('배송 날짜와 시간을 입력해주세요.');
+    }
 
     const pickupDatetime = `${newOrder.pickup_date}T${newOrder.pickup_time}:00`;
     const receiptDatetime = `${newOrder.receipt_date}T${newOrder.receipt_time}:00`;
@@ -1052,9 +1102,8 @@ export default function App() {
       payment_method: newOrder.payment_method,
       status: newOrder.payment_method,
       is_delivery: !!newOrder.is_delivery,
-      // 예약주문은 배송이어도 별도 배송일시를 따로 안 받고, 위 pickup_datetime(픽업/배송 날짜·시간)을 그대로 배송 기준으로 씁니다.
-      delivery_date: null,
-      delivery_time: null,
+      delivery_date: newOrder.is_delivery ? newOrder.delivery_date : null,
+      delivery_time: newOrder.is_delivery ? newOrder.delivery_time : null,
       order_type: '예약',
       memo: newOrder.memo
     }]).select().single();
@@ -1222,6 +1271,7 @@ export default function App() {
       delivery_time: '',
       memo: ''
     });
+    setOnsiteMatchedCustomerList([]);
     fetchData();
   };
 
@@ -1413,9 +1463,7 @@ export default function App() {
       }
     }
 
-    // 현장판매만 별도 배송 날짜/시간을 입력받으므로, 그 경우에만 검증합니다.
-    // 예약주문은 위 픽업 날짜/시간 필드 자체가 배송 체크 시 배송 기준으로 쓰이므로 별도 검증이 필요 없습니다.
-    if (isOnsite && editingOrder.is_delivery && (!editingOrder.delivery_date || !editingOrder.delivery_time)) {
+    if (editingOrder.is_delivery && (!editingOrder.delivery_date || !editingOrder.delivery_time)) {
       return alert('배송 날짜와 시간을 입력해주세요.');
     }
 
@@ -1463,9 +1511,8 @@ export default function App() {
       payment_method: editingOrder.payment_method,
       status: editingOrder.payment_method,
       is_delivery: !!editingOrder.is_delivery,
-      // 현장판매만 별도 배송일시를 저장하고, 예약주문은 pickup_datetime을 그대로 배송 기준으로 사용하므로 null로 둡니다.
-      delivery_date: (isOnsite && editingOrder.is_delivery) ? editingOrder.delivery_date : null,
-      delivery_time: (isOnsite && editingOrder.is_delivery) ? editingOrder.delivery_time : null,
+      delivery_date: editingOrder.is_delivery ? editingOrder.delivery_date : null,
+      delivery_time: editingOrder.is_delivery ? editingOrder.delivery_time : null,
       memo: editingOrder.memo
     };
 
@@ -1751,6 +1798,17 @@ export default function App() {
     setSelectedOrderIds(prev => 
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
+  };
+
+  // 제작 완료 체크박스 토글 (내부 확인용). Supabase orders 테이블에 'completed'(boolean) 컬럼이 있어야 합니다.
+  const handleToggleOrderCompleted = async (order) => {
+    const newVal = !order.completed;
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, completed: newVal } : o));
+    const { error } = await supabase.from('orders').update({ completed: newVal }).eq('id', order.id);
+    if (error) {
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, completed: !newVal } : o));
+      alert('완료 상태 저장 실패: ' + error.message);
+    }
   };
 
   // 선택된 주문들을 휴지통으로 이동 (삭제 시간 기록 포함)
@@ -2292,6 +2350,15 @@ export default function App() {
       return nameMatch || phoneMatch;
     })
     .sort((a, b) => {
+      // 접수일시 헤더의 삼각형을 눌러 정렬을 켠 경우: 접수일시(created_at) 기준 정렬을 우선 적용
+      if (receiptSort === 'desc') {
+        return (b.created_at || '').localeCompare(a.created_at || '');
+      }
+      if (receiptSort === 'asc') {
+        return (a.created_at || '').localeCompare(b.created_at || '');
+      }
+
+      // 기본 정렬: 픽업/배송일시 기준
       const dateA = a.pickup_datetime ? a.pickup_datetime.replace(' ', 'T').split('T')[0] : '9999-99-99';
       const dateB = b.pickup_datetime ? b.pickup_datetime.replace(' ', 'T').split('T')[0] : '9999-99-99';
 
@@ -2307,6 +2374,13 @@ export default function App() {
 
       return (b.pickup_datetime || '').localeCompare(a.pickup_datetime || '');
     });
+
+  // 전체 주문 목록: 40건씩 페이지 단위로 잘라서 보여줍니다. (검색/필터/정렬은 전체 목록 기준으로 계산됨)
+  const orderListTotalPages = Math.max(1, Math.ceil(sortedAndFilteredOrders.length / ORDERS_PER_PAGE));
+  const pagedOrders = sortedAndFilteredOrders.slice(
+    (orderListPage - 1) * ORDERS_PER_PAGE,
+    orderListPage * ORDERS_PER_PAGE
+  );
 
   const filteredCustomers = customers.filter(c => {
     const q = customerSearch.trim().toLowerCase();
@@ -2840,9 +2914,7 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700">
-                      {editingOrder.is_delivery ? '배송 날짜' : '픽업 날짜'}
-                    </label>
+                    <label className="text-[11px] font-bold text-slate-700">픽업 날짜</label>
                     <input
                       type="date"
                       value={editingOrder.pickup_date}
@@ -2851,9 +2923,7 @@ export default function App() {
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700">
-                      {editingOrder.is_delivery ? '배송 시간' : '픽업 시간'}
-                    </label>
+                    <label className="text-[11px] font-bold text-slate-700">픽업 시간</label>
                     <TimePickerCustom
                       value={editingOrder.pickup_time}
                       onChange={val => setEditingOrder({ ...editingOrder, pickup_time: val })}
@@ -2861,7 +2931,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
                   <div>
                     <label className="text-[11px] font-bold text-slate-700">결제 방식</label>
                     <select
@@ -2872,16 +2942,48 @@ export default function App() {
                       {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
                     </select>
                   </div>
-                  <label className="flex items-center gap-1 px-2 py-2 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap h-fit self-end">
+                  <label className="flex items-center gap-1 px-2 py-2 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap">
                     <input
                       type="checkbox"
                       checked={!!editingOrder.is_delivery}
-                      onChange={e => setEditingOrder({ ...editingOrder, is_delivery: e.target.checked })}
+                      onChange={e => {
+                        if (e.target.checked) {
+                          const nextQ = getNextQuarterHourDateTime();
+                          setEditingOrder({
+                            ...editingOrder,
+                            is_delivery: true,
+                            delivery_date: editingOrder.delivery_date || getKoreaNowFormatted().date,
+                            delivery_time: editingOrder.delivery_time || nextQ.time
+                          });
+                        } else {
+                          setEditingOrder({ ...editingOrder, is_delivery: false, delivery_date: '', delivery_time: '' });
+                        }
+                      }}
                       className="w-4 h-4 accent-sky-500 cursor-pointer"
                     />
                     <span className="text-xs font-bold text-slate-700">🚚 배송</span>
                   </label>
                 </div>
+                {editingOrder.is_delivery && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700">배송 날짜</label>
+                      <input
+                        type="date"
+                        value={editingOrder.delivery_date || ''}
+                        onChange={e => setEditingOrder({ ...editingOrder, delivery_date: e.target.value })}
+                        className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700">배송 시간</label>
+                      <TimePickerCustom
+                        value={editingOrder.delivery_time || ''}
+                        onChange={val => setEditingOrder({ ...editingOrder, delivery_time: val })}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label className="text-[11px] font-bold text-slate-700">메모</label>
@@ -3007,9 +3109,7 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700">
-                      {newOrder.is_delivery ? '배송 날짜 *' : '픽업 날짜 *'}
-                    </label>
+                    <label className="text-[11px] font-bold text-slate-700">픽업 날짜 *</label>
                     <input
                       type="date"
                       value={newOrder.pickup_date}
@@ -3018,9 +3118,7 @@ export default function App() {
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700">
-                      {newOrder.is_delivery ? '배송 시간 *' : '픽업 시간 *'}
-                    </label>
+                    <label className="text-[11px] font-bold text-slate-700">픽업 시간 *</label>
                     <TimePickerCustom
                       value={newOrder.pickup_time}
                       onChange={val => setNewOrder({...newOrder, pickup_time: val})}
@@ -3028,26 +3126,15 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-700">결제 방식 *</label>
-                    <select
-                      value={newOrder.payment_method}
-                      onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
-                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium"
-                    >
-                      {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
-                    </select>
-                  </div>
-                  <label className="flex items-center gap-1 px-2 py-2 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap h-fit self-end">
-                    <input
-                      type="checkbox"
-                      checked={!!newOrder.is_delivery}
-                      onChange={e => setNewOrder({...newOrder, is_delivery: e.target.checked})}
-                      className="w-4 h-4 accent-sky-500 cursor-pointer"
-                    />
-                    <span className="text-xs font-bold text-slate-700">🚚 배송 (체크 시 픽업→배송)</span>
-                  </label>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700">결제 방식 *</label>
+                  <select
+                    value={newOrder.payment_method}
+                    onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
+                    className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium"
+                  >
+                    {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
+                  </select>
                 </div>
 
                 <div>
@@ -3214,9 +3301,7 @@ export default function App() {
 
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-black">
-                    {newOrder.is_delivery ? '배송 날짜 *' : '픽업 날짜 *'}
-                  </label>
+                  <label className="text-[11px] md:text-xs font-bold text-black">픽업 날짜 *</label>
                   <input
                     type="date"
                     value={newOrder.pickup_date}
@@ -3226,9 +3311,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-black">
-                    {newOrder.is_delivery ? '배송 시간 *' : '픽업 시간 *'}
-                  </label>
+                  <label className="text-[11px] md:text-xs font-bold text-black">픽업 시간 *</label>
                   <TimePickerCustom
                     value={newOrder.pickup_time}
                     onChange={val => setNewOrder({...newOrder, pickup_time: val})}
@@ -3260,27 +3343,16 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 md:gap-4">
-                <div>
-                  <label className="text-[11px] md:text-xs font-bold text-black">결제 방식 *</label>
-                  <select
-                    value={newOrder.payment_method}
-                    onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
-                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
-                    style={{ backgroundColor: '#ffffff' }}
-                  >
-                    {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
-                  </select>
-                </div>
-                <label className="flex items-center gap-1.5 px-3 py-2 md:py-3 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap mt-1 h-fit self-end">
-                  <input
-                    type="checkbox"
-                    checked={!!newOrder.is_delivery}
-                    onChange={e => setNewOrder({...newOrder, is_delivery: e.target.checked})}
-                    className="w-4 h-4 accent-sky-500 cursor-pointer"
-                  />
-                  <span className="text-xs md:text-sm font-bold text-black">🚚 배송 (체크 시 픽업→배송)</span>
-                </label>
+              <div>
+                <label className="text-[11px] md:text-xs font-bold text-black">결제 방식 *</label>
+                <select
+                  value={newOrder.payment_method}
+                  onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
+                  className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
+                  style={{ backgroundColor: '#ffffff' }}
+                >
+                  {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
+                </select>
               </div>
 
               <div>
@@ -3407,24 +3479,46 @@ export default function App() {
               )}
 
               <div className="grid grid-cols-2 gap-2 md:gap-4">
-                <div>
+                <div className="relative">
                   <label className="text-[11px] md:text-xs font-bold text-black">고객 성명 (선택)</label>
                   <input
                     type="text"
+                    name="onsite-customer-name"
+                    autoComplete="off"
                     lang="ko"
                     autoCapitalize="off"
                     autoCorrect="off"
                     spellCheck={false}
                     value={onsiteOrder.customer_name}
-                    onChange={e => setOnsiteOrder({ ...onsiteOrder, customer_name: e.target.value })}
+                    onChange={e => handleOnsiteCustomerNameChange(e.target.value)}
                     className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
                     placeholder="입력 안 해도 됩니다"
                   />
+
+                  {onsiteMatchedCustomerList.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-300 rounded-xl shadow-lg z-20 max-h-48 overflow-y-auto p-1">
+                      <div className="text-[11px] text-black font-bold px-2 py-1 bg-slate-100 rounded-t-lg">
+                        💡 검색된 고객 목록 (선택하면 휴대폰 번호가 채워집니다):
+                      </div>
+                      {onsiteMatchedCustomerList.map(c => (
+                        <div
+                          key={c.id || c.name}
+                          onClick={() => selectCustomerForOnsiteOrder(c)}
+                          className="p-2 text-xs hover:bg-slate-100 rounded-lg cursor-pointer flex justify-between items-center"
+                        >
+                          <span className="font-bold text-black">{c.name}</span>
+                          <span className="text-black text-[11px]">{c.phone || '-'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="text-[11px] md:text-xs font-bold text-black">휴대폰 번호 (선택)</label>
                   <input
                     type="text"
+                    name="onsite-customer-phone"
+                    autoComplete="off"
                     inputMode="numeric"
                     value={onsiteOrder.phone}
                     onChange={e => setOnsiteOrder({ ...onsiteOrder, phone: formatPhone(e.target.value) })}
@@ -3571,6 +3665,7 @@ export default function App() {
                       <thead>
                         <tr className="border-b border-slate-200 text-slate-700 text-sm bg-slate-100 font-bold">
                           <th className="px-2 text-center whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>유형</th>
+                          <th className="px-2 text-center whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>완료</th>
                           <th className="px-2 whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>픽업/배송일시</th>
                           <th className="px-2 whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>고객명</th>
                           <th className="px-2 whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>연락처</th>
@@ -3578,7 +3673,19 @@ export default function App() {
                           <th className="px-2 whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>금액</th>
                           <th className="px-2 whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>결제수단</th>
                           <th className="px-2 whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>메모</th>
-                          <th className="px-2 whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>접수일시</th>
+                          <th
+                            className="px-2 whitespace-nowrap cursor-pointer select-none"
+                            style={{ paddingTop: '6px', paddingBottom: '6px' }}
+                            onClick={() => setReceiptSort(prev => prev === 'desc' ? 'asc' : prev === 'asc' ? null : 'desc')}
+                            title="클릭하면 접수일시 기준으로 정렬됩니다"
+                          >
+                            <span className="inline-flex items-center gap-1">
+                              접수일시
+                              <span className={`text-[9px] leading-none ${receiptSort ? 'text-rose-600' : 'text-slate-400'}`}>
+                                {receiptSort === 'asc' ? '▲' : '▼'}
+                              </span>
+                            </span>
+                          </th>
                           <th className="px-2 text-center whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>관리 / 출력</th>
                           <th className="px-2 text-center whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>사진(3p)</th>
                           <th className="px-2 text-center whitespace-nowrap" style={{ paddingTop: '6px', paddingBottom: '6px' }}>
@@ -3592,14 +3699,14 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody>
-                        {sortedAndFilteredOrders.length === 0 ? (
+                        {pagedOrders.length === 0 ? (
                           <tr>
-                            <td colSpan={12} className="py-6 text-center text-slate-500 text-sm whitespace-nowrap">
+                            <td colSpan={13} className="py-6 text-center text-slate-500 text-sm whitespace-nowrap">
                               검색 결과가 없습니다.
                             </td>
                           </tr>
                         ) : (
-                          sortedAndFilteredOrders.map(o => {
+                          pagedOrders.map(o => {
                             const displayDatetime = (o.is_delivery && o.delivery_date && o.delivery_time)
                               ? `${o.delivery_date} ${o.delivery_time}`
                               : o.pickup_datetime;
@@ -3607,24 +3714,40 @@ export default function App() {
                             const isPast = displayDate !== '' && displayDate < todayDateStr;
                             const isOnsite = o.order_type === '현장판매';
                             const cellPad = { paddingTop: '6px', paddingBottom: '6px' };
+                            const isRowSelected = selectedOrderIds.includes(o.id);
 
                             return (
                               <tr 
                                 key={o.id} 
-                                className={`border-b border-slate-100 transition-colors text-sm ${
-                                  isPast 
-                                    ? 'text-slate-300 opacity-40 bg-slate-100/50 hover:bg-slate-100' 
-                                    : 'text-slate-900 hover:bg-slate-50'
+                                onClick={(e) => {
+                                  if (e.target.closest('button, input, a, label')) return;
+                                  handleToggleSelectOrder(o.id);
+                                }}
+                                className={`border-b border-slate-100 transition-colors text-sm cursor-pointer ${
+                                  isRowSelected
+                                    ? 'bg-rose-100 hover:bg-rose-100'
+                                    : isPast 
+                                      ? 'text-slate-300 opacity-40 bg-slate-100/50 hover:bg-slate-100' 
+                                      : 'text-slate-900 hover:bg-slate-50'
                                 }`}
                               >
                                 <td className="px-2 text-center whitespace-nowrap" style={cellPad}>
                                   <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-xs ${
                                     isPast ? 'opacity-40' : ''
                                   } ${
-                                    o.is_delivery ? 'badge-blink' : (isOnsite ? '' : 'bg-indigo-300')
-                                  }`} title={o.is_delivery ? '배송' : (isOnsite ? '현장판매' : '예약주문')}>
-                                    {o.is_delivery ? '🚚' : (isOnsite ? '🏪' : '📅')}
+                                    (isOnsite && o.is_delivery) ? 'badge-blink' : (isOnsite ? '' : 'bg-indigo-300')
+                                  }`} title={(isOnsite && o.is_delivery) ? '배송' : (isOnsite ? '현장판매' : '예약주문')}>
+                                    {(isOnsite && o.is_delivery) ? '🚚' : (isOnsite ? '🏪' : '📅')}
                                   </span>
+                                </td>
+                                <td className="px-2 text-center whitespace-nowrap" style={cellPad}>
+                                  <input
+                                    type="checkbox"
+                                    checked={!!o.completed}
+                                    onChange={() => handleToggleOrderCompleted(o)}
+                                    className="accent-emerald-600 cursor-pointer w-4 h-4"
+                                    title="제작 완료 체크 (내부 확인용)"
+                                  />
                                 </td>
                                 <td className={`px-2 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`} style={cellPad} title={o.is_delivery ? '배송일시' : '픽업일시'}>
                                   {formatShortDateTime(displayDatetime)}
@@ -3726,6 +3849,66 @@ export default function App() {
                     </table>
                   </div>
 
+                  {orderListTotalPages > 1 && (
+                    <div className="flex items-center justify-center gap-1 flex-wrap pt-1">
+                      <button
+                        onClick={() => setOrderListPage(p => Math.max(1, p - 1))}
+                        disabled={orderListPage === 1}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold border cursor-pointer ${
+                          orderListPage === 1
+                            ? 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
+                            : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                        }`}
+                      >
+                        ‹ 이전
+                      </button>
+
+                      {Array.from({ length: orderListTotalPages }, (_, i) => i + 1)
+                        .filter(pageNum => {
+                          // 현재 페이지 주변 2개 + 처음/끝 페이지만 표시 (페이지가 많을 때 너무 길어지지 않도록)
+                          return (
+                            pageNum === 1 ||
+                            pageNum === orderListTotalPages ||
+                            Math.abs(pageNum - orderListPage) <= 2
+                          );
+                        })
+                        .reduce((acc, pageNum, idx, arr) => {
+                          if (idx > 0 && pageNum - arr[idx - 1] > 1) acc.push('...' + pageNum);
+                          acc.push(pageNum);
+                          return acc;
+                        }, [])
+                        .map((item, idx) =>
+                          typeof item === 'string' ? (
+                            <span key={`ellipsis-${idx}`} className="px-1 text-xs text-slate-400">…</span>
+                          ) : (
+                            <button
+                              key={item}
+                              onClick={() => setOrderListPage(item)}
+                              className={`min-w-[28px] px-2 py-1 rounded-lg text-xs font-bold border cursor-pointer ${
+                                orderListPage === item
+                                  ? 'bg-rose-500 text-white border-rose-500 shadow-sm'
+                                  : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                              }`}
+                            >
+                              {item}
+                            </button>
+                          )
+                        )}
+
+                      <button
+                        onClick={() => setOrderListPage(p => Math.min(orderListTotalPages, p + 1))}
+                        disabled={orderListPage === orderListTotalPages}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold border cursor-pointer ${
+                          orderListPage === orderListTotalPages
+                            ? 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
+                            : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                        }`}
+                      >
+                        다음 ›
+                      </button>
+                    </div>
+                  )}
+
                 </div>
               )}
             </div>
@@ -3773,8 +3956,7 @@ export default function App() {
                 ) : (
                   <div className="flex flex-col gap-2">
                     {selectedDayOrders.map(o => {
-                      const isOnsiteDelivery = o.order_type === '현장판매'; // 이 리스트에 뜨는 현장판매 건은 전부 배송 건임
-                      const showAsDelivery = isOnsiteDelivery || !!o.is_delivery;
+                      const isOnsiteDelivery = o.order_type === '현장판매';
                       const timeOnly = isOnsiteDelivery
                         ? (o.delivery_time || '--:--')
                         : (o.pickup_datetime ? o.pickup_datetime.replace(' ', 'T').split('T')[1]?.slice(0, 5) : '--:--');
@@ -3784,11 +3966,13 @@ export default function App() {
                           className="p-2.5 md:p-3 rounded-xl border border-slate-200 bg-white flex flex-col gap-1.5 shadow-2xs"
                         >
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] shrink-0 ${showAsDelivery ? 'badge-blink' : 'bg-indigo-300'}`} title={showAsDelivery ? '배송' : '예약주문'}>
-                              {showAsDelivery ? '🚚' : '📅'}
+                            <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] shrink-0 ${isOnsiteDelivery ? 'badge-blink' : 'bg-indigo-300'}`} title={isOnsiteDelivery ? '배송' : '예약주문'}>
+                              {isOnsiteDelivery ? '🚚' : '📅'}
                             </span>
-                            <span className="px-2 py-0.5 font-extrabold text-xs rounded-md whitespace-nowrap border shrink-0 bg-sky-100 text-sky-900 border-sky-300">
-                              {showAsDelivery ? '🚚' : '⏰'} {timeOnly}
+                            <span className={`px-2 py-0.5 font-extrabold text-xs rounded-md whitespace-nowrap border shrink-0 ${
+                              isOnsiteDelivery ? 'bg-sky-100 text-sky-900 border-sky-300' : 'bg-sky-100 text-sky-900 border-sky-300'
+                            }`}>
+                              {isOnsiteDelivery ? '🚚' : '⏰'} {timeOnly}
                             </span>
                             <span className="font-bold text-slate-900 text-sm md:text-base">
                               {o.customers?.name || '익명'}
@@ -3796,6 +3980,11 @@ export default function App() {
                             <span className="text-xs text-slate-600 font-medium">
                               {o.customers?.phone || ''}
                             </span>
+                            {o.is_delivery && !isOnsiteDelivery && (
+                              <span className="px-1.5 py-0.5 bg-sky-500 text-white font-bold text-[10px] rounded-md whitespace-nowrap shrink-0">
+                                🚚 배송{o.delivery_time ? ` ${o.delivery_time}` : ''}
+                              </span>
+                            )}
                             {(photoMap[String(o.id)]?.length || 0) > 0 && (
                               <button
                                 onClick={() => { setPhotoViewer(o.id); setPhotoViewerIndex(0); }}
@@ -3878,13 +4067,85 @@ export default function App() {
                 <h2 className="text-base md:text-xl font-bold text-slate-900 flex items-center gap-2">
                   <span>📊</span> 매출 대시보드
                 </h2>
-                <button
-                  onClick={handleExportSalesSummaryCSV}
-                  className="text-xs font-bold bg-white hover:bg-slate-100 border border-slate-800 text-slate-900 px-3 py-1.5 rounded-lg cursor-pointer"
-                >
-                  📥 매출 요약 CSV 내보내기
-                </button>
+                <div className="flex items-center gap-2">
+                  <label
+                    className={`text-xs font-bold border px-3 py-1.5 rounded-lg inline-flex items-center gap-1 ${
+                      payhereImportLoading
+                        ? 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
+                        : 'bg-white hover:bg-slate-100 border-slate-800 text-slate-900 cursor-pointer'
+                    }`}
+                  >
+                    🧾 페이히어 가져오기
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={handlePayhereFileSelect}
+                      disabled={payhereImportLoading}
+                      className="hidden"
+                    />
+                  </label>
+                  <button
+                    onClick={handleExportSalesSummaryCSV}
+                    className="text-xs font-bold bg-white hover:bg-slate-100 border border-slate-800 text-slate-900 px-3 py-1.5 rounded-lg cursor-pointer"
+                  >
+                    📥 매출요약 내보내기
+                  </button>
+                </div>
               </div>
+
+              {payhereImportLoading && <p className="text-xs text-slate-500 mb-3">파일을 읽는 중...</p>}
+
+              {payhereImportRows.length > 0 && (
+                <div className="border border-slate-200 rounded-xl bg-white overflow-hidden mb-4">
+                  <div className="flex items-center justify-between px-3 py-2 bg-slate-100 border-b border-slate-200 text-xs font-bold text-slate-700">
+                    <span>총 {payhereImportRows.length}건 · 선택됨 {payhereImportRows.filter(r => r.selected).length}건</span>
+                    <span className="text-rose-600">
+                      선택 합계 {payhereImportRows.filter(r => r.selected).reduce((s, r) => s + r.amount, 0).toLocaleString()}원
+                    </span>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                    {payhereImportRows.map(r => (
+                      <label
+                        key={r.key}
+                        className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer ${r.selected ? 'bg-white' : 'bg-slate-50'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={r.selected}
+                          onChange={() => handleTogglePayhereRow(r.key)}
+                          className="w-4 h-4 accent-rose-600 cursor-pointer shrink-0"
+                        />
+                        <span className="text-slate-400 whitespace-nowrap">{r.date.slice(5)} {r.time.slice(0, 5)}</span>
+                        <span className="font-bold text-slate-800 truncate flex-1">{r.product_name}</span>
+                        <span className={`px-1.5 py-0.5 rounded border whitespace-nowrap ${
+                          r.isOnline ? 'bg-sky-50 border-sky-300 text-sky-700' : 'bg-slate-100 border-slate-300 text-slate-700'
+                        }`}>
+                          {r.payment_method}
+                        </span>
+                        {r.hasReservationKeyword && (
+                          <span className="px-1.5 py-0.5 rounded bg-indigo-100 border border-indigo-300 text-indigo-800 whitespace-nowrap font-bold">
+                            예약표시
+                          </span>
+                        )}
+                        {r.isDuplicate && !r.hasReservationKeyword && (
+                          <span className="px-1.5 py-0.5 rounded bg-amber-100 border border-amber-300 text-amber-800 whitespace-nowrap">
+                            중복의심
+                          </span>
+                        )}
+                        <span className="font-bold text-black whitespace-nowrap">{r.amount.toLocaleString()}원</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="p-2 border-t border-slate-200">
+                    <button
+                      onClick={handleConfirmPayhereImport}
+                      className="w-full py-2 bg-rose-200 hover:bg-rose-300 text-slate-900 font-extrabold rounded-xl text-xs shadow-xs transition-colors cursor-pointer border border-rose-400"
+                    >
+                      ✅ 선택 항목 현장판매로 가져오기
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-1.5 mb-4">
                 {[
@@ -3982,7 +4243,7 @@ export default function App() {
                     </div>
                     {dashboardDateOrders.map(o => {
                       const isOnsite = o.order_type === '현장판매';
-                      const isDeliveryRow = o.is_delivery;
+                      const isDeliveryRow = isOnsite && o.is_delivery;
                       const timeOnly = (o.created_at || '').replace(' ', 'T').split('T')[1]?.slice(0, 5) || '--:--';
                       return (
                         <div
@@ -4420,74 +4681,6 @@ export default function App() {
                 onChange={handleImportCSV}
                 className="w-full text-xs text-slate-700 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border file:border-slate-300 file:text-xs file:font-bold file:bg-white file:text-slate-800 hover:file:bg-slate-100 cursor-pointer"
               />
-            </div>
-            <div className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-3">
-              <h3 className="font-bold text-xs md:text-sm text-slate-800">3. 페이히어 매출 엑셀 가져오기</h3>
-              <p className="text-xs text-slate-500">
-                페이히어 앱에서 "매출 내역"을 이메일로 요청해서 받은 엑셀(.xlsx) 파일을 올려주세요.<br />
-                🌐 온라인 스토어(네이버페이) 결제는 예약주문과 중복일 가능성이 높아 기본적으로 체크가 꺼진 채로 표시됩니다.<br />
-                💡 팁: 페이히어에서 예약/배송 건을 결제하실 때 상품명에 <strong>"예약"</strong> 또는 <strong>"배송"</strong>이라는 글자를 넣어두시면(예: "예약-꽃다발"), 금액이 같은 다른 주문과 헷갈리지 않고 확실하게 걸러집니다.
-              </p>
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handlePayhereFileSelect}
-                disabled={payhereImportLoading}
-                className="w-full text-xs text-slate-700 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border file:border-slate-300 file:text-xs file:font-bold file:bg-white file:text-slate-800 hover:file:bg-slate-100 cursor-pointer"
-              />
-              {payhereImportLoading && <p className="text-xs text-slate-500">파일을 읽는 중...</p>}
-
-              {payhereImportRows.length > 0 && (
-                <div className="border border-slate-200 rounded-xl bg-white overflow-hidden">
-                  <div className="flex items-center justify-between px-3 py-2 bg-slate-100 border-b border-slate-200 text-xs font-bold text-slate-700">
-                    <span>총 {payhereImportRows.length}건 · 선택됨 {payhereImportRows.filter(r => r.selected).length}건</span>
-                    <span className="text-rose-600">
-                      선택 합계 {payhereImportRows.filter(r => r.selected).reduce((s, r) => s + r.amount, 0).toLocaleString()}원
-                    </span>
-                  </div>
-                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
-                    {payhereImportRows.map(r => (
-                      <label
-                        key={r.key}
-                        className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer ${r.selected ? 'bg-white' : 'bg-slate-50'}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={r.selected}
-                          onChange={() => handleTogglePayhereRow(r.key)}
-                          className="w-4 h-4 accent-rose-600 cursor-pointer shrink-0"
-                        />
-                        <span className="text-slate-400 whitespace-nowrap">{r.date.slice(5)} {r.time.slice(0, 5)}</span>
-                        <span className="font-bold text-slate-800 truncate flex-1">{r.product_name}</span>
-                        <span className={`px-1.5 py-0.5 rounded border whitespace-nowrap ${
-                          r.isOnline ? 'bg-sky-50 border-sky-300 text-sky-700' : 'bg-slate-100 border-slate-300 text-slate-700'
-                        }`}>
-                          {r.payment_method}
-                        </span>
-                        {r.hasReservationKeyword && (
-                          <span className="px-1.5 py-0.5 rounded bg-indigo-100 border border-indigo-300 text-indigo-800 whitespace-nowrap font-bold">
-                            예약표시
-                          </span>
-                        )}
-                        {r.isDuplicate && !r.hasReservationKeyword && (
-                          <span className="px-1.5 py-0.5 rounded bg-amber-100 border border-amber-300 text-amber-800 whitespace-nowrap">
-                            중복의심
-                          </span>
-                        )}
-                        <span className="font-bold text-black whitespace-nowrap">{r.amount.toLocaleString()}원</span>
-                      </label>
-                    ))}
-                  </div>
-                  <div className="p-2 border-t border-slate-200">
-                    <button
-                      onClick={handleConfirmPayhereImport}
-                      className="w-full py-2 bg-rose-200 hover:bg-rose-300 text-slate-900 font-extrabold rounded-xl text-xs shadow-xs transition-colors cursor-pointer border border-rose-400"
-                    >
-                      ✅ 선택 항목 현장판매로 가져오기
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         )}
