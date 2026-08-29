@@ -1038,9 +1038,6 @@ export default function App() {
     }
 
     const actualAmount = (Number(newOrder.amount_thousands) || 0) * 1000;
-    if (newOrder.is_delivery && (!newOrder.delivery_date || !newOrder.delivery_time)) {
-      return alert('배송 날짜와 시간을 입력해주세요.');
-    }
 
     const pickupDatetime = `${newOrder.pickup_date}T${newOrder.pickup_time}:00`;
     const receiptDatetime = `${newOrder.receipt_date}T${newOrder.receipt_time}:00`;
@@ -1055,8 +1052,9 @@ export default function App() {
       payment_method: newOrder.payment_method,
       status: newOrder.payment_method,
       is_delivery: !!newOrder.is_delivery,
-      delivery_date: newOrder.is_delivery ? newOrder.delivery_date : null,
-      delivery_time: newOrder.is_delivery ? newOrder.delivery_time : null,
+      // 예약주문은 배송이어도 별도 배송일시를 따로 안 받고, 위 pickup_datetime(픽업/배송 날짜·시간)을 그대로 배송 기준으로 씁니다.
+      delivery_date: null,
+      delivery_time: null,
       order_type: '예약',
       memo: newOrder.memo
     }]).select().single();
@@ -1415,7 +1413,9 @@ export default function App() {
       }
     }
 
-    if (editingOrder.is_delivery && (!editingOrder.delivery_date || !editingOrder.delivery_time)) {
+    // 현장판매만 별도 배송 날짜/시간을 입력받으므로, 그 경우에만 검증합니다.
+    // 예약주문은 위 픽업 날짜/시간 필드 자체가 배송 체크 시 배송 기준으로 쓰이므로 별도 검증이 필요 없습니다.
+    if (isOnsite && editingOrder.is_delivery && (!editingOrder.delivery_date || !editingOrder.delivery_time)) {
       return alert('배송 날짜와 시간을 입력해주세요.');
     }
 
@@ -1463,8 +1463,9 @@ export default function App() {
       payment_method: editingOrder.payment_method,
       status: editingOrder.payment_method,
       is_delivery: !!editingOrder.is_delivery,
-      delivery_date: editingOrder.is_delivery ? editingOrder.delivery_date : null,
-      delivery_time: editingOrder.is_delivery ? editingOrder.delivery_time : null,
+      // 현장판매만 별도 배송일시를 저장하고, 예약주문은 pickup_datetime을 그대로 배송 기준으로 사용하므로 null로 둡니다.
+      delivery_date: (isOnsite && editingOrder.is_delivery) ? editingOrder.delivery_date : null,
+      delivery_time: (isOnsite && editingOrder.is_delivery) ? editingOrder.delivery_time : null,
       memo: editingOrder.memo
     };
 
@@ -2839,7 +2840,9 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700">픽업 날짜</label>
+                    <label className="text-[11px] font-bold text-slate-700">
+                      {editingOrder.is_delivery ? '배송 날짜' : '픽업 날짜'}
+                    </label>
                     <input
                       type="date"
                       value={editingOrder.pickup_date}
@@ -2848,7 +2851,9 @@ export default function App() {
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700">픽업 시간</label>
+                    <label className="text-[11px] font-bold text-slate-700">
+                      {editingOrder.is_delivery ? '배송 시간' : '픽업 시간'}
+                    </label>
                     <TimePickerCustom
                       value={editingOrder.pickup_time}
                       onChange={val => setEditingOrder({ ...editingOrder, pickup_time: val })}
@@ -2871,44 +2876,12 @@ export default function App() {
                     <input
                       type="checkbox"
                       checked={!!editingOrder.is_delivery}
-                      onChange={e => {
-                        if (e.target.checked) {
-                          const nextQ = getNextQuarterHourDateTime();
-                          setEditingOrder({
-                            ...editingOrder,
-                            is_delivery: true,
-                            delivery_date: editingOrder.delivery_date || getKoreaNowFormatted().date,
-                            delivery_time: editingOrder.delivery_time || nextQ.time
-                          });
-                        } else {
-                          setEditingOrder({ ...editingOrder, is_delivery: false, delivery_date: '', delivery_time: '' });
-                        }
-                      }}
+                      onChange={e => setEditingOrder({ ...editingOrder, is_delivery: e.target.checked })}
                       className="w-4 h-4 accent-sky-500 cursor-pointer"
                     />
                     <span className="text-xs font-bold text-slate-700">🚚 배송</span>
                   </label>
                 </div>
-                {editingOrder.is_delivery && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-700">배송 날짜</label>
-                      <input
-                        type="date"
-                        value={editingOrder.delivery_date || ''}
-                        onChange={e => setEditingOrder({ ...editingOrder, delivery_date: e.target.value })}
-                        className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-700">배송 시간</label>
-                      <TimePickerCustom
-                        value={editingOrder.delivery_time || ''}
-                        onChange={val => setEditingOrder({ ...editingOrder, delivery_time: val })}
-                      />
-                    </div>
-                  </div>
-                )}
 
                 <div>
                   <label className="text-[11px] font-bold text-slate-700">메모</label>
@@ -3034,7 +3007,9 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700">픽업 날짜 *</label>
+                    <label className="text-[11px] font-bold text-slate-700">
+                      {newOrder.is_delivery ? '배송 날짜 *' : '픽업 날짜 *'}
+                    </label>
                     <input
                       type="date"
                       value={newOrder.pickup_date}
@@ -3043,13 +3018,25 @@ export default function App() {
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700">픽업 시간 *</label>
+                    <label className="text-[11px] font-bold text-slate-700">
+                      {newOrder.is_delivery ? '배송 시간 *' : '픽업 시간 *'}
+                    </label>
                     <TimePickerCustom
                       value={newOrder.pickup_time}
                       onChange={val => setNewOrder({...newOrder, pickup_time: val})}
                     />
                   </div>
                 </div>
+
+                <label className="flex items-center gap-1.5 px-2 py-1.5 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap w-fit">
+                  <input
+                    type="checkbox"
+                    checked={!!newOrder.is_delivery}
+                    onChange={e => setNewOrder({...newOrder, is_delivery: e.target.checked})}
+                    className="w-4 h-4 accent-sky-500 cursor-pointer"
+                  />
+                  <span className="text-xs font-bold text-slate-700">🚚 배송 (체크 시 위 날짜·시간이 배송 기준으로 사용됩니다)</span>
+                </label>
 
                 <div>
                   <label className="text-[11px] font-bold text-slate-700">결제 방식 *</label>
@@ -3226,7 +3213,9 @@ export default function App() {
 
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-black">픽업 날짜 *</label>
+                  <label className="text-[11px] md:text-xs font-bold text-black">
+                    {newOrder.is_delivery ? '배송 날짜 *' : '픽업 날짜 *'}
+                  </label>
                   <input
                     type="date"
                     value={newOrder.pickup_date}
@@ -3236,7 +3225,9 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-black">픽업 시간 *</label>
+                  <label className="text-[11px] md:text-xs font-bold text-black">
+                    {newOrder.is_delivery ? '배송 시간 *' : '픽업 시간 *'}
+                  </label>
                   <TimePickerCustom
                     value={newOrder.pickup_time}
                     onChange={val => setNewOrder({...newOrder, pickup_time: val})}
@@ -3244,6 +3235,16 @@ export default function App() {
                   />
                 </div>
               </div>
+
+              <label className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap w-fit">
+                <input
+                  type="checkbox"
+                  checked={!!newOrder.is_delivery}
+                  onChange={e => setNewOrder({...newOrder, is_delivery: e.target.checked})}
+                  className="w-4 h-4 accent-sky-500 cursor-pointer"
+                />
+                <span className="text-xs md:text-sm font-bold text-black">🚚 배송 (체크 시 위 날짜·시간이 배송 기준으로 사용됩니다)</span>
+              </label>
 
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
@@ -3618,9 +3619,9 @@ export default function App() {
                                   <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-xs ${
                                     isPast ? 'opacity-40' : ''
                                   } ${
-                                    (isOnsite && o.is_delivery) ? 'badge-blink' : (isOnsite ? '' : 'bg-indigo-300')
-                                  }`} title={(isOnsite && o.is_delivery) ? '배송' : (isOnsite ? '현장판매' : '예약주문')}>
-                                    {(isOnsite && o.is_delivery) ? '🚚' : (isOnsite ? '🏪' : '📅')}
+                                    o.is_delivery ? 'badge-blink' : (isOnsite ? '' : 'bg-indigo-300')
+                                  }`} title={o.is_delivery ? '배송' : (isOnsite ? '현장판매' : '예약주문')}>
+                                    {o.is_delivery ? '🚚' : (isOnsite ? '🏪' : '📅')}
                                   </span>
                                 </td>
                                 <td className={`px-2 whitespace-nowrap ${isPast ? 'text-slate-300' : 'text-slate-900'}`} style={cellPad} title={o.is_delivery ? '배송일시' : '픽업일시'}>
@@ -3770,7 +3771,8 @@ export default function App() {
                 ) : (
                   <div className="flex flex-col gap-2">
                     {selectedDayOrders.map(o => {
-                      const isOnsiteDelivery = o.order_type === '현장판매';
+                      const isOnsiteDelivery = o.order_type === '현장판매'; // 이 리스트에 뜨는 현장판매 건은 전부 배송 건임
+                      const showAsDelivery = isOnsiteDelivery || !!o.is_delivery;
                       const timeOnly = isOnsiteDelivery
                         ? (o.delivery_time || '--:--')
                         : (o.pickup_datetime ? o.pickup_datetime.replace(' ', 'T').split('T')[1]?.slice(0, 5) : '--:--');
@@ -3780,13 +3782,11 @@ export default function App() {
                           className="p-2.5 md:p-3 rounded-xl border border-slate-200 bg-white flex flex-col gap-1.5 shadow-2xs"
                         >
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] shrink-0 ${isOnsiteDelivery ? 'badge-blink' : 'bg-indigo-300'}`} title={isOnsiteDelivery ? '배송' : '예약주문'}>
-                              {isOnsiteDelivery ? '🚚' : '📅'}
+                            <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] shrink-0 ${showAsDelivery ? 'badge-blink' : 'bg-indigo-300'}`} title={showAsDelivery ? '배송' : '예약주문'}>
+                              {showAsDelivery ? '🚚' : '📅'}
                             </span>
-                            <span className={`px-2 py-0.5 font-extrabold text-xs rounded-md whitespace-nowrap border shrink-0 ${
-                              isOnsiteDelivery ? 'bg-sky-100 text-sky-900 border-sky-300' : 'bg-sky-100 text-sky-900 border-sky-300'
-                            }`}>
-                              {isOnsiteDelivery ? '🚚' : '⏰'} {timeOnly}
+                            <span className="px-2 py-0.5 font-extrabold text-xs rounded-md whitespace-nowrap border shrink-0 bg-sky-100 text-sky-900 border-sky-300">
+                              {showAsDelivery ? '🚚' : '⏰'} {timeOnly}
                             </span>
                             <span className="font-bold text-slate-900 text-sm md:text-base">
                               {o.customers?.name || '익명'}
@@ -3794,11 +3794,6 @@ export default function App() {
                             <span className="text-xs text-slate-600 font-medium">
                               {o.customers?.phone || ''}
                             </span>
-                            {o.is_delivery && !isOnsiteDelivery && (
-                              <span className="px-1.5 py-0.5 bg-sky-500 text-white font-bold text-[10px] rounded-md whitespace-nowrap shrink-0">
-                                🚚 배송{o.delivery_time ? ` ${o.delivery_time}` : ''}
-                              </span>
-                            )}
                             {(photoMap[String(o.id)]?.length || 0) > 0 && (
                               <button
                                 onClick={() => { setPhotoViewer(o.id); setPhotoViewerIndex(0); }}
@@ -3985,7 +3980,7 @@ export default function App() {
                     </div>
                     {dashboardDateOrders.map(o => {
                       const isOnsite = o.order_type === '현장판매';
-                      const isDeliveryRow = isOnsite && o.is_delivery;
+                      const isDeliveryRow = o.is_delivery;
                       const timeOnly = (o.created_at || '').replace(' ', 'T').split('T')[1]?.slice(0, 5) || '--:--';
                       return (
                         <div
