@@ -4245,38 +4245,73 @@ export default function App() {
                   {kakaoSendLogs.map(log => {
                     const relatedOrder = (orders || []).find(o => o.id === log.order_id);
                     return (
-                      <div key={log.id} className="px-4 py-2.5 text-xs">
-                        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                      <div key={log.id} className="text-xs">
+                        {/* 가로모드·PC(640px 이상): 한 줄 표시 */}
+                        <div className="hidden sm:flex items-center gap-2 px-4 py-2">
                           <span
-                            className={`px-1.5 py-0.5 rounded font-bold whitespace-nowrap ${
+                            className={`px-1.5 py-0.5 rounded font-bold whitespace-nowrap shrink-0 ${
                               log.success ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-red-100 text-red-800 border border-red-300 cursor-help'
                             }`}
                             title={!log.success ? (log.error_message || '실패 사유 미상') : undefined}
                           >
                             {log.success ? '✅ 성공' : '❌ 실패'}
                           </span>
-                          <span className={`px-1.5 py-0.5 rounded border whitespace-nowrap ${
+                          <span className={`px-1.5 py-0.5 rounded border whitespace-nowrap shrink-0 ${
                             log.event_type === '픽업임박' ? 'bg-sky-50 border-sky-300 text-sky-700' : 'bg-indigo-50 border-indigo-300 text-indigo-700'
                           }`}>
                             {log.event_type || '-'}
                           </span>
-                          <span className="text-slate-400 whitespace-nowrap ml-auto">
-                            {(log.created_at || '').replace('T', ' ').slice(0, 16)}
-                          </span>
-                        </div>
-                        <div className="font-bold text-slate-900 mb-0.5">{log.customer_name || '(이름 없음)'}</div>
-                        <div className="flex items-center gap-1.5 flex-wrap text-slate-500">
-                          <span className="whitespace-nowrap">{log.phone || '-'}</span>
+                          <span className="font-bold text-slate-900 whitespace-nowrap">{log.customer_name || '(이름 없음)'}</span>
+                          <span className="text-slate-500 whitespace-nowrap">{log.phone || '-'}</span>
                           {relatedOrder && (
                             <>
                               <span className="text-slate-300">·</span>
-                              <span className="whitespace-nowrap">{relatedOrder.product_name}</span>
+                              <span className="text-slate-600 whitespace-nowrap">{relatedOrder.product_name}</span>
                               <span className="text-slate-300">·</span>
                               <span className="font-bold text-black whitespace-nowrap">
                                 {Number(relatedOrder.amount || 0).toLocaleString()}원
                               </span>
                             </>
                           )}
+                          <span className="text-slate-400 whitespace-nowrap ml-auto shrink-0">
+                            {(log.created_at || '').replace('T', ' ').slice(0, 16)}
+                          </span>
+                        </div>
+
+                        {/* 모바일 세로모드(640px 미만): 여러 줄로 나눠서 표시 */}
+                        <div className="sm:hidden px-4 py-2.5">
+                          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                            <span
+                              className={`px-1.5 py-0.5 rounded font-bold whitespace-nowrap ${
+                                log.success ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-red-100 text-red-800 border border-red-300 cursor-help'
+                              }`}
+                              title={!log.success ? (log.error_message || '실패 사유 미상') : undefined}
+                            >
+                              {log.success ? '✅ 성공' : '❌ 실패'}
+                            </span>
+                            <span className={`px-1.5 py-0.5 rounded border whitespace-nowrap ${
+                              log.event_type === '픽업임박' ? 'bg-sky-50 border-sky-300 text-sky-700' : 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                            }`}>
+                              {log.event_type || '-'}
+                            </span>
+                            <span className="text-slate-400 whitespace-nowrap ml-auto">
+                              {(log.created_at || '').replace('T', ' ').slice(0, 16)}
+                            </span>
+                          </div>
+                          <div className="font-bold text-slate-900 mb-0.5">{log.customer_name || '(이름 없음)'}</div>
+                          <div className="flex items-center gap-1.5 flex-wrap text-slate-500">
+                            <span className="whitespace-nowrap">{log.phone || '-'}</span>
+                            {relatedOrder && (
+                              <>
+                                <span className="text-slate-300">·</span>
+                                <span className="whitespace-nowrap">{relatedOrder.product_name}</span>
+                                <span className="text-slate-300">·</span>
+                                <span className="font-bold text-black whitespace-nowrap">
+                                  {Number(relatedOrder.amount || 0).toLocaleString()}원
+                                </span>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
