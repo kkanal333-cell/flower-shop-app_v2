@@ -4266,6 +4266,28 @@ export default function App() {
               </div>
             </div>
 
+            {/* 매출 달력 (픽업 달력과 동일한 형태·스타일. 금액은 작은 숫자로 표시) */}
+            <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
+              <h3 className="text-sm md:text-base font-bold text-slate-900 mb-3">🗓️ 매출 달력</h3>
+              <div className="calendar-compact">
+                <FullCalendar
+                  plugins={[dayGridPlugin, interactionPlugin]}
+                  initialView="dayGridMonth"
+                  locale="ko"
+                  aspectRatio={1.8}
+                  fixedWeekCount={false}
+                  dayMaxEventRows={true}
+                  contentHeight="auto"
+                  events={getSalesCalendarEvents()}
+                  eventContent={(arg) => (
+                    <span style={{ fontSize: '9px', fontWeight: 700 }}>{arg.event.title}</span>
+                  )}
+                  dateClick={(info) => setDashboardSelectedDate(info.dateStr)}
+                  eventClick={(info) => setDashboardSelectedDate(info.event.startStr)}
+                />
+              </div>
+            </div>
+
             {/* 날짜 선택 매출 리스트 */}
             <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
               <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
@@ -4350,28 +4372,6 @@ export default function App() {
                   </div>
                 </>
               )}
-            </div>
-
-            {/* 매출 달력 (픽업 달력과 동일한 형태·스타일. 금액은 작은 숫자로 표시) */}
-            <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <h3 className="text-sm md:text-base font-bold text-slate-900 mb-3">🗓️ 매출 달력</h3>
-              <div className="calendar-compact">
-                <FullCalendar
-                  plugins={[dayGridPlugin, interactionPlugin]}
-                  initialView="dayGridMonth"
-                  locale="ko"
-                  aspectRatio={1.8}
-                  fixedWeekCount={false}
-                  dayMaxEventRows={true}
-                  contentHeight="auto"
-                  events={getSalesCalendarEvents()}
-                  eventContent={(arg) => (
-                    <span style={{ fontSize: '9px', fontWeight: 700 }}>{arg.event.title}</span>
-                  )}
-                  dateClick={(info) => setDashboardSelectedDate(info.dateStr)}
-                  eventClick={(info) => setDashboardSelectedDate(info.event.startStr)}
-                />
-              </div>
             </div>
 
             {/* 매출 추이 */}
