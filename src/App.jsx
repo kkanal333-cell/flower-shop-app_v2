@@ -1284,7 +1284,6 @@ export default function App() {
 
   const [dashboardPeriod, setDashboardPeriod] = useState('today'); // today | week | month | all
   const [dashboardSelectedDate, setDashboardSelectedDate] = useState(() => getKoreaNowFormatted().date);
-  const [salesCalendarMonth, setSalesCalendarMonth] = useState(() => getKoreaNowFormatted().date.slice(0, 7)); // 'YYYY-MM'
 
   // 매출 대시보드용 집계 (접수일시=created_at 기준. orders는 이미 로드된 상태를 재사용하므로 추가 트래픽 없음)
   const dashboardStats = useMemo(() => {
@@ -1420,26 +1419,23 @@ export default function App() {
     return byDate;
   }, [orders]);
 
-  // 매출 달력에 표시할 달(salesCalendarMonth)의 날짜 셀 배열
-  const salesCalendarGrid = useMemo(() => {
-    const [y, m] = salesCalendarMonth.split('-').map(Number);
-    if (!y || !m) return [];
-    const firstDay = new Date(y, m - 1, 1);
-    const startWeekday = firstDay.getDay(); // 0=일
-    const daysInMonth = new Date(y, m, 0).getDate();
-    const cells = [];
-    for (let i = 0; i < startWeekday; i++) cells.push(null);
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      cells.push({ day: d, dateStr, amt: salesByDateAll[dateStr] || 0 });
-    }
-    return cells;
-  }, [salesCalendarMonth, salesByDateAll]);
-
-  const changeSalesCalendarMonth = (delta) => {
-    const [y, m] = salesCalendarMonth.split('-').map(Number);
-    const dt = new Date(y, m - 1 + delta, 1);
-    setSalesCalendarMonth(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`);
+  // 매출 달력 이벤트 (픽업 달력의 getCalendarEvents와 동일한 형태·색상 규칙을 재사용)
+  const getSalesCalendarEvents = () => {
+    const todayStr = getKoreaNowFormatted().date;
+    return Object.entries(salesByDateAll)
+      .filter(([, amt]) => amt > 0)
+      .map(([date, amt]) => {
+        const isPast = date < todayStr;
+        return {
+          id: date,
+          title: amt.toLocaleString(),
+          start: date,
+          allDay: true,
+          backgroundColor: isPast ? '#f1f5f9' : '#fbe7e8',
+          textColor: isPast ? '#94a3b8' : '#be123c',
+          borderColor: isPast ? '#e2e8f0' : '#fda4af'
+        };
+      });
   };
 
   // 날짜별 매출 요약을 CSV로 내보냅니다. (기간 필터와 무관하게 전체 데이터 기준)
@@ -3790,11 +3786,14 @@ export default function App() {
                                 }}
                                 className={`border-b border-slate-100 transition-colors text-sm cursor-pointer ${
                                   isRowHighlighted
-                                    ? 'bg-rose-100 hover:bg-rose-100'
+                                    ? ''
                                     : isPast 
-                                      ? 'text-slate-300 opacity-40 bg-slate-100/50 hover:bg-slate-100' 
+                                      ? 'text-slate-300 opacity-40 hover:bg-slate-100' 
                                       : 'text-slate-900 hover:bg-slate-50'
                                 }`}
+                                style={{
+                                  backgroundColor: isRowHighlighted ? '#fecdd3' : (isPast ? 'rgba(241,245,249,0.6)' : undefined)
+                                }}
                               >
                                 <td className="px-2 text-center whitespace-nowrap" style={cellPad}>
                                   <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-xs ${
@@ -4353,57 +4352,25 @@ export default function App() {
               )}
             </div>
 
-            {/* 매출 달력 (날짜별 매출을 한 달 단위로 한눈에 확인) */}
-            <div className="bg-white p-3 md:p-4 rounded-2xl border border-slate-200 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <button
-                  onClick={() => changeSalesCalendarMonth(-1)}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-sm font-bold cursor-pointer"
-                  aria-label="이전 달"
-                >
-                  ‹
-                </button>
-                <h3 className="text-xs md:text-sm font-bold text-slate-900">
-                  🗓️ {salesCalendarMonth.split('-')[0]}년 {Number(salesCalendarMonth.split('-')[1])}월 매출 달력
-                </h3>
-                <button
-                  onClick={() => changeSalesCalendarMonth(1)}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-sm font-bold cursor-pointer"
-                  aria-label="다음 달"
-                >
-                  ›
-                </button>
-              </div>
-
-              <div className="grid grid-cols-7 gap-0.5 text-center text-[9px] font-bold text-slate-400 mb-1">
-                {['일', '월', '화', '수', '목', '금', '토'].map(d => <div key={d}>{d}</div>)}
-              </div>
-
-              <div className="grid grid-cols-7 gap-0.5">
-                {salesCalendarGrid.map((cell, idx) =>
-                  cell === null ? (
-                    <div key={`empty-${idx}`} />
-                  ) : (
-                    <button
-                      key={cell.dateStr}
-                      onClick={() => setDashboardSelectedDate(cell.dateStr)}
-                      className={`aspect-square flex flex-col items-center justify-center rounded-md border leading-tight cursor-pointer transition-colors ${
-                        cell.dateStr === dashboardSelectedDate
-                          ? 'bg-rose-500 border-rose-500 text-white'
-                          : cell.amt > 0
-                            ? 'bg-rose-50 border-rose-200 hover:bg-rose-100 text-slate-800'
-                            : 'bg-slate-50 border-slate-100 hover:bg-slate-100 text-slate-400'
-                      }`}
-                    >
-                      <span className="text-[9px] font-bold">{cell.day}</span>
-                      {cell.amt > 0 && (
-                        <span className={`text-[8px] font-bold ${cell.dateStr === dashboardSelectedDate ? 'text-white' : 'text-rose-600'}`}>
-                          {(cell.amt / 10000).toFixed(cell.amt % 10000 === 0 ? 0 : 1)}만
-                        </span>
-                      )}
-                    </button>
-                  )
-                )}
+            {/* 매출 달력 (픽업 달력과 동일한 형태·스타일. 금액은 작은 숫자로 표시) */}
+            <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
+              <h3 className="text-sm md:text-base font-bold text-slate-900 mb-3">🗓️ 매출 달력</h3>
+              <div className="calendar-compact">
+                <FullCalendar
+                  plugins={[dayGridPlugin, interactionPlugin]}
+                  initialView="dayGridMonth"
+                  locale="ko"
+                  aspectRatio={1.8}
+                  fixedWeekCount={false}
+                  dayMaxEventRows={true}
+                  contentHeight="auto"
+                  events={getSalesCalendarEvents()}
+                  eventContent={(arg) => (
+                    <span style={{ fontSize: '9px', fontWeight: 700 }}>{arg.event.title}</span>
+                  )}
+                  dateClick={(info) => setDashboardSelectedDate(info.dateStr)}
+                  eventClick={(info) => setDashboardSelectedDate(info.event.startStr)}
+                />
               </div>
             </div>
 
