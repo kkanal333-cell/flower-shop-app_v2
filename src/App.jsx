@@ -3028,7 +3028,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+                <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-[11px] font-bold text-slate-700">결제 방식 *</label>
                     <select
@@ -3039,7 +3039,7 @@ export default function App() {
                       {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
                     </select>
                   </div>
-                  <label className="flex items-center gap-1 px-2 py-2 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap">
+                  <label className="flex items-center gap-1 px-2 py-2 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap h-fit self-end">
                     <input
                       type="checkbox"
                       checked={!!newOrder.is_delivery}
@@ -3260,7 +3260,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-[1fr_auto] gap-2 md:gap-4 items-end">
+              <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
                   <label className="text-[11px] md:text-xs font-bold text-black">결제 방식 *</label>
                   <select
@@ -3272,7 +3272,7 @@ export default function App() {
                     {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
                   </select>
                 </div>
-                <label className="flex items-center gap-1.5 px-3 py-2 md:py-3 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap mt-1">
+                <label className="flex items-center gap-1.5 px-3 py-2 md:py-3 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap mt-1 h-fit self-end">
                   <input
                     type="checkbox"
                     checked={!!newOrder.is_delivery}
