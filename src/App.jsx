@@ -838,6 +838,7 @@ export default function App() {
 
   useEffect(() => {
     fetchData();
+    fetchKakaoSendLogs();
   }, []);
 
   const formatPhone = (val) => {
