@@ -3028,25 +3028,26 @@ export default function App() {
                   </div>
                 </div>
 
-                <label className="flex items-center gap-1.5 px-2 py-1.5 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap w-fit">
-                  <input
-                    type="checkbox"
-                    checked={!!newOrder.is_delivery}
-                    onChange={e => setNewOrder({...newOrder, is_delivery: e.target.checked})}
-                    className="w-4 h-4 accent-sky-500 cursor-pointer"
-                  />
-                  <span className="text-xs font-bold text-slate-700">🚚 배송 (체크 시 위 날짜·시간이 배송 기준으로 사용됩니다)</span>
-                </label>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700">결제 방식 *</label>
-                  <select
-                    value={newOrder.payment_method}
-                    onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
-                    className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium"
-                  >
-                    {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
-                  </select>
+                <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700">결제 방식 *</label>
+                    <select
+                      value={newOrder.payment_method}
+                      onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
+                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium"
+                    >
+                      {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
+                    </select>
+                  </div>
+                  <label className="flex items-center gap-1 px-2 py-2 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={!!newOrder.is_delivery}
+                      onChange={e => setNewOrder({...newOrder, is_delivery: e.target.checked})}
+                      className="w-4 h-4 accent-sky-500 cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-slate-700">🚚 배송 (체크 시 픽업→배송)</span>
+                  </label>
                 </div>
 
                 <div>
@@ -3236,16 +3237,6 @@ export default function App() {
                 </div>
               </div>
 
-              <label className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap w-fit">
-                <input
-                  type="checkbox"
-                  checked={!!newOrder.is_delivery}
-                  onChange={e => setNewOrder({...newOrder, is_delivery: e.target.checked})}
-                  className="w-4 h-4 accent-sky-500 cursor-pointer"
-                />
-                <span className="text-xs md:text-sm font-bold text-black">🚚 배송 (체크 시 위 날짜·시간이 배송 기준으로 사용됩니다)</span>
-              </label>
-
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
                   <label className="text-[11px] md:text-xs font-bold text-black">접수 날짜</label>
@@ -3269,16 +3260,27 @@ export default function App() {
                 </div>
               </div>
 
-              <div>
-                <label className="text-[11px] md:text-xs font-bold text-black">결제 방식 *</label>
-                <select
-                  value={newOrder.payment_method}
-                  onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
-                  className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
-                  style={{ backgroundColor: '#ffffff' }}
-                >
-                  {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
-                </select>
+              <div className="grid grid-cols-[1fr_auto] gap-2 md:gap-4 items-end">
+                <div>
+                  <label className="text-[11px] md:text-xs font-bold text-black">결제 방식 *</label>
+                  <select
+                    value={newOrder.payment_method}
+                    onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
+                    style={{ backgroundColor: '#ffffff' }}
+                  >
+                    {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
+                  </select>
+                </div>
+                <label className="flex items-center gap-1.5 px-3 py-2 md:py-3 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap mt-1">
+                  <input
+                    type="checkbox"
+                    checked={!!newOrder.is_delivery}
+                    onChange={e => setNewOrder({...newOrder, is_delivery: e.target.checked})}
+                    className="w-4 h-4 accent-sky-500 cursor-pointer"
+                  />
+                  <span className="text-xs md:text-sm font-bold text-black">🚚 배송 (체크 시 픽업→배송)</span>
+                </label>
               </div>
 
               <div>
