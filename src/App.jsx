@@ -277,6 +277,8 @@ export default function App() {
   const [payhereImportLoading, setPayhereImportLoading] = useState(false);
   const [kakaoSendLogs, setKakaoSendLogs] = useState([]);
   const [kakaoSendLogsLoading, setKakaoSendLogsLoading] = useState(false);
+  const [kakaoSendLogsLoadingMore, setKakaoSendLogsLoadingMore] = useState(false);
+  const [kakaoSendLogsHasMore, setKakaoSendLogsHasMore] = useState(true);
   const [customerSearch, setCustomerSearch] = useState('');
   const [matchedCustomerList, setMatchedCustomerList] = useState([]);
 
@@ -772,6 +774,8 @@ export default function App() {
   };
 
   // 카카오 알림톡 발송 기록을 최근순으로 불러옵니다. (알림 메뉴에서 사용)
+  const KAKAO_LOG_PAGE_SIZE = 50;
+
   const fetchKakaoSendLogs = async () => {
     setKakaoSendLogsLoading(true);
     try {
@@ -779,15 +783,39 @@ export default function App() {
         .from('kakao_send_log')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(50);
+        .range(0, KAKAO_LOG_PAGE_SIZE - 1);
       if (error) {
         console.warn('카톡 발송 기록 조회 실패(테이블이 아직 없을 수 있습니다):', error.message);
         setKakaoSendLogs([]);
+        setKakaoSendLogsHasMore(false);
       } else {
         setKakaoSendLogs(data || []);
+        setKakaoSendLogsHasMore((data || []).length === KAKAO_LOG_PAGE_SIZE);
       }
     } finally {
       setKakaoSendLogsLoading(false);
+    }
+  };
+
+  // "더보기" 버튼: 이미 불러온 목록 뒤에 다음 50건을 이어붙입니다.
+  const fetchMoreKakaoSendLogs = async () => {
+    setKakaoSendLogsLoadingMore(true);
+    try {
+      const from = kakaoSendLogs.length;
+      const to = from + KAKAO_LOG_PAGE_SIZE - 1;
+      const { data, error } = await supabase
+        .from('kakao_send_log')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, to);
+      if (error) {
+        alert('추가 기록을 불러오는 중 오류가 발생했습니다: ' + error.message);
+      } else {
+        setKakaoSendLogs(prev => [...prev, ...(data || [])]);
+        setKakaoSendLogsHasMore((data || []).length === KAKAO_LOG_PAGE_SIZE);
+      }
+    } finally {
+      setKakaoSendLogsLoadingMore(false);
     }
   };
 
@@ -4316,6 +4344,17 @@ export default function App() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+              {kakaoSendLogsHasMore && kakaoSendLogs.length > 0 && (
+                <div className="p-2 border-t border-slate-100">
+                  <button
+                    onClick={fetchMoreKakaoSendLogs}
+                    disabled={kakaoSendLogsLoadingMore}
+                    className="w-full py-2 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold rounded-xl text-xs cursor-pointer"
+                  >
+                    {kakaoSendLogsLoadingMore ? '불러오는 중...' : `더보기 (다음 ${KAKAO_LOG_PAGE_SIZE}건)`}
+                  </button>
                 </div>
               )}
               {kakaoSendLogs.some(l => !l.success) && (
