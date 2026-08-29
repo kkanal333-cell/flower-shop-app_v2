@@ -4241,28 +4241,45 @@ export default function App() {
                 </p>
               ) : (
                 <div className="max-h-96 overflow-y-auto divide-y divide-slate-100">
-                  {kakaoSendLogs.map(log => (
-                    <div key={log.id} className="flex items-center gap-2 px-4 py-2 text-xs">
-                      <span
-                        className={`px-1.5 py-0.5 rounded font-bold whitespace-nowrap ${
-                          log.success ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-red-100 text-red-800 border border-red-300 cursor-help'
-                        }`}
-                        title={!log.success ? (log.error_message || '실패 사유 미상') : undefined}
-                      >
-                        {log.success ? '✅ 성공' : '❌ 실패'}
-                      </span>
-                      <span className={`px-1.5 py-0.5 rounded border whitespace-nowrap ${
-                        log.event_type === '픽업임박' ? 'bg-sky-50 border-sky-300 text-sky-700' : 'bg-indigo-50 border-indigo-300 text-indigo-700'
-                      }`}>
-                        {log.event_type || '-'}
-                      </span>
-                      <span className="font-bold text-slate-800 truncate max-w-[80px]">{log.customer_name || '-'}</span>
-                      <span className="text-slate-500 whitespace-nowrap">{log.phone || '-'}</span>
-                      <span className="text-slate-400 whitespace-nowrap ml-auto">
-                        {(log.created_at || '').replace('T', ' ').slice(0, 16)}
-                      </span>
-                    </div>
-                  ))}
+                  {kakaoSendLogs.map(log => {
+                    const relatedOrder = (orders || []).find(o => o.id === log.order_id);
+                    return (
+                      <div key={log.id} className="px-4 py-2.5 text-xs">
+                        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                          <span
+                            className={`px-1.5 py-0.5 rounded font-bold whitespace-nowrap ${
+                              log.success ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-red-100 text-red-800 border border-red-300 cursor-help'
+                            }`}
+                            title={!log.success ? (log.error_message || '실패 사유 미상') : undefined}
+                          >
+                            {log.success ? '✅ 성공' : '❌ 실패'}
+                          </span>
+                          <span className={`px-1.5 py-0.5 rounded border whitespace-nowrap ${
+                            log.event_type === '픽업임박' ? 'bg-sky-50 border-sky-300 text-sky-700' : 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                          }`}>
+                            {log.event_type || '-'}
+                          </span>
+                          <span className="text-slate-400 whitespace-nowrap ml-auto">
+                            {(log.created_at || '').replace('T', ' ').slice(0, 16)}
+                          </span>
+                        </div>
+                        <div className="font-bold text-slate-900 mb-0.5">{log.customer_name || '(이름 없음)'}</div>
+                        <div className="flex items-center gap-1.5 flex-wrap text-slate-500">
+                          <span className="whitespace-nowrap">{log.phone || '-'}</span>
+                          {relatedOrder && (
+                            <>
+                              <span className="text-slate-300">·</span>
+                              <span className="whitespace-nowrap">{relatedOrder.product_name}</span>
+                              <span className="text-slate-300">·</span>
+                              <span className="font-bold text-black whitespace-nowrap">
+                                {Number(relatedOrder.amount || 0).toLocaleString()}원
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
               {kakaoSendLogs.some(l => !l.success) && (
