@@ -4139,7 +4139,7 @@ export default function App() {
                         : 'bg-white hover:bg-slate-100 border-slate-800 text-slate-900 cursor-pointer'
                     }`}
                   >
-                    🧾 페이히어 가져오기
+                    페이히어 가져오기
                     <input
                       type="file"
                       accept=".xlsx,.xls"
@@ -4152,7 +4152,7 @@ export default function App() {
                     onClick={handleExportSalesSummaryCSV}
                     className="text-xs font-bold bg-white hover:bg-slate-100 border border-slate-800 text-slate-900 px-3 py-1.5 rounded-lg cursor-pointer"
                   >
-                    📥 매출요약 내보내기
+                    매출요약 내보내기
                   </button>
                 </div>
               </div>
@@ -4232,30 +4232,25 @@ export default function App() {
                 ))}
               </div>
 
-              <p className="text-[11px] text-slate-500 mb-3">※ 접수일시(주문 등록 시각) 기준 집계입니다. 삭제(휴지통)된 주문은 제외됩니다.</p>
-
               {/* 요약 카드 */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
                 <div className="p-3 rounded-xl bg-rose-50 border border-rose-200">
-                  <div className="text-[11px] font-bold text-rose-700">총매출</div>
+                  <div className="text-[11px] font-bold text-rose-700">총매출 {dashboardStats.totalCount}건</div>
                   <div className="text-base md:text-xl font-extrabold text-rose-700 mt-1">
                     {dashboardStats.totalRevenue.toLocaleString()}원
                   </div>
-                  <div className="text-[10px] text-rose-500 mt-0.5">{dashboardStats.totalCount}건</div>
                 </div>
                 <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200">
-                  <div className="text-[11px] font-bold text-indigo-700">📅 예약매출</div>
+                  <div className="text-[11px] font-bold text-indigo-700">📅 예약매출 {dashboardStats.reservationCount}건</div>
                   <div className="text-base md:text-xl font-extrabold text-indigo-700 mt-1">
                     {dashboardStats.reservationRevenue.toLocaleString()}원
                   </div>
-                  <div className="text-[10px] text-indigo-500 mt-0.5">{dashboardStats.reservationCount}건</div>
                 </div>
                 <div className="p-3 rounded-xl bg-amber-50 border border-amber-200">
-                  <div className="text-[11px] font-bold text-amber-700">🏪 현장매출</div>
+                  <div className="text-[11px] font-bold text-amber-700">🏪 현장매출 {dashboardStats.onsiteCount}건</div>
                   <div className="text-base md:text-xl font-extrabold text-amber-700 mt-1">
                     {dashboardStats.onsiteRevenue.toLocaleString()}원
                   </div>
-                  <div className="text-[10px] text-amber-500 mt-0.5">{dashboardStats.onsiteCount}건</div>
                 </div>
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
                   <div className="text-[11px] font-bold text-slate-700">건당 평균</div>
