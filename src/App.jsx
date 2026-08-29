@@ -265,6 +265,7 @@ export default function App() {
   const [isCalendarOrderModalOpen, setIsCalendarOrderModalOpen] = useState(false);
 
   const [selectedOrderIds, setSelectedOrderIds] = useState([]);
+  const [highlightedOrderId, setHighlightedOrderId] = useState(null); // 전체 주문 목록: 행을 클릭하면 음영 표시만 됨 (체크박스 선택과는 무관)
   const [selectedCustomerIds, setSelectedCustomerIds] = useState([]);
 
   // 휴지통 내부 선택 상태 관리
@@ -1059,16 +1060,20 @@ export default function App() {
       .eq('phone', newOrder.phone)
       .maybeSingle();
 
-    if (custByPhone) {
+    if (custByPhone && (custByPhone.name || '').trim() === finalCustomerName) {
+      // 번호와 성명이 모두 일치하는 기존 고객이면 그대로 매칭합니다.
       customerId = custByPhone.id;
-      finalCustomerName = custByPhone.name;
     } else {
-      const baseName = finalCustomerName.replace(/[0-9]/g, '');
-      const sameNameCusts = customers.filter(c => c.name.replace(/[0-9]/g, '') === baseName);
+      // 번호는 같아도 성명이 다르면(가족 등 번호를 함께 쓰는 경우) 기존 고객명을 덮어쓰지 않고 새 고객으로 등록합니다.
+      // 번호가 아예 새로운 경우, 이름이 겹치는 기존 고객이 있으면 구분을 위해 숫자를 붙입니다.
+      if (!custByPhone) {
+        const baseName = finalCustomerName.replace(/[0-9]/g, '');
+        const sameNameCusts = customers.filter(c => c.name.replace(/[0-9]/g, '') === baseName);
 
-      if (sameNameCusts.length > 0) {
-        const nextNum = sameNameCusts.length + 1;
-        finalCustomerName = `${baseName}${nextNum}`;
+        if (sameNameCusts.length > 0) {
+          const nextNum = sameNameCusts.length + 1;
+          finalCustomerName = `${baseName}${nextNum}`;
+        }
       }
 
       const { data: newCust, error: custErr } = await supabase
@@ -1187,9 +1192,11 @@ export default function App() {
         .eq('phone', trimmedPhone)
         .maybeSingle();
 
-      if (custByPhone) {
+      if (custByPhone && (custByPhone.name || '').trim() === trimmedName) {
+        // 번호와 성명이 모두 일치하는 기존 고객이면 그대로 매칭합니다.
         customerId = custByPhone.id;
       } else {
+        // 번호는 같아도 성명이 다르면(가족 등 번호를 함께 쓰는 경우) 기존 고객명을 덮어쓰지 않고 새 고객으로 등록합니다.
         const { data: newCust, error: custErr } = await supabase
           .from('customers')
           .insert([{ name: trimmedName, phone: trimmedPhone }])
@@ -1277,6 +1284,7 @@ export default function App() {
 
   const [dashboardPeriod, setDashboardPeriod] = useState('today'); // today | week | month | all
   const [dashboardSelectedDate, setDashboardSelectedDate] = useState(() => getKoreaNowFormatted().date);
+  const [salesCalendarMonth, setSalesCalendarMonth] = useState(() => getKoreaNowFormatted().date.slice(0, 7)); // 'YYYY-MM'
 
   // 매출 대시보드용 집계 (접수일시=created_at 기준. orders는 이미 로드된 상태를 재사용하므로 추가 트래픽 없음)
   const dashboardStats = useMemo(() => {
@@ -1401,6 +1409,39 @@ export default function App() {
       .sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
   }, [orders, dashboardSelectedDate]);
 
+  // 날짜(YYYY-MM-DD)별 매출 합계 맵 (매출 달력에서 재사용)
+  const salesByDateAll = useMemo(() => {
+    const validOrders = (orders || []).filter(o => !o.deleted_at);
+    const byDate = {};
+    validOrders.forEach(o => {
+      const d = (o.created_at || '').replace(' ', 'T').split('T')[0];
+      if (d) byDate[d] = (byDate[d] || 0) + (Number(o.amount) || 0);
+    });
+    return byDate;
+  }, [orders]);
+
+  // 매출 달력에 표시할 달(salesCalendarMonth)의 날짜 셀 배열
+  const salesCalendarGrid = useMemo(() => {
+    const [y, m] = salesCalendarMonth.split('-').map(Number);
+    if (!y || !m) return [];
+    const firstDay = new Date(y, m - 1, 1);
+    const startWeekday = firstDay.getDay(); // 0=일
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const cells = [];
+    for (let i = 0; i < startWeekday; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      cells.push({ day: d, dateStr, amt: salesByDateAll[dateStr] || 0 });
+    }
+    return cells;
+  }, [salesCalendarMonth, salesByDateAll]);
+
+  const changeSalesCalendarMonth = (delta) => {
+    const [y, m] = salesCalendarMonth.split('-').map(Number);
+    const dt = new Date(y, m - 1 + delta, 1);
+    setSalesCalendarMonth(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`);
+  };
+
   // 날짜별 매출 요약을 CSV로 내보냅니다. (기간 필터와 무관하게 전체 데이터 기준)
   const handleExportSalesSummaryCSV = () => {
     const validOrders = (orders || []).filter(o => !o.deleted_at);
@@ -1485,9 +1526,10 @@ export default function App() {
         .eq('phone', trimmedPhone)
         .maybeSingle();
 
-      if (custByPhone) {
+      if (custByPhone && (custByPhone.name || '').trim() === trimmedName) {
         customerIdToLink = custByPhone.id;
       } else {
+        // 번호는 같아도 성명이 다르면 기존 고객명을 덮어쓰지 않고 새 고객으로 등록합니다.
         const { data: newCust, error: custErr } = await supabase
           .from('customers')
           .insert([{ name: trimmedName, phone: trimmedPhone }])
@@ -2331,6 +2373,32 @@ export default function App() {
     : [];
 
   const todayDateStr = getKoreaNowFormatted().date;
+  const nowTimeStr = getKoreaNowFormatted().time;
+
+  // 주문 한 건의 "픽업/배송 일시" 문자열 (현장판매+배송이면 배송일시, 아니면 픽업일시)
+  const getOrderDisplayDatetime = (o) => {
+    return (o.is_delivery && o.delivery_date && o.delivery_time)
+      ? `${o.delivery_date} ${o.delivery_time}`
+      : o.pickup_datetime;
+  };
+
+  // 지난 주문 여부 판단
+  // - 완료 체크(o.completed)된 주문: 날짜+시간까지 비교해서 예정 시각이 지나면 즉시 지난 주문으로 처리 (리스트 아래로/흐리게)
+  // - 완료 체크 안 된 주문: 기존처럼 날짜만 비교 (당일에는 흐려지지 않음)
+  const getOrderIsPast = (o) => {
+    const displayDatetime = getOrderDisplayDatetime(o);
+    if (!displayDatetime) return false;
+    const clean = displayDatetime.replace(' ', 'T');
+    const [datePart, timePartRaw] = clean.split('T');
+    if (!datePart) return false;
+
+    if (o.completed) {
+      if (datePart !== todayDateStr) return datePart < todayDateStr;
+      const timePart = (timePartRaw || '00:00').slice(0, 5);
+      return timePart <= nowTimeStr;
+    }
+    return datePart < todayDateStr;
+  };
 
   const sortedAndFilteredOrders = [...orders]
     .filter(o => {
@@ -2358,21 +2426,21 @@ export default function App() {
         return (a.created_at || '').localeCompare(b.created_at || '');
       }
 
-      // 기본 정렬: 픽업/배송일시 기준
-      const dateA = a.pickup_datetime ? a.pickup_datetime.replace(' ', 'T').split('T')[0] : '9999-99-99';
-      const dateB = b.pickup_datetime ? b.pickup_datetime.replace(' ', 'T').split('T')[0] : '9999-99-99';
-
-      const isPastA = dateA < todayDateStr;
-      const isPastB = dateB < todayDateStr;
+      // 기본 정렬: 픽업/배송일시 기준 (완료 체크된 주문은 날짜+시간까지 비교해 지난 주문 여부 판단)
+      const isPastA = getOrderIsPast(a);
+      const isPastB = getOrderIsPast(b);
 
       if (!isPastA && isPastB) return -1;
       if (isPastA && !isPastB) return 1;
 
+      const dtA = getOrderDisplayDatetime(a) || '';
+      const dtB = getOrderDisplayDatetime(b) || '';
+
       if (!isPastA && !isPastB) {
-        return (a.pickup_datetime || '').localeCompare(b.pickup_datetime || '');
+        return dtA.localeCompare(dtB);
       }
 
-      return (b.pickup_datetime || '').localeCompare(a.pickup_datetime || '');
+      return dtB.localeCompare(dtA);
     });
 
   // 전체 주문 목록: 40건씩 페이지 단위로 잘라서 보여줍니다. (검색/필터/정렬은 전체 목록 기준으로 계산됨)
@@ -3707,24 +3775,21 @@ export default function App() {
                           </tr>
                         ) : (
                           pagedOrders.map(o => {
-                            const displayDatetime = (o.is_delivery && o.delivery_date && o.delivery_time)
-                              ? `${o.delivery_date} ${o.delivery_time}`
-                              : o.pickup_datetime;
-                            const displayDate = displayDatetime ? displayDatetime.replace(' ', 'T').split('T')[0] : '';
-                            const isPast = displayDate !== '' && displayDate < todayDateStr;
+                            const displayDatetime = getOrderDisplayDatetime(o);
+                            const isPast = getOrderIsPast(o);
                             const isOnsite = o.order_type === '현장판매';
                             const cellPad = { paddingTop: '6px', paddingBottom: '6px' };
-                            const isRowSelected = selectedOrderIds.includes(o.id);
+                            const isRowHighlighted = highlightedOrderId === o.id;
 
                             return (
                               <tr 
                                 key={o.id} 
                                 onClick={(e) => {
                                   if (e.target.closest('button, input, a, label')) return;
-                                  handleToggleSelectOrder(o.id);
+                                  setHighlightedOrderId(prev => prev === o.id ? null : o.id);
                                 }}
                                 className={`border-b border-slate-100 transition-colors text-sm cursor-pointer ${
-                                  isRowSelected
+                                  isRowHighlighted
                                     ? 'bg-rose-100 hover:bg-rose-100'
                                     : isPast 
                                       ? 'text-slate-300 opacity-40 bg-slate-100/50 hover:bg-slate-100' 
@@ -4286,6 +4351,60 @@ export default function App() {
                   </div>
                 </>
               )}
+            </div>
+
+            {/* 매출 달력 (날짜별 매출을 한 달 단위로 한눈에 확인) */}
+            <div className="bg-white p-3 md:p-4 rounded-2xl border border-slate-200 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <button
+                  onClick={() => changeSalesCalendarMonth(-1)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-sm font-bold cursor-pointer"
+                  aria-label="이전 달"
+                >
+                  ‹
+                </button>
+                <h3 className="text-xs md:text-sm font-bold text-slate-900">
+                  🗓️ {salesCalendarMonth.split('-')[0]}년 {Number(salesCalendarMonth.split('-')[1])}월 매출 달력
+                </h3>
+                <button
+                  onClick={() => changeSalesCalendarMonth(1)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-sm font-bold cursor-pointer"
+                  aria-label="다음 달"
+                >
+                  ›
+                </button>
+              </div>
+
+              <div className="grid grid-cols-7 gap-0.5 text-center text-[9px] font-bold text-slate-400 mb-1">
+                {['일', '월', '화', '수', '목', '금', '토'].map(d => <div key={d}>{d}</div>)}
+              </div>
+
+              <div className="grid grid-cols-7 gap-0.5">
+                {salesCalendarGrid.map((cell, idx) =>
+                  cell === null ? (
+                    <div key={`empty-${idx}`} />
+                  ) : (
+                    <button
+                      key={cell.dateStr}
+                      onClick={() => setDashboardSelectedDate(cell.dateStr)}
+                      className={`aspect-square flex flex-col items-center justify-center rounded-md border leading-tight cursor-pointer transition-colors ${
+                        cell.dateStr === dashboardSelectedDate
+                          ? 'bg-rose-500 border-rose-500 text-white'
+                          : cell.amt > 0
+                            ? 'bg-rose-50 border-rose-200 hover:bg-rose-100 text-slate-800'
+                            : 'bg-slate-50 border-slate-100 hover:bg-slate-100 text-slate-400'
+                      }`}
+                    >
+                      <span className="text-[9px] font-bold">{cell.day}</span>
+                      {cell.amt > 0 && (
+                        <span className={`text-[8px] font-bold ${cell.dateStr === dashboardSelectedDate ? 'text-white' : 'text-rose-600'}`}>
+                          {(cell.amt / 10000).toFixed(cell.amt % 10000 === 0 ? 0 : 1)}만
+                        </span>
+                      )}
+                    </button>
+                  )
+                )}
+              </div>
             </div>
 
             {/* 매출 추이 */}
