@@ -288,6 +288,7 @@ export default function App() {
   const [onsiteMatchedCustomerList, setOnsiteMatchedCustomerList] = useState([]); // 현장판매 탭 성명 매칭 후보
 
   const [showBackupAlertModal, setShowBackupAlertModal] = useState(false);
+  const [orderSuccessModal, setOrderSuccessModal] = useState(null); // { message, order } | null - 신규예약주문 저장 완료 팝업(확인/출력)
   const [isMemoAutofilled, setIsMemoAutofilled] = useState(false);
 
   // ===== 리본편집기(세로 리본 문구 인쇄) 상태 =====
@@ -1140,7 +1141,18 @@ export default function App() {
       is_delivery: newOrder.is_delivery
     });
 
-    alert(`주문이 성공적으로 등록되었습니다! (고객명: ${finalCustomerName})`);
+    setOrderSuccessModal({
+      message: `주문이 성공적으로 등록되었습니다! (고객명: ${finalCustomerName})`,
+      order: {
+        id: insertedNewOrder?.id,
+        customers: { name: finalCustomerName, phone: newOrder.phone },
+        product_name: newOrder.product_name,
+        amount: actualAmount,
+        payment_method: newOrder.payment_method,
+        pickup_datetime: pickupDatetime,
+        memo: newOrder.memo
+      }
+    });
     
     const kstNow = getKoreaNowFormatted();
     const nextQ = getNextQuarterHourDateTime();
@@ -2607,6 +2619,34 @@ export default function App() {
         </div>
       )}
 
+      {orderSuccessModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border-2 border-rose-400 text-center space-y-4">
+            <div className="text-4xl">✅</div>
+            <p className="text-xs md:text-sm text-slate-700 leading-relaxed font-bold">
+              {orderSuccessModal.message}
+            </p>
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setOrderSuccessModal(null)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-300 cursor-pointer"
+              >
+                확인
+              </button>
+              <button
+                onClick={() => {
+                  handlePrintSingleOrder(orderSuccessModal.order);
+                  setOrderSuccessModal(null);
+                }}
+                className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
+              >
+                🖨️ 출력
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showBackupAlertModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border-2 border-rose-400 text-center space-y-4">
@@ -3646,14 +3686,22 @@ export default function App() {
               {subTab === 'calendar' && (
                 <div className="calendar-compact">
                   <FullCalendar
+                    key={selectedDate}
                     plugins={[dayGridPlugin, interactionPlugin]}
                     initialView="dayGridMonth"
+                    initialDate={selectedDate}
                     locale="ko"
                     aspectRatio={1.8}
                     fixedWeekCount={false}
                     dayMaxEventRows={true}
                     contentHeight="auto"
                     events={getCalendarEvents()}
+                    dayCellDidMount={(arg) => {
+                      const cellDateStr = `${arg.date.getFullYear()}-${String(arg.date.getMonth() + 1).padStart(2, '0')}-${String(arg.date.getDate()).padStart(2, '0')}`;
+                      if (cellDateStr === selectedDate) {
+                        arg.el.style.backgroundColor = '#fecdd3';
+                      }
+                    }}
                     dateClick={(info) => setSelectedDate(info.dateStr)}
                     eventClick={(info) => setSelectedDate(info.event.startStr)}
                   />
@@ -4266,8 +4314,10 @@ export default function App() {
               <h3 className="text-sm md:text-base font-bold text-slate-900 mb-3">🗓️ 매출 달력</h3>
               <div className="calendar-compact">
                 <FullCalendar
+                  key={dashboardSelectedDate}
                   plugins={[dayGridPlugin, interactionPlugin]}
                   initialView="dayGridMonth"
+                  initialDate={dashboardSelectedDate}
                   locale="ko"
                   aspectRatio={1.8}
                   fixedWeekCount={false}
@@ -4277,6 +4327,12 @@ export default function App() {
                   eventContent={(arg) => (
                     <span style={{ fontSize: '9px', fontWeight: 700 }}>{arg.event.title}</span>
                   )}
+                  dayCellDidMount={(arg) => {
+                    const cellDateStr = `${arg.date.getFullYear()}-${String(arg.date.getMonth() + 1).padStart(2, '0')}-${String(arg.date.getDate()).padStart(2, '0')}`;
+                    if (cellDateStr === dashboardSelectedDate) {
+                      arg.el.style.backgroundColor = '#fecdd3';
+                    }
+                  }}
                   dateClick={(info) => setDashboardSelectedDate(info.dateStr)}
                   eventClick={(info) => setDashboardSelectedDate(info.event.startStr)}
                 />
