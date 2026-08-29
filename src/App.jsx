@@ -275,6 +275,8 @@ export default function App() {
   const [orderTypeFilter, setOrderTypeFilter] = useState('all'); // all | reservation | onsite
   const [payhereImportRows, setPayhereImportRows] = useState([]); // 미리보기 화면에 뜨는 파싱된 거래 목록
   const [payhereImportLoading, setPayhereImportLoading] = useState(false);
+  const [kakaoSendLogs, setKakaoSendLogs] = useState([]);
+  const [kakaoSendLogsLoading, setKakaoSendLogsLoading] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
   const [matchedCustomerList, setMatchedCustomerList] = useState([]);
 
@@ -507,6 +509,9 @@ export default function App() {
       });
       setIsMemoAutofilled(false);
       setMatchedCustomerList([]);
+    }
+    if (menuId === 'notifications') {
+      fetchKakaoSendLogs();
     }
   };
 
@@ -764,6 +769,26 @@ export default function App() {
     const paths = (data || []).map(p => p.storage_path).filter(Boolean);
     if (paths.length) await supabase.storage.from('order-photos').remove(paths);
     await supabase.from('order_photos').delete().in('order_id', ids);
+  };
+
+  // 카카오 알림톡 발송 기록을 최근순으로 불러옵니다. (알림 메뉴에서 사용)
+  const fetchKakaoSendLogs = async () => {
+    setKakaoSendLogsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('kakao_send_log')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (error) {
+        console.warn('카톡 발송 기록 조회 실패(테이블이 아직 없을 수 있습니다):', error.message);
+        setKakaoSendLogs([]);
+      } else {
+        setKakaoSendLogs(data || []);
+      }
+    } finally {
+      setKakaoSendLogsLoading(false);
+    }
   };
 
   const fetchData = async () => {
@@ -4194,6 +4219,57 @@ export default function App() {
               <p className="text-xs text-rose-700 leading-relaxed">
                 매주 월요일 낮 12시 이후 앱에 접속하시거나 화면을 켜두시면 백업 팝업 알림창이 자동으로 작동합니다.
               </p>
+            </div>
+
+            <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-b border-slate-200">
+                <h3 className="font-bold text-sm text-slate-800">💬 카카오 알림톡 발송 내역 (최근 50건)</h3>
+                <button
+                  onClick={fetchKakaoSendLogs}
+                  disabled={kakaoSendLogsLoading}
+                  className="text-xs font-bold bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 px-2.5 py-1 rounded-lg cursor-pointer"
+                >
+                  {kakaoSendLogsLoading ? '불러오는 중...' : '🔄 새로고침'}
+                </button>
+              </div>
+
+              {kakaoSendLogsLoading ? (
+                <p className="text-xs text-slate-400 text-center py-6">불러오는 중...</p>
+              ) : kakaoSendLogs.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-6 px-4">
+                  발송 기록이 없습니다. (아직 카톡 발송이 없었거나, kakao_send_log 테이블이 준비되지 않았을 수 있습니다)
+                </p>
+              ) : (
+                <div className="max-h-96 overflow-y-auto divide-y divide-slate-100">
+                  {kakaoSendLogs.map(log => (
+                    <div key={log.id} className="flex items-center gap-2 px-4 py-2 text-xs">
+                      <span
+                        className={`px-1.5 py-0.5 rounded font-bold whitespace-nowrap ${
+                          log.success ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-red-100 text-red-800 border border-red-300 cursor-help'
+                        }`}
+                        title={!log.success ? (log.error_message || '실패 사유 미상') : undefined}
+                      >
+                        {log.success ? '✅ 성공' : '❌ 실패'}
+                      </span>
+                      <span className={`px-1.5 py-0.5 rounded border whitespace-nowrap ${
+                        log.event_type === '픽업임박' ? 'bg-sky-50 border-sky-300 text-sky-700' : 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                      }`}>
+                        {log.event_type || '-'}
+                      </span>
+                      <span className="font-bold text-slate-800 truncate max-w-[80px]">{log.customer_name || '-'}</span>
+                      <span className="text-slate-500 whitespace-nowrap">{log.phone || '-'}</span>
+                      <span className="text-slate-400 whitespace-nowrap ml-auto">
+                        {(log.created_at || '').replace('T', ' ').slice(0, 16)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {kakaoSendLogs.some(l => !l.success) && (
+                <p className="text-[11px] text-slate-500 px-4 py-2 border-t border-slate-100">
+                  ❌ 실패 배지에 마우스를 올리시면(모바일은 길게 터치) 실패 사유를 확인할 수 있습니다.
+                </p>
+              )}
             </div>
           </div>
         )}
