@@ -2645,7 +2645,7 @@ export default function App() {
       )}
 
       {orderConfirmModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[60]">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4" style={{ zIndex: 9999 }}>
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border-2 border-rose-400 text-center space-y-4">
             <div className="text-4xl">📝</div>
             <p className="text-xs md:text-sm text-slate-700 leading-relaxed font-bold">
