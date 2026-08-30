@@ -2645,7 +2645,7 @@ export default function App() {
       )}
 
       {orderConfirmModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[60]">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border-2 border-rose-400 text-center space-y-4">
             <div className="text-4xl">📝</div>
             <p className="text-xs md:text-sm text-slate-700 leading-relaxed font-bold">
@@ -3294,13 +3294,6 @@ export default function App() {
                     className="flex-1 py-2.5 bg-white hover:bg-slate-100 text-black border border-black font-extrabold rounded-xl text-xs cursor-pointer"
                   >
                     주문 저장하기
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsCalendarOrderModalOpen(false)}
-                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-300 cursor-pointer"
-                  >
-                    취소
                   </button>
                 </div>
               </form>
