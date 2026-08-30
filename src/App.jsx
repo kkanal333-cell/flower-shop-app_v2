@@ -1318,11 +1318,10 @@ export default function App() {
   const dashboardStats = useMemo(() => {
     const now = getKoreaNowFormatted();
     const nowDate = now.kstDateObj;
-    const dayOfWeek = nowDate.getDay();
-    const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-    const monday = new Date(nowDate);
-    monday.setDate(nowDate.getDate() - mondayOffset);
-    const mondayStr = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+    const dayOfWeek = nowDate.getDay(); // 0:일 ~ 6:토
+    const sunday = new Date(nowDate);
+    sunday.setDate(nowDate.getDate() - dayOfWeek); // 이번 주 일요일 (달력 표시와 동일하게 일~토 기준)
+    const sundayStr = `${sunday.getFullYear()}-${String(sunday.getMonth() + 1).padStart(2, '0')}-${String(sunday.getDate()).padStart(2, '0')}`;
     const monthStr = now.date.slice(0, 7);
 
     const validOrders = (orders || []).filter(o => !o.deleted_at);
@@ -1330,7 +1329,7 @@ export default function App() {
       const d = (o.created_at || '').replace(' ', 'T').split('T')[0];
       if (!d) return false;
       if (dashboardPeriod === 'today') return d === now.date;
-      if (dashboardPeriod === 'week') return d >= mondayStr;
+      if (dashboardPeriod === 'week') return d >= sundayStr;
       if (dashboardPeriod === 'month') return d.slice(0, 7) === monthStr;
       return true;
     });
@@ -1392,13 +1391,12 @@ export default function App() {
         points.push({ key: dStr, label: `${pad(dt.getMonth() + 1)}/${pad(dt.getDate())}`, amt: byDateAll[dStr] || 0 });
       }
     } else if (trendGranularity === 'weekly') {
-      const dayOfWeek = nowDate.getDay();
-      const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-      const thisMonday = new Date(nowDate);
-      thisMonday.setDate(nowDate.getDate() - mondayOffset);
+      const dayOfWeek = nowDate.getDay(); // 0:일 ~ 6:토
+      const thisSunday = new Date(nowDate);
+      thisSunday.setDate(nowDate.getDate() - dayOfWeek); // 이번 주 일요일 (달력 표시와 동일하게 일~토 기준)
       for (let i = 6; i >= 0; i--) {
-        const start = new Date(thisMonday);
-        start.setDate(thisMonday.getDate() - i * 7);
+        const start = new Date(thisSunday);
+        start.setDate(thisSunday.getDate() - i * 7);
         const end = new Date(start);
         end.setDate(start.getDate() + 6);
         const startStr = fmtDate(start);
