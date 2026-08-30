@@ -46,7 +46,8 @@ const RIBBON_GOOGLE_FONTS_URL =
   "https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700&family=Nanum+Gothic:wght@400;700;800&family=Nanum+Pen+Script&family=Nanum+Brush+Script&family=Noto+Serif+KR:wght@400;500;700;900&family=Noto+Sans+KR:wght@400;500;700;900&display=swap";
 
 const AMPM_OPTIONS = ["오전", "오후"];
-const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+const HOUR_OPTIONS_AM = Array.from({ length: 12 }, (_, i) => String(i).padStart(2, '0'));       // 00~11 (오전 0시=자정)
+const HOUR_OPTIONS_PM = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));    // 01~12 (오후 12시=정오)
 const MINUTE_OPTIONS = ["00", "15", "30", "45"];
 
 // 날짜/시간 문자열을 YY-MM-DD HH:MM 포맷으로 변환하는 헬퍼 함수
@@ -99,7 +100,8 @@ const parseTimeToParts = (timeStr) => {
 
   const ampm = h >= 12 ? "오후" : "오전";
   let h12 = h % 12;
-  if (h12 === 0) h12 = 12;
+  // 정오(낮 12시)는 "오후 12시"로 표시하되, 자정(밤 12시=00:00)은 "오전 00시"로 표시합니다 (오전 12시 표기로 인한 혼동 방지).
+  if (h12 === 0 && ampm === "오후") h12 = 12;
 
   return {
     ampm,
@@ -2533,7 +2535,7 @@ export default function App() {
           className="bg-white text-xs md:text-sm font-semibold focus:outline-none cursor-pointer flex-1 text-center text-slate-900"
           style={{ backgroundColor: '#ffffff' }}
         >
-          {HOUR_OPTIONS.map(h => <option key={h} value={h}>{h}시</option>)}
+          {(ampm === "오전" ? HOUR_OPTIONS_AM : HOUR_OPTIONS_PM).map(h => <option key={h} value={h}>{h}시</option>)}
         </select>
         <span className="text-xs text-slate-400 font-bold">:</span>
         <select
