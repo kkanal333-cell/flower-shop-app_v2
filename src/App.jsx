@@ -4486,8 +4486,8 @@ export default function App() {
                           height: '100%'
                         }}
                       >
-                        <div style={{ fontSize: '16px', color: '#64748b', fontWeight: 'bold', marginBottom: '2px', whiteSpace: 'nowrap' }}>
-                          {p.amt > 0 ? (p.amt >= 10000 ? Math.round(p.amt / 1000) + '천' : p.amt.toLocaleString()) : ''}
+                        <div style={{ fontSize: '9px', color: '#64748b', fontWeight: 'bold', marginBottom: '2px', whiteSpace: 'nowrap' }}>
+                          {p.amt > 0 ? p.amt.toLocaleString() : ''}
                         </div>
                         <div
                           style={{
@@ -4498,13 +4498,13 @@ export default function App() {
                           }}
                         />
                         {trendGranularity === 'monthly' ? (
-                          <div style={{ fontSize: '16px', color: '#94a3b8', marginTop: '4px', textAlign: 'center', lineHeight: '1.2' }}>
+                          <div style={{ fontSize: '9px', color: '#94a3b8', marginTop: '4px', textAlign: 'center', lineHeight: '1.2' }}>
                             <div>{labelTop}</div>
                             <div>{labelBottom}</div>
                           </div>
                         ) : (
                           <div style={{
-                            fontSize: '16px', color: '#94a3b8', marginTop: '4px',
+                            fontSize: '9px', color: '#94a3b8', marginTop: '4px',
                             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                             width: '100%', textAlign: 'center'
                           }}>
