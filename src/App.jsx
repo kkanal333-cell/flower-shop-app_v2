@@ -305,7 +305,7 @@ export default function App() {
   const [onsiteMatchedCustomerList, setOnsiteMatchedCustomerList] = useState([]); // 현장판매 탭 성명 매칭 후보
 
   const [showBackupAlertModal, setShowBackupAlertModal] = useState(false);
-  const [orderSuccessModal, setOrderSuccessModal] = useState(null); // { message, order } | null - 신규예약주문 저장 완료 팝업(확인/출력)
+  const [orderConfirmModal, setOrderConfirmModal] = useState(false); // 신규예약주문: "저장하시겠습니까?" 확인 팝업 (출력/저장/취소). true일 때만 실제 저장이 진행됩니다.
   const [isMemoAutofilled, setIsMemoAutofilled] = useState(false);
 
   // ===== 리본편집기(세로 리본 문구 인쇄) 상태 =====
@@ -1060,14 +1060,26 @@ export default function App() {
     }
   };
 
-  const handleCreateOrder = async (e) => {
+  const handleCreateOrder = (e) => {
     e.preventDefault();
     if (!newOrder.customer_name) return alert('고객 성명을 입력해주세요.');
-    
+
     const rawNums = newOrder.phone.replace(/[^0-9]/g, '');
     if (!newOrder.phone || rawNums.length < 10) {
       return alert('올바른 휴대폰 번호를 입력해주세요. (최소 10자리 이상)');
     }
+
+    if (newOrder.is_delivery && (!newOrder.delivery_date || !newOrder.delivery_time)) {
+      return alert('배송 날짜와 시간을 입력해주세요.');
+    }
+
+    // 바로 저장하지 않고 확인 팝업(출력/저장/취소)을 먼저 띄웁니다.
+    setOrderConfirmModal(true);
+  };
+
+  // 확인 팝업에서 "저장" 또는 "출력"을 눌렀을 때만 실제로 DB에 저장합니다. (shouldPrint=true면 저장 후 바로 출력)
+  const submitNewOrder = async (shouldPrint) => {
+    setOrderConfirmModal(false);
 
     let customerId;
     let finalCustomerName = newOrder.customer_name.trim();
@@ -1108,9 +1120,6 @@ export default function App() {
     }
 
     const actualAmount = (Number(newOrder.amount_thousands) || 0) * 1000;
-    if (newOrder.is_delivery && (!newOrder.delivery_date || !newOrder.delivery_time)) {
-      return alert('배송 날짜와 시간을 입력해주세요.');
-    }
 
     const pickupDatetime = `${newOrder.pickup_date}T${newOrder.pickup_time}:00`;
     const receiptDatetime = `${newOrder.receipt_date}T${newOrder.receipt_time}:00`;
@@ -1158,9 +1167,8 @@ export default function App() {
       is_delivery: newOrder.is_delivery
     });
 
-    setOrderSuccessModal({
-      message: `주문이 성공적으로 등록되었습니다! (고객명: ${finalCustomerName})`,
-      order: {
+    if (shouldPrint) {
+      handlePrintSingleOrder({
         id: insertedNewOrder?.id,
         customers: { name: finalCustomerName, phone: newOrder.phone },
         product_name: newOrder.product_name,
@@ -1168,8 +1176,10 @@ export default function App() {
         payment_method: newOrder.payment_method,
         pickup_datetime: pickupDatetime,
         memo: newOrder.memo
-      }
-    });
+      });
+    }
+
+    alert(`주문이 저장되었습니다! (고객명: ${finalCustomerName})`);
     
     const kstNow = getKoreaNowFormatted();
     const nextQ = getNextQuarterHourDateTime();
@@ -2634,28 +2644,31 @@ export default function App() {
         </div>
       )}
 
-      {orderSuccessModal && (
+      {orderConfirmModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border-2 border-rose-400 text-center space-y-4">
-            <div className="text-4xl">✅</div>
+            <div className="text-4xl">📝</div>
             <p className="text-xs md:text-sm text-slate-700 leading-relaxed font-bold">
-              {orderSuccessModal.message}
+              이 주문을 저장하시겠습니까?
             </p>
             <div className="flex gap-2 pt-2">
               <button
-                onClick={() => setOrderSuccessModal(null)}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-300 cursor-pointer"
-              >
-                확인
-              </button>
-              <button
-                onClick={() => {
-                  handlePrintSingleOrder(orderSuccessModal.order);
-                  setOrderSuccessModal(null);
-                }}
+                onClick={() => submitNewOrder(true)}
                 className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
               >
                 🖨️ 출력
+              </button>
+              <button
+                onClick={() => submitNewOrder(false)}
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
+              >
+                저장
+              </button>
+              <button
+                onClick={() => setOrderConfirmModal(false)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-300 cursor-pointer"
+              >
+                취소
               </button>
             </div>
           </div>
