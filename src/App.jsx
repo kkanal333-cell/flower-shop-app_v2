@@ -115,6 +115,21 @@ const formatPartsToTime = (ampm, hour, minute) => {
   return `${String(h).padStart(2, '0')}:${minute}`;
 };
 
+// DB가 자동으로 채운 UTC 타임스탬프(예: kakao_send_log.created_at)를 한국시간(KST) "YY-MM-DD HH:mm"으로 변환합니다.
+// (orders.created_at처럼 앱에서 직접 KST 문자열로 저장한 값은 이 함수를 쓰지 않습니다 - formatShortDateTime을 그대로 사용하세요)
+const formatUtcToKstShort = (isoStr) => {
+  if (!isoStr) return '-';
+  const d = new Date(isoStr);
+  if (isNaN(d.getTime())) return '-';
+  const kst = new Date(d.getTime() + 9 * 60 * 60000);
+  const yy = String(kst.getUTCFullYear()).slice(-2);
+  const mm = String(kst.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(kst.getUTCDate()).padStart(2, '0');
+  const hh = String(kst.getUTCHours()).padStart(2, '0');
+  const mi = String(kst.getUTCMinutes()).padStart(2, '0');
+  return `${yy}-${mm}-${dd} ${hh}:${mi}`;
+};
+
 // KST 실시간 일시 구하기
 const getKoreaNowFormatted = () => {
   const now = new Date();
@@ -4697,7 +4712,7 @@ export default function App() {
                             </>
                           )}
                           <span className="text-slate-400 whitespace-nowrap ml-auto shrink-0">
-                            {(log.created_at || '').replace('T', ' ').slice(0, 16)}
+                            {formatUtcToKstShort(log.created_at)}
                           </span>
                         </div>
 
@@ -4718,7 +4733,7 @@ export default function App() {
                               {log.event_type || '-'}
                             </span>
                             <span className="text-slate-400 whitespace-nowrap ml-auto">
-                              {(log.created_at || '').replace('T', ' ').slice(0, 16)}
+                              {formatUtcToKstShort(log.created_at)}
                             </span>
                           </div>
                           <div className="font-bold text-slate-900 mb-0.5">{log.customer_name || '(이름 없음)'}</div>
