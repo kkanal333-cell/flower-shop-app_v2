@@ -2656,7 +2656,7 @@ export default function App() {
                 onClick={() => submitNewOrder(true)}
                 className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
               >
-                🖨️ 출력
+                🖨️ 출력/저장
               </button>
               <button
                 onClick={() => submitNewOrder(false)}
