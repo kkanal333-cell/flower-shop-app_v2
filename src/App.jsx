@@ -308,6 +308,7 @@ export default function App() {
   const [showBackupAlertModal, setShowBackupAlertModal] = useState(false);
   const [orderConfirmModal, setOrderConfirmModal] = useState(false); // 신규예약주문: "저장하시겠습니까?" 확인 팝업 (출력/저장/취소). true일 때만 실제 저장이 진행됩니다.
   const [isMemoAutofilled, setIsMemoAutofilled] = useState(false);
+  const [receiptTimeAutoUpdate, setReceiptTimeAutoUpdate] = useState(true); // true면 접수일시가 현재 시각을 계속 따라감 (접수일시를 직접 수정하면 false로 바뀌어 멈춤)
 
   // ===== 리본편집기(세로 리본 문구 인쇄) 상태 =====
   // 빅솔론 SRP-330III(감열지, 용지폭 80mm)로 30mm 리본에 어울리는 세로 문구를 인쇄하기 위한 설정값
@@ -494,6 +495,19 @@ export default function App() {
     setOrderListPage(1);
   }, [orderSearch, orderTypeFilter, receiptSort]);
 
+  // 신규주문 탭에 있는 동안 접수일시가 현재 시각을 따라 자동으로 갱신되도록 합니다.
+  // (접수일시를 사용자가 직접 수정하면 receiptTimeAutoUpdate가 false가 되어 더 이상 덮어쓰지 않습니다)
+  useEffect(() => {
+    if (activeMenu !== 'new' || !receiptTimeAutoUpdate) return;
+    const tick = () => {
+      const kstNow = getKoreaNowFormatted();
+      setNewOrder(prev => ({ ...prev, receipt_date: kstNow.date, receipt_time: kstNow.time }));
+    };
+    tick();
+    const interval = setInterval(tick, 30000); // 30초마다 갱신
+    return () => clearInterval(interval);
+  }, [activeMenu, receiptTimeAutoUpdate]);
+
   useEffect(() => {
     const checkBackupSchedule = () => {
       const nowInfo = getKoreaNowFormatted();
@@ -540,6 +554,7 @@ export default function App() {
       });
       setIsMemoAutofilled(false);
       setMatchedCustomerList([]);
+      setReceiptTimeAutoUpdate(true);
     }
     if (menuId === 'notifications') {
       fetchKakaoSendLogs();
@@ -1201,6 +1216,7 @@ export default function App() {
     });
     setIsMemoAutofilled(false);
     setMatchedCustomerList([]);
+    setReceiptTimeAutoUpdate(true);
     setIsCalendarOrderModalOpen(false);
     fetchData();
   };
@@ -2521,11 +2537,12 @@ export default function App() {
   };
 
   // 주문 횟수에 따른 고객명 글씨 색상: 1회=검정, 2회=그린, 3회=블루, 4회 이상=퍼플
-  const getCustomerNameColorClass = (count) => {
-    if (count >= 4) return 'text-purple-700 hover:text-purple-900';
-    if (count === 3) return 'text-blue-700 hover:text-blue-900';
-    if (count === 2) return 'text-emerald-700 hover:text-emerald-900';
-    return 'text-slate-900 hover:text-slate-700';
+  // (동적으로 조합한 Tailwind 색상 클래스는 이 배포 환경에서 빠지는 경우가 있어, 인라인 style로 직접 지정합니다)
+  const getCustomerNameColor = (count) => {
+    if (count >= 4) return '#7e22ce'; // purple-700
+    if (count === 3) return '#1d4ed8'; // blue-700
+    if (count === 2) return '#047857'; // emerald-700
+    return '#0f172a'; // slate-900 (검정에 가까움)
   };
 
   const TimePickerCustom = ({ value, onChange, bgClass = "bg-white" }) => {
@@ -3465,7 +3482,7 @@ export default function App() {
                   <input
                     type="date"
                     value={newOrder.receipt_date}
-                    onChange={e => setNewOrder({...newOrder, receipt_date: e.target.value})}
+                    onChange={e => { setReceiptTimeAutoUpdate(false); setNewOrder({...newOrder, receipt_date: e.target.value}); }}
                     className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm text-black font-medium"
                     style={{ backgroundColor: '#f1f5f9' }}
                   />
@@ -3475,7 +3492,7 @@ export default function App() {
                   <input
                     type="time"
                     value={newOrder.receipt_time}
-                    onChange={e => setNewOrder({...newOrder, receipt_time: e.target.value})}
+                    onChange={e => { setReceiptTimeAutoUpdate(false); setNewOrder({...newOrder, receipt_time: e.target.value}); }}
                     className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm text-black font-medium"
                     style={{ backgroundColor: '#f1f5f9' }}
                   />
@@ -4622,10 +4639,10 @@ export default function App() {
                 className="flex-1 min-w-0 p-2.5 md:p-3 border border-slate-300 rounded-xl text-xs md:text-sm bg-white text-slate-900 focus:outline-none focus:border-rose-500"
               />
               <div className="flex items-center gap-1 shrink-0" title="주문 횟수별 색상: 1회=검정, 2회=그린, 3회=블루, 4회 이상=퍼플">
-                <span className="w-5 h-5 flex items-center justify-center rounded text-[9px] font-bold text-white bg-slate-900">1</span>
-                <span className="w-5 h-5 flex items-center justify-center rounded text-[9px] font-bold text-white bg-emerald-600">2</span>
-                <span className="w-5 h-5 flex items-center justify-center rounded text-[9px] font-bold text-white bg-blue-600">3</span>
-                <span className="w-5 h-5 flex items-center justify-center rounded text-[9px] font-bold text-white bg-purple-600">4~</span>
+                <span style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', fontSize: '9px', fontWeight: 'bold', color: '#fff', backgroundColor: '#0f172a' }}>1</span>
+                <span style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', fontSize: '9px', fontWeight: 'bold', color: '#fff', backgroundColor: '#047857' }}>2</span>
+                <span style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', fontSize: '9px', fontWeight: 'bold', color: '#fff', backgroundColor: '#1d4ed8' }}>3</span>
+                <span style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', fontSize: '9px', fontWeight: 'bold', color: '#fff', backgroundColor: '#7e22ce' }}>4~</span>
               </div>
             </div>
 
@@ -4661,7 +4678,8 @@ export default function App() {
                         <tr key={c.id} className="border-b border-slate-100 text-xs md:text-sm hover:bg-slate-50">
                           <td className="py-2.5 px-3 text-center text-slate-500 font-bold">{filteredCustomers.length - idx}</td>
                           <td
-                            className={`py-2.5 px-3 font-bold hover:underline cursor-pointer ${getCustomerNameColorClass(orderCount)}`}
+                            className="py-2.5 px-3 font-bold hover:underline cursor-pointer"
+                            style={{ color: getCustomerNameColor(orderCount) }}
                             onClick={() => setCustomerHistoryModal(c)}
                           >
                             {c.name}
