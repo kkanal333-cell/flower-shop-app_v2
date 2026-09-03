@@ -2515,6 +2515,19 @@ export default function App() {
     return '-';
   };
 
+  // 해당 고객의 누적 주문 횟수 (삭제된 주문 제외)
+  const getCustomerOrderCount = (customerId, customerName) => {
+    return orders.filter(o => !o.deleted_at && (o.customer_id === customerId || o.customers?.name === customerName)).length;
+  };
+
+  // 주문 횟수에 따른 고객명 글씨 색상: 1회=검정, 2회=그린, 3회=블루, 4회 이상=퍼플
+  const getCustomerNameColorClass = (count) => {
+    if (count >= 4) return 'text-purple-700 hover:text-purple-900';
+    if (count === 3) return 'text-blue-700 hover:text-blue-900';
+    if (count === 2) return 'text-emerald-700 hover:text-emerald-900';
+    return 'text-slate-900 hover:text-slate-700';
+  };
+
   const TimePickerCustom = ({ value, onChange, bgClass = "bg-white" }) => {
     const { ampm, hour, minute } = parseTimeToParts(value);
 
@@ -4600,13 +4613,21 @@ export default function App() {
               </button>
             </div>
 
-            <input
-              type="text"
-              value={customerSearch}
-              onChange={e => handleCustomerSearchChange(e.target.value)}
-              placeholder="🔍 고객 이름 또는 전화번호 검색"
-              className="w-full p-2.5 md:p-3 border border-slate-300 rounded-xl text-xs md:text-sm bg-white text-slate-900 focus:outline-none focus:border-rose-500"
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={customerSearch}
+                onChange={e => handleCustomerSearchChange(e.target.value)}
+                placeholder="🔍 고객 이름 또는 전화번호 검색"
+                className="flex-1 min-w-0 p-2.5 md:p-3 border border-slate-300 rounded-xl text-xs md:text-sm bg-white text-slate-900 focus:outline-none focus:border-rose-500"
+              />
+              <div className="flex items-center gap-1 shrink-0" title="주문 횟수별 색상: 1회=검정, 2회=그린, 3회=블루, 4회 이상=퍼플">
+                <span className="w-5 h-5 flex items-center justify-center rounded text-[9px] font-bold text-white bg-slate-900">1</span>
+                <span className="w-5 h-5 flex items-center justify-center rounded text-[9px] font-bold text-white bg-emerald-600">2</span>
+                <span className="w-5 h-5 flex items-center justify-center rounded text-[9px] font-bold text-white bg-blue-600">3</span>
+                <span className="w-5 h-5 flex items-center justify-center rounded text-[9px] font-bold text-white bg-purple-600">4~</span>
+              </div>
+            </div>
 
             <div className="overflow-x-auto border border-slate-200 rounded-xl">
               <table className="w-full text-left border-collapse whitespace-nowrap">
@@ -4634,22 +4655,30 @@ export default function App() {
                       </td>
                     </tr>
                   ) : (
-                    filteredCustomers.map((c, idx) => (
-                      <tr key={c.id} className="border-b border-slate-100 text-xs md:text-sm hover:bg-slate-50">
-                        <td className="py-2.5 px-3 text-center text-slate-500 font-bold">{filteredCustomers.length - idx}</td>
-                        <td className="py-2.5 px-3 font-bold text-rose-700 hover:text-rose-900 hover:underline cursor-pointer" onClick={() => setCustomerHistoryModal(c)}>{c.name}</td>
-                        <td className="py-2.5 px-3 text-slate-700 font-medium">{c.phone || '-'}</td>
-                        <td className="py-2.5 px-3 text-slate-600 font-medium">{getCustomerPickupDate(c.id, c.name)}</td>
-                        <td className="py-2.5 px-3 text-center">
-                          <input
-                            type="checkbox"
-                            checked={selectedCustomerIds.includes(c.id)}
-                            onChange={() => handleToggleSelectCustomer(c.id)}
-                            className="accent-rose-600 cursor-pointer w-4 h-4"
-                          />
-                        </td>
-                      </tr>
-                    ))
+                    filteredCustomers.map((c, idx) => {
+                      const orderCount = getCustomerOrderCount(c.id, c.name);
+                      return (
+                        <tr key={c.id} className="border-b border-slate-100 text-xs md:text-sm hover:bg-slate-50">
+                          <td className="py-2.5 px-3 text-center text-slate-500 font-bold">{filteredCustomers.length - idx}</td>
+                          <td
+                            className={`py-2.5 px-3 font-bold hover:underline cursor-pointer ${getCustomerNameColorClass(orderCount)}`}
+                            onClick={() => setCustomerHistoryModal(c)}
+                          >
+                            {c.name}
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-700 font-medium">{c.phone || '-'}</td>
+                          <td className="py-2.5 px-3 text-slate-600 font-medium">{getCustomerPickupDate(c.id, c.name)}</td>
+                          <td className="py-2.5 px-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={selectedCustomerIds.includes(c.id)}
+                              onChange={() => handleToggleSelectCustomer(c.id)}
+                              className="accent-rose-600 cursor-pointer w-4 h-4"
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
