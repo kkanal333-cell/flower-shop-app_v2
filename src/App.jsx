@@ -284,6 +284,7 @@ export default function App() {
   const [selectedOrderIds, setSelectedOrderIds] = useState([]);
   const [highlightedOrderId, setHighlightedOrderId] = useState(null); // 전체 주문 목록: 행을 클릭하면 음영 표시만 됨 (체크박스 선택과는 무관)
   const [selectedCustomerIds, setSelectedCustomerIds] = useState([]);
+  const [customerHistoryModal, setCustomerHistoryModal] = useState(null); // 고객 클릭 시 그동안의 주문 내역 팝업 (고객 객체 또는 null)
 
   // 휴지통 내부 선택 상태 관리
   const [selectedTrashOrderIds, setSelectedTrashOrderIds] = useState([]);
@@ -4636,7 +4637,7 @@ export default function App() {
                     filteredCustomers.map((c, idx) => (
                       <tr key={c.id} className="border-b border-slate-100 text-xs md:text-sm hover:bg-slate-50">
                         <td className="py-2.5 px-3 text-center text-slate-500 font-bold">{filteredCustomers.length - idx}</td>
-                        <td className="py-2.5 px-3 font-bold text-slate-900">{c.name}</td>
+                        <td className="py-2.5 px-3 font-bold text-rose-700 hover:text-rose-900 hover:underline cursor-pointer" onClick={() => setCustomerHistoryModal(c)}>{c.name}</td>
                         <td className="py-2.5 px-3 text-slate-700 font-medium">{c.phone || '-'}</td>
                         <td className="py-2.5 px-3 text-slate-600 font-medium">{getCustomerPickupDate(c.id, c.name)}</td>
                         <td className="py-2.5 px-3 text-center">
@@ -4655,6 +4656,116 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {customerHistoryModal && (() => {
+          const cust = customerHistoryModal;
+          const custOrders = orders
+            .filter(o => !o.deleted_at && (o.customer_id === cust.id || o.customers?.name === cust.name))
+            .sort((a, b) => {
+              const da = a.pickup_datetime || a.created_at || '';
+              const db = b.pickup_datetime || b.created_at || '';
+              return db.localeCompare(da); // 최신순
+            });
+
+          const totalAmount = custOrders.reduce((s, o) => s + (Number(o.amount) || 0), 0);
+          const memos = custOrders.filter(o => (o.memo || '').trim()).map(o => o.memo.trim());
+
+          return (
+            <div
+              className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 md:p-4"
+              style={{ zIndex: 9999 }}
+              onClick={() => setCustomerHistoryModal(null)}
+            >
+              <div
+                className="bg-white rounded-2xl p-4 md:p-6 max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-2xl border border-slate-200"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <h3 className="text-base md:text-lg font-bold text-slate-900">🎂 {cust.name}</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">{cust.phone || '연락처 없음'}</p>
+                  </div>
+                  <button
+                    onClick={() => setCustomerHistoryModal(null)}
+                    className="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* 요약 */}
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-center">
+                    <div className="text-[10px] font-bold text-rose-700">총 주문</div>
+                    <div className="text-sm md:text-base font-extrabold text-rose-700 mt-0.5">{custOrders.length}건</div>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-200 text-center">
+                    <div className="text-[10px] font-bold text-indigo-700">총 구매금액</div>
+                    <div className="text-sm md:text-base font-extrabold text-indigo-700 mt-0.5">{totalAmount.toLocaleString()}원</div>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-center">
+                    <div className="text-[10px] font-bold text-slate-700">건당 평균</div>
+                    <div className="text-sm md:text-base font-extrabold text-slate-700 mt-0.5">
+                      {custOrders.length > 0 ? Math.round(totalAmount / custOrders.length).toLocaleString() : 0}원
+                    </div>
+                  </div>
+                </div>
+
+                {memos.length > 0 && (
+                  <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200">
+                    <div className="text-[11px] font-bold text-amber-800 mb-1.5">📝 그동안 남긴 요청사항 모음</div>
+                    <ul className="space-y-1">
+                      {memos.map((m, i) => (
+                        <li key={i} className="text-xs text-amber-900 leading-snug">· {m}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* 주문 리스트 테이블 */}
+                {custOrders.length === 0 ? (
+                  <p className="text-xs text-slate-400 text-center py-6">주문 내역이 없습니다.</p>
+                ) : (
+                  <div className="border border-slate-200 rounded-xl overflow-hidden overflow-x-auto">
+                    <table className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+                      <colgroup>
+                        <col style={{ width: '112px' }} />
+                        <col style={{ width: 'auto' }} />
+                        <col style={{ width: '92px' }} />
+                        <col style={{ width: 'auto' }} />
+                      </colgroup>
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-600 text-[11px] font-bold">
+                          <th className="py-2 px-2 whitespace-nowrap">픽업/배송일시</th>
+                          <th className="py-2 px-2">상품명</th>
+                          <th className="py-2 px-2 text-right whitespace-nowrap">금액</th>
+                          <th className="py-2 px-2">메모</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {custOrders.map(o => {
+                          const displayDt = o.pickup_datetime || o.created_at || '';
+                          const displayDtShort = displayDt ? displayDt.replace(' ', 'T').slice(0, 16).replace('T', ' ') : '-';
+                          const memoShort = (o.memo || '').trim();
+                          return (
+                            <tr key={o.id} className="border-t border-slate-100 text-xs">
+                              <td className="py-2 px-2 whitespace-nowrap text-slate-600">{displayDtShort}</td>
+                              <td className="py-2 px-2 text-slate-800 font-medium overflow-hidden text-ellipsis whitespace-nowrap">{o.product_name}</td>
+                              <td className="py-2 px-2 text-right whitespace-nowrap text-slate-900 font-bold">{Number(o.amount || 0).toLocaleString()}원</td>
+                              <td className="py-2 px-2 text-slate-500 overflow-hidden text-ellipsis whitespace-nowrap">
+                                {memoShort ? (memoShort.length > 20 ? memoShort.slice(0, 20) + '…' : memoShort) : '-'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {activeMenu === 'notifications' && (
           <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
