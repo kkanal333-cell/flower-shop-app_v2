@@ -1671,7 +1671,10 @@ export default function App() {
         </style>
       </head>
       <body>
-        <div class="center title">화사한 하루 주문서</div>
+        <div class="center title" style="display:flex; align-items:center; justify-content:center; gap:4px;">
+          <img src="${SHOP_LOGO_SRC}" alt="화사한 하루" style="height:22px; width:auto; vertical-align:middle;" />
+          <span>주문서</span>
+        </div>
         <div class="row"><span class="label">번호:</span><span>#${o.id}</span></div>
         <div class="row"><span class="label">성명:</span><span class="big-text">${o.customers?.name || '-'}</span></div>
         <div class="row"><span class="label">연락처:</span><span class="big-text">${o.customers?.phone || '-'}</span></div>
@@ -1710,7 +1713,10 @@ export default function App() {
 
     const ticketsHtml = targetOrders.map((o, index) => `
       <div class="ticket-page">
-        <div class="center title">화사한 하루 주문서 (${index + 1}/${targetOrders.length})</div>
+        <div class="center title" style="display:flex; align-items:center; justify-content:center; gap:4px;">
+          <img src="${SHOP_LOGO_SRC}" alt="화사한 하루" style="height:22px; width:auto; vertical-align:middle;" />
+          <span>주문서 (${index + 1}/${targetOrders.length})</span>
+        </div>
         <div class="row"><span class="label">번호:</span><span>#${o.id}</span></div>
         <div class="row"><span class="label">성명:</span><span class="big-text">${o.customers?.name || '-'}</span></div>
         <div class="row"><span class="label">연락처:</span><span class="big-text">${o.customers?.phone || '-'}</span></div>
