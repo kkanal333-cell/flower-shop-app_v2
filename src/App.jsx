@@ -3220,7 +3220,7 @@ export default function App() {
                             onClick={() => selectCustomerForNewOrder(c)}
                             className="p-2 text-xs hover:bg-rose-50 rounded-lg cursor-pointer flex justify-between items-center"
                           >
-                            <span className="font-bold text-slate-900">{c.name}</span>
+                            <span className="font-bold" style={{ color: getCustomerNameColor(getCustomerOrderCount(c.id, c.name)) }}>{c.name}</span>
                             <span className="text-slate-600 text-[10px]">{c.phone || '-'}</span>
                           </div>
                         ))}
@@ -3402,7 +3402,7 @@ export default function App() {
                           onClick={() => selectCustomerForNewOrder(c)}
                           className="p-2 text-xs hover:bg-slate-100 rounded-lg cursor-pointer flex justify-between items-center"
                         >
-                          <span className="font-bold text-black">{c.name}</span>
+                          <span className="font-bold" style={{ color: getCustomerNameColor(getCustomerOrderCount(c.id, c.name)) }}>{c.name}</span>
                           <span className="text-black text-[11px]">{c.phone || '-'}</span>
                         </div>
                       ))}
@@ -3662,7 +3662,7 @@ export default function App() {
                           onClick={() => selectCustomerForOnsiteOrder(c)}
                           className="p-2 text-xs hover:bg-slate-100 rounded-lg cursor-pointer flex justify-between items-center"
                         >
-                          <span className="font-bold text-black">{c.name}</span>
+                          <span className="font-bold" style={{ color: getCustomerNameColor(getCustomerOrderCount(c.id, c.name)) }}>{c.name}</span>
                           <span className="text-black text-[11px]">{c.phone || '-'}</span>
                         </div>
                       ))}
