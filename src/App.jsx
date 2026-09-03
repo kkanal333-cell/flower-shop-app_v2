@@ -1672,7 +1672,7 @@ export default function App() {
       </head>
       <body>
         <div class="center title" style="display:flex; align-items:center; justify-content:center; gap:4px;">
-          <img src="${SHOP_LOGO_SRC}" alt="화사한 하루" style="height:22px; width:auto; vertical-align:middle;" />
+          <img src="${SHOP_LOGO_SRC}" alt="화사한 하루" style="height:36px; width:auto; vertical-align:middle; filter: brightness(0);" />
           <span>주문서</span>
         </div>
         <div class="row"><span class="label">번호:</span><span>#${o.id}</span></div>
@@ -1714,7 +1714,7 @@ export default function App() {
     const ticketsHtml = targetOrders.map((o, index) => `
       <div class="ticket-page">
         <div class="center title" style="display:flex; align-items:center; justify-content:center; gap:4px;">
-          <img src="${SHOP_LOGO_SRC}" alt="화사한 하루" style="height:22px; width:auto; vertical-align:middle;" />
+          <img src="${SHOP_LOGO_SRC}" alt="화사한 하루" style="height:36px; width:auto; vertical-align:middle; filter: brightness(0);" />
           <span>주문서 (${index + 1}/${targetOrders.length})</span>
         </div>
         <div class="row"><span class="label">번호:</span><span>#${o.id}</span></div>
