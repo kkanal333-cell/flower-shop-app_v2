@@ -473,7 +473,8 @@ export default function App() {
     is_delivery: false,
     delivery_date: '',
     delivery_time: '',
-    memo: ''
+    memo: '',
+    notify_kakao: true
   });
 
   const [newOrderTab, setNewOrderTab] = useState('reservation'); // 'reservation' | 'onsite'
@@ -487,18 +488,21 @@ export default function App() {
     is_delivery: false,
     delivery_date: '',
     delivery_time: '',
+    receipt_date: initialKst.date,
+    receipt_time: initialKst.time,
     memo: ''
   });
+  const [onsiteReceiptTimeAutoUpdate, setOnsiteReceiptTimeAutoUpdate] = useState(true); // true면 현장판매 접수일시가 현재 시각을 계속 따라감
 
   // 전체 주문 목록: 검색어/유형 필터/정렬 기준이 바뀌면 항상 1페이지로 되돌립니다.
   useEffect(() => {
     setOrderListPage(1);
   }, [orderSearch, orderTypeFilter, receiptSort]);
 
-  // 신규주문 탭에 있는 동안 접수일시가 현재 시각을 따라 자동으로 갱신되도록 합니다.
+  // 신규주문(예약) 탭에 있는 동안 접수일시가 현재 시각을 따라 자동으로 갱신되도록 합니다.
   // (접수일시를 사용자가 직접 수정하면 receiptTimeAutoUpdate가 false가 되어 더 이상 덮어쓰지 않습니다)
   useEffect(() => {
-    if (activeMenu !== 'new' || !receiptTimeAutoUpdate) return;
+    if (activeMenu !== 'new' || newOrderTab !== 'reservation' || !receiptTimeAutoUpdate) return;
     const tick = () => {
       const kstNow = getKoreaNowFormatted();
       setNewOrder(prev => ({ ...prev, receipt_date: kstNow.date, receipt_time: kstNow.time }));
@@ -506,7 +510,19 @@ export default function App() {
     tick();
     const interval = setInterval(tick, 30000); // 30초마다 갱신
     return () => clearInterval(interval);
-  }, [activeMenu, receiptTimeAutoUpdate]);
+  }, [activeMenu, newOrderTab, receiptTimeAutoUpdate]);
+
+  // 현장판매 탭에 있는 동안에도 동일한 규칙으로 접수일시가 자동 갱신됩니다.
+  useEffect(() => {
+    if (activeMenu !== 'new' || newOrderTab !== 'onsite' || !onsiteReceiptTimeAutoUpdate) return;
+    const tick = () => {
+      const kstNow = getKoreaNowFormatted();
+      setOnsiteOrder(prev => ({ ...prev, receipt_date: kstNow.date, receipt_time: kstNow.time }));
+    };
+    tick();
+    const interval = setInterval(tick, 30000);
+    return () => clearInterval(interval);
+  }, [activeMenu, newOrderTab, onsiteReceiptTimeAutoUpdate]);
 
   useEffect(() => {
     const checkBackupSchedule = () => {
@@ -550,7 +566,8 @@ export default function App() {
         is_delivery: false,
         delivery_date: '',
         delivery_time: '',
-        memo: ''
+        memo: '',
+        notify_kakao: true
       });
       setIsMemoAutofilled(false);
       setMatchedCustomerList([]);
@@ -1153,7 +1170,8 @@ export default function App() {
       delivery_date: newOrder.is_delivery ? newOrder.delivery_date : null,
       delivery_time: newOrder.is_delivery ? newOrder.delivery_time : null,
       order_type: '예약',
-      memo: newOrder.memo
+      memo: newOrder.memo,
+      kakao_notify_enabled: !!newOrder.notify_kakao
     }]).select().single();
 
     if (orderErr) {
@@ -1172,16 +1190,18 @@ export default function App() {
       memo: newOrder.memo
     });
 
-    // 예약 접수 즉시 고객에게 카카오 알림톡 발송 (Solapi 연동 완료 후 실제 발송됨)
-    notifyCustomerByKakao('접수확인', {
-      order_id: insertedNewOrder?.id,
-      customer_name: finalCustomerName,
-      phone: newOrder.phone,
-      product_name: newOrder.product_name,
-      amount: actualAmount,
-      pickup_datetime: pickupDatetime,
-      is_delivery: newOrder.is_delivery
-    });
+    // 예약 접수 즉시 고객에게 카카오 알림톡 발송 (알림톡 체크박스가 켜져 있을 때만. Solapi 연동 완료 후 실제 발송됨)
+    if (newOrder.notify_kakao) {
+      notifyCustomerByKakao('접수확인', {
+        order_id: insertedNewOrder?.id,
+        customer_name: finalCustomerName,
+        phone: newOrder.phone,
+        product_name: newOrder.product_name,
+        amount: actualAmount,
+        pickup_datetime: pickupDatetime,
+        is_delivery: newOrder.is_delivery
+      });
+    }
 
     if (shouldPrint) {
       handlePrintSingleOrder({
@@ -1212,7 +1232,8 @@ export default function App() {
       is_delivery: false,
       delivery_date: '',
       delivery_time: '',
-      memo: ''
+      memo: '',
+      notify_kakao: true
     });
     setIsMemoAutofilled(false);
     setMatchedCustomerList([]);
@@ -1230,9 +1251,6 @@ export default function App() {
     if (onsiteOrder.is_delivery && (!onsiteOrder.delivery_date || !onsiteOrder.delivery_time)) {
       return alert('배송 날짜와 시간을 입력해주세요.');
     }
-
-    const nowKst = getKoreaNowFormatted();
-    const nowDatetime = `${nowKst.date}T${nowKst.time}:00`;
 
     let customerId = null;
     const trimmedName = (onsiteOrder.customer_name || '').trim();
@@ -1301,13 +1319,15 @@ export default function App() {
       }
     }
 
+    const receiptDatetime = `${onsiteOrder.receipt_date}T${onsiteOrder.receipt_time}:00`;
+
     const { error } = await supabase.from('orders').insert([{
       customer_id: customerId,
       product_name: onsiteOrder.product_name,
       product: onsiteOrder.product_name,
       amount: actualAmount,
-      pickup_datetime: nowDatetime,
-      created_at: nowDatetime,
+      pickup_datetime: receiptDatetime,
+      created_at: receiptDatetime,
       payment_method: onsiteOrder.payment_method,
       status: onsiteOrder.payment_method,
       is_delivery: !!onsiteOrder.is_delivery,
@@ -1323,6 +1343,7 @@ export default function App() {
     }
 
     alert(`현장판매가 등록되었습니다! (${onsiteOrder.product_name} / ${actualAmount.toLocaleString()}원)`);
+    const kstNowReset = getKoreaNowFormatted();
     setOnsiteOrder({
       customer_name: '',
       phone: '010-',
@@ -1332,9 +1353,12 @@ export default function App() {
       is_delivery: false,
       delivery_date: '',
       delivery_time: '',
+      receipt_date: kstNowReset.date,
+      receipt_time: kstNowReset.time,
       memo: ''
     });
     setOnsiteMatchedCustomerList([]);
+    setOnsiteReceiptTimeAutoUpdate(true);
     fetchData();
   };
 
@@ -1609,12 +1633,12 @@ export default function App() {
     };
 
     let pickupDatetime = null;
+    const receiptDatetime = `${editingOrder.receipt_date}T${editingOrder.receipt_time}:00`;
+    updatePayload.created_at = receiptDatetime; // 접수일시는 예약/현장판매 모두 동일하게 수정 가능
     if (!isOnsite) {
       // 현장판매는 픽업 날짜/시간 개념이 없으므로 기존 값을 그대로 둡니다.
       pickupDatetime = `${editingOrder.pickup_date}T${editingOrder.pickup_time}:00`;
-      const receiptDatetime = `${editingOrder.receipt_date}T${editingOrder.receipt_time}:00`;
       updatePayload.pickup_datetime = pickupDatetime;
-      updatePayload.created_at = receiptDatetime;
     }
 
     await supabase.from('orders').update(updatePayload).eq('id', editingOrder.id);
@@ -2951,6 +2975,27 @@ export default function App() {
                     </label>
                   </div>
 
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700">접수 날짜</label>
+                      <input
+                        type="date"
+                        value={editingOrder.receipt_date || ''}
+                        onChange={e => setEditingOrder({ ...editingOrder, receipt_date: e.target.value })}
+                        className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700">접수 시간</label>
+                      <input
+                        type="time"
+                        value={editingOrder.receipt_time || ''}
+                        onChange={e => setEditingOrder({ ...editingOrder, receipt_time: e.target.value })}
+                        className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                      />
+                    </div>
+                  </div>
+
                   {editingOrder.is_delivery && (
                     <div className="grid grid-cols-2 gap-2">
                       <div>
@@ -3295,15 +3340,26 @@ export default function App() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-[11px] font-bold text-slate-700">결제 방식 *</label>
-                  <select
-                    value={newOrder.payment_method}
-                    onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
-                    className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium"
-                  >
-                    {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
-                  </select>
+                <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700">결제 방식 *</label>
+                    <select
+                      value={newOrder.payment_method}
+                      onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
+                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium"
+                    >
+                      {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
+                    </select>
+                  </div>
+                  <label className="flex items-center gap-1.5 px-2.5 py-2 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={newOrder.notify_kakao}
+                      onChange={e => setNewOrder({ ...newOrder, notify_kakao: e.target.checked })}
+                      className="w-4 h-4 accent-yellow-500 cursor-pointer"
+                    />
+                    <span className="text-[11px] font-bold text-slate-700">💬 알림톡</span>
+                  </label>
                 </div>
 
                 <div>
@@ -3505,16 +3561,27 @@ export default function App() {
                 </div>
               </div>
 
-              <div>
-                <label className="text-[11px] md:text-xs font-bold text-black">결제 방식 *</label>
-                <select
-                  value={newOrder.payment_method}
-                  onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
-                  className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
-                  style={{ backgroundColor: '#ffffff' }}
-                >
-                  {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
-                </select>
+              <div className="grid grid-cols-[1fr_auto] gap-2 md:gap-4 items-end">
+                <div>
+                  <label className="text-[11px] md:text-xs font-bold text-black">결제 방식 *</label>
+                  <select
+                    value={newOrder.payment_method}
+                    onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
+                    style={{ backgroundColor: '#ffffff' }}
+                  >
+                    {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
+                  </select>
+                </div>
+                <label className="flex items-center gap-1.5 px-3 py-2 md:py-3 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap h-fit">
+                  <input
+                    type="checkbox"
+                    checked={newOrder.notify_kakao}
+                    onChange={e => setNewOrder({ ...newOrder, notify_kakao: e.target.checked })}
+                    className="w-4 h-4 accent-yellow-500 cursor-pointer"
+                  />
+                  <span className="text-xs md:text-sm font-bold text-black">💬 알림톡</span>
+                </label>
               </div>
 
               <div>
@@ -3617,6 +3684,29 @@ export default function App() {
                   />
                   <span className="text-xs md:text-sm font-bold text-black">🚚 배송</span>
                 </label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 md:gap-4">
+                <div>
+                  <label className="text-[11px] md:text-xs font-bold text-black">접수 날짜</label>
+                  <input
+                    type="date"
+                    value={onsiteOrder.receipt_date}
+                    onChange={e => { setOnsiteReceiptTimeAutoUpdate(false); setOnsiteOrder({ ...onsiteOrder, receipt_date: e.target.value }); }}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm text-black font-medium"
+                    style={{ backgroundColor: '#f1f5f9' }}
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] md:text-xs font-bold text-black">접수 시간</label>
+                  <input
+                    type="time"
+                    value={onsiteOrder.receipt_time}
+                    onChange={e => { setOnsiteReceiptTimeAutoUpdate(false); setOnsiteOrder({ ...onsiteOrder, receipt_time: e.target.value }); }}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm text-black font-medium"
+                    style={{ backgroundColor: '#f1f5f9' }}
+                  />
+                </div>
               </div>
 
               {onsiteOrder.is_delivery && (
@@ -4107,7 +4197,8 @@ export default function App() {
                         is_delivery: false,
                         delivery_date: '',
                         delivery_time: '',
-                        memo: ''
+                        memo: '',
+                        notify_kakao: true
                       });
                       setIsMemoAutofilled(false);
                       setMatchedCustomerList([]);
