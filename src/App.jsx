@@ -1399,6 +1399,7 @@ export default function App() {
       if (dashboardPeriod === 'today') return d === now.date;
       if (dashboardPeriod === 'week') return d >= sundayStr;
       if (dashboardPeriod === 'month') return d.slice(0, 7) === monthStr;
+      if (dashboardPeriod === 'year') return d.slice(0, 4) === now.date.slice(0, 4);
       return true;
     });
 
@@ -1540,20 +1541,23 @@ export default function App() {
     validOrders.forEach(o => {
       const d = (o.created_at || '').replace(' ', 'T').split('T')[0];
       if (!d) return;
-      if (!byDate[d]) byDate[d] = { reservation: 0, onsite: 0, count: 0 };
+      if (!byDate[d]) byDate[d] = { reservation: 0, onsite: 0, count: 0, byPayment: {} };
       const amt = Number(o.amount) || 0;
       if (o.order_type === '현장판매') byDate[d].onsite += amt;
       else byDate[d].reservation += amt;
       byDate[d].count += 1;
+      const pm = o.payment_method || '미지정';
+      byDate[d].byPayment[pm] = (byDate[d].byPayment[pm] || 0) + 1;
     });
     const dates = Object.keys(byDate).sort();
-    const headers = ['날짜', '예약매출', '현장매출', '합계매출', '건수'];
+    const headers = ['날짜', '예약매출', '현장매출', '합계매출', '건수', ...PAYMENT_OPTIONS];
     const rows = dates.map(d => [
       d,
-      byDate[d].reservation,
-      byDate[d].onsite,
-      byDate[d].reservation + byDate[d].onsite,
-      byDate[d].count
+      byDate[d].reservation.toLocaleString(),
+      byDate[d].onsite.toLocaleString(),
+      (byDate[d].reservation + byDate[d].onsite).toLocaleString(),
+      byDate[d].count,
+      ...PAYMENT_OPTIONS.map(pm => byDate[d].byPayment[pm] || 0)
     ]);
     const today = getKoreaNowFormatted().date;
     downloadCSV(headers, rows, `export_sales_summary_${today}.csv`);
@@ -2300,7 +2304,7 @@ export default function App() {
           o.customers?.name || '',
           o.customers?.phone || '',
           o.product_name || '',
-          o.amount || 0,
+          o.amount ? Number(o.amount).toLocaleString() : 0,
           o.pickup_datetime || '',
           o.created_at || '',
           o.payment_method || '',
@@ -4343,7 +4347,7 @@ export default function App() {
 
         {activeMenu === 'dashboard' && (
           <div className="space-y-4">
-            <div className={`flex gap-2 ${salesMenuTab === 'sales' ? 'max-w-3xl mx-auto' : ''}`}>
+            <div className="flex gap-2 max-w-3xl mx-auto">
               <button
                 onClick={() => setSalesMenuTab('sales')}
                 className={`px-4 py-2 rounded-lg text-xs md:text-sm font-bold cursor-pointer border-2 transition-colors ${
@@ -4454,7 +4458,7 @@ export default function App() {
                   { id: 'today', label: '오늘' },
                   { id: 'week', label: '이번주' },
                   { id: 'month', label: '이번달' },
-                  { id: 'all', label: '전체' },
+                  { id: 'year', label: '이번해' },
                 ].map(p => (
                   <button
                     key={p.id}
@@ -5598,10 +5602,13 @@ export default function App() {
 function PurchaseTab({ purchases, fetchPurchases }) {
   const todayStr = getKoreaNowFormatted().date;
 
-  const [period, setPeriod] = useState('today'); // today | week | month | all
+  const [period, setPeriod] = useState('today'); // today | week | month | year
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [trendGranularity, setTrendGranularity] = useState('daily'); // daily | weekly | monthly | yearly
-  const [vendorHistoryModal, setVendorHistoryModal] = useState(null); // 업체명 문자열 | null
+  const [selectedVendor, setSelectedVendor] = useState(null); // 업체명 문자열 | null (고정 화면에 표시)
+  const [vendorPeriod, setVendorPeriod] = useState('month'); // week | month | year | custom
+  const [vendorCustomStart, setVendorCustomStart] = useState(todayStr);
+  const [vendorCustomEnd, setVendorCustomEnd] = useState(todayStr);
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
@@ -5663,21 +5670,55 @@ function PurchaseTab({ purchases, fetchPurchases }) {
     fetchPurchases();
   };
 
-  // 기간별 필터링 (오늘/이번주(일~토)/이번달/전체)
+  // 기간별 필터링 (오늘/이번주(일~토)/이번달/이번해)
   const nowDate = getKoreaNowFormatted().kstDateObj;
   const dayOfWeek = nowDate.getDay();
   const sunday = new Date(nowDate);
   sunday.setDate(nowDate.getDate() - dayOfWeek);
   const sundayStr = `${sunday.getFullYear()}-${String(sunday.getMonth() + 1).padStart(2, '0')}-${String(sunday.getDate()).padStart(2, '0')}`;
   const monthStr = todayStr.slice(0, 7);
+  const yearStr = todayStr.slice(0, 4);
 
   const periodFiltered = (purchases || []).filter(p => {
     if (period === 'today') return p.date === todayStr;
     if (period === 'week') return p.date >= sundayStr;
     if (period === 'month') return (p.date || '').slice(0, 7) === monthStr;
+    if (period === 'year') return (p.date || '').slice(0, 4) === yearStr;
     return true;
   });
   const totalPurchaseAmount = periodFiltered.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+
+  // 결제수단별 매입 집계 (현재 선택된 기간 기준)
+  const byPurchasePayment = {};
+  periodFiltered.forEach(p => {
+    const pm = p.payment_method || '미지정';
+    byPurchasePayment[pm] = (byPurchasePayment[pm] || 0) + (Number(p.amount) || 0);
+  });
+  const purchasePaymentBreakdown = Object.entries(byPurchasePayment).sort((a, b) => b[1] - a[1]);
+  const maxPurchasePayment = purchasePaymentBreakdown.reduce((m, [, v]) => Math.max(m, v), 0) || 1;
+
+  // 매입요약 CSV 내보내기 (날짜별 합계 + 거래방식별 건수, 매출요약 내보내기와 동일한 형식)
+  const handleExportPurchaseSummaryCSV = () => {
+    const byDate = {};
+    (purchases || []).forEach(p => {
+      const d = p.date;
+      if (!d) return;
+      if (!byDate[d]) byDate[d] = { amount: 0, count: 0, byPayment: {} };
+      byDate[d].amount += Number(p.amount) || 0;
+      byDate[d].count += 1;
+      const pm = p.payment_method || '미지정';
+      byDate[d].byPayment[pm] = (byDate[d].byPayment[pm] || 0) + 1;
+    });
+    const dates = Object.keys(byDate).sort();
+    const headers = ['날짜', '매입금액', '건수', ...PURCHASE_PAYMENT_OPTIONS];
+    const rows = dates.map(d => [
+      d,
+      byDate[d].amount.toLocaleString(),
+      byDate[d].count,
+      ...PURCHASE_PAYMENT_OPTIONS.map(pm => byDate[d].byPayment[pm] || 0)
+    ]);
+    downloadCSV(headers, rows, `export_purchase_summary_${todayStr}.csv`);
+  };
 
   // 매입 달력용: 날짜별 합계
   const purchaseByDateAll = {};
@@ -5753,10 +5794,20 @@ function PurchaseTab({ purchases, fetchPurchases }) {
   }
   const trendMaxAmt = trendPoints.reduce((m, p) => Math.max(m, p.amt), 0) || 1;
 
-  // 업체별 이력 (업체명 클릭 시)
-  const vendorHistory = vendorHistoryModal
+  // 업체별 이력 (업체명 클릭 시, 고정 화면에 기간 필터와 함께 표시)
+  const vendorRange = (() => {
+    if (vendorPeriod === 'custom') return { start: vendorCustomStart, end: vendorCustomEnd };
+    const end = new Date(nowDate);
+    const start = new Date(nowDate);
+    if (vendorPeriod === 'week') start.setDate(nowDate.getDate() - 7);
+    else if (vendorPeriod === 'month') start.setMonth(nowDate.getMonth() - 1);
+    else if (vendorPeriod === 'year') start.setFullYear(nowDate.getFullYear() - 1);
+    return { start: fmtDate(start), end: fmtDate(end) };
+  })();
+
+  const vendorHistory = selectedVendor
     ? (purchases || [])
-        .filter(p => p.vendor === vendorHistoryModal)
+        .filter(p => p.vendor === selectedVendor && p.date >= vendorRange.start && p.date <= vendorRange.end)
         .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.created_at || '').localeCompare(a.created_at || ''))
     : [];
 
@@ -5764,30 +5815,37 @@ function PurchaseTab({ purchases, fetchPurchases }) {
 
   return (
     <div className="space-y-4">
-      {/* 기간 필터 + 총매입 */}
+      {/* 매입 관리 타이틀 + 요약 내보내기 */}
       <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
           <h2 className="text-base md:text-xl font-bold text-slate-900 flex items-center gap-2">
             <span>🧾</span> 매입 관리
           </h2>
-          <div className="flex gap-1.5 flex-wrap">
-            {[
-              { id: 'today', label: '오늘' },
-              { id: 'week', label: '이번주' },
-              { id: 'month', label: '이번달' },
-              { id: 'all', label: '전체' },
-            ].map(p => (
-              <button
-                key={p.id}
-                onClick={() => setPeriod(p.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-2 ${
-                  period === p.id ? 'bg-sky-100 border-sky-400 shadow-sm' : 'bg-white border-transparent hover:bg-slate-100'
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
+          <button
+            onClick={handleExportPurchaseSummaryCSV}
+            className="text-xs font-bold bg-white hover:bg-slate-100 border border-slate-800 text-slate-900 px-3 py-1.5 rounded-lg cursor-pointer"
+          >
+            매입요약 내보내기
+          </button>
+        </div>
+
+        <div className="flex gap-1.5 mb-4 flex-wrap">
+          {[
+            { id: 'today', label: '오늘' },
+            { id: 'week', label: '이번주' },
+            { id: 'month', label: '이번달' },
+            { id: 'year', label: '이번해' },
+          ].map(p => (
+            <button
+              key={p.id}
+              onClick={() => setPeriod(p.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-2 ${
+                period === p.id ? 'bg-sky-100 border-sky-400 shadow-sm' : 'bg-white border-transparent hover:bg-slate-100'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
         </div>
 
         <div className="p-4 rounded-xl bg-sky-50 border border-sky-200 inline-block">
@@ -5944,7 +6002,7 @@ function PurchaseTab({ purchases, fetchPurchases }) {
                     <td className="py-2 px-2 text-slate-600">{p.payment_method}</td>
                     <td
                       className="py-2 px-2 font-bold text-sky-700 hover:underline cursor-pointer"
-                      onClick={() => setVendorHistoryModal(p.vendor)}
+                      onClick={() => setSelectedVendor(p.vendor)}
                     >
                       {p.vendor}
                     </td>
@@ -5967,8 +6025,109 @@ function PurchaseTab({ purchases, fetchPurchases }) {
             </tbody>
           </table>
         </div>
-        <p className="text-[11px] text-slate-400 mt-2">💡 업체명을 클릭하면 그 업체의 그동안 매입 이력(품목·단가)을 볼 수 있습니다.</p>
+        <p className="text-[11px] text-slate-400 mt-2">💡 업체명을 클릭하면 아래에 그 업체의 매입 이력(품목·단가)이 표시됩니다.</p>
       </div>
+
+      {/* 업체별 매입 이력 (고정 화면 - 업체명 클릭 시 표시) */}
+      {selectedVendor && (
+        <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+            <h3 className="text-sm md:text-base font-bold text-slate-900">🏭 {selectedVendor} 매입 이력</h3>
+            <button
+              onClick={() => setSelectedVendor(null)}
+              className="text-xs font-bold text-slate-500 hover:text-slate-700 cursor-pointer"
+            >
+              ✕ 닫기
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-wrap mb-3">
+            {[
+              { id: 'week', label: '1주일' },
+              { id: 'month', label: '1달' },
+              { id: 'year', label: '1년' },
+              { id: 'custom', label: '임의기간' },
+            ].map(v => (
+              <button
+                key={v.id}
+                onClick={() => setVendorPeriod(v.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-2 ${
+                  vendorPeriod === v.id ? 'bg-sky-100 border-sky-400 shadow-sm' : 'bg-white border-transparent hover:bg-slate-100'
+                }`}
+              >
+                {v.label}
+              </button>
+            ))}
+            {vendorPeriod === 'custom' && (
+              <div className="flex items-center gap-1.5 ml-1">
+                <input
+                  type="date"
+                  value={vendorCustomStart}
+                  onChange={e => setVendorCustomStart(e.target.value)}
+                  className="p-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-900"
+                />
+                <span className="text-slate-400 text-xs">~</span>
+                <input
+                  type="date"
+                  value={vendorCustomEnd}
+                  onChange={e => setVendorCustomEnd(e.target.value)}
+                  className="p-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-900"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            <div className="p-2.5 rounded-xl bg-sky-50 border border-sky-200 text-center">
+              <div className="text-[10px] font-bold text-sky-700">총 매입건수</div>
+              <div className="text-sm md:text-base font-extrabold text-sky-700 mt-0.5">{vendorHistory.length}건</div>
+            </div>
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-center">
+              <div className="text-[10px] font-bold text-slate-700">총 매입금액</div>
+              <div className="text-sm md:text-base font-extrabold text-slate-700 mt-0.5">
+                {vendorHistory.reduce((s, p) => s + (Number(p.amount) || 0), 0).toLocaleString()}원
+              </div>
+            </div>
+          </div>
+
+          {vendorHistory.length === 0 ? (
+            <p className="text-xs text-slate-400 text-center py-6">선택한 기간에 매입 내역이 없습니다.</p>
+          ) : (
+            <div className="border border-slate-200 rounded-xl overflow-hidden overflow-x-auto">
+              <table className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col style={{ width: '92px' }} />
+                  <col style={{ width: 'auto' }} />
+                  <col style={{ width: '60px' }} />
+                  <col style={{ width: '92px' }} />
+                  <col style={{ width: '92px' }} />
+                </colgroup>
+                <thead>
+                  <tr className="bg-slate-100 text-slate-600 text-[11px] font-bold">
+                    <th className="py-2 px-2 whitespace-nowrap">일자</th>
+                    <th className="py-2 px-2">품목</th>
+                    <th className="py-2 px-2 text-right">수량</th>
+                    <th className="py-2 px-2 text-right whitespace-nowrap">단가</th>
+                    <th className="py-2 px-2 text-right whitespace-nowrap">금액</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vendorHistory.map(p => (
+                    <tr key={p.id} className="border-t border-slate-100 text-xs">
+                      <td className="py-2 px-2 whitespace-nowrap text-slate-600">{p.date}</td>
+                      <td className="py-2 px-2 text-slate-800 font-medium overflow-hidden text-ellipsis whitespace-nowrap">{p.item_name}</td>
+                      <td className="py-2 px-2 text-right text-slate-600">{Number(p.quantity).toLocaleString()}</td>
+                      <td className="py-2 px-2 text-right whitespace-nowrap text-slate-600">{Number(p.unit_price).toLocaleString()}원</td>
+                      <td className="py-2 px-2 text-right whitespace-nowrap font-bold text-slate-900">{Number(p.amount).toLocaleString()}원</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="text-[11px] text-slate-400 mt-2">💡 같은 품목의 단가 변동을 여기서 확인하고 다음 매입 시 참고할 수 있습니다.</p>
+        </div>
+      )}
 
       {/* 매입 추이 */}
       <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -6027,70 +6186,30 @@ function PurchaseTab({ purchases, fetchPurchases }) {
         )}
       </div>
 
-      {/* 업체별 매입 이력 팝업 */}
-      {vendorHistoryModal && (
-        <div
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 md:p-4"
-          style={{ zIndex: 9999 }}
-          onClick={() => setVendorHistoryModal(null)}
-        >
-          <div
-            className="bg-white rounded-2xl p-4 md:p-6 max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-2xl border border-slate-200"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-start mb-3">
-              <h3 className="text-base md:text-lg font-bold text-slate-900">🏭 {vendorHistoryModal}</h3>
-              <button onClick={() => setVendorHistoryModal(null)} className="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer">✕</button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 mb-4">
-              <div className="p-2.5 rounded-xl bg-sky-50 border border-sky-200 text-center">
-                <div className="text-[10px] font-bold text-sky-700">총 매입건수</div>
-                <div className="text-sm md:text-base font-extrabold text-sky-700 mt-0.5">{vendorHistory.length}건</div>
-              </div>
-              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-center">
-                <div className="text-[10px] font-bold text-slate-700">총 매입금액</div>
-                <div className="text-sm md:text-base font-extrabold text-slate-700 mt-0.5">
-                  {vendorHistory.reduce((s, p) => s + (Number(p.amount) || 0), 0).toLocaleString()}원
+      {/* 결제수단별 매입 */}
+      <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <h3 className="text-sm md:text-base font-bold text-slate-900 mb-3">💳 결제수단별 매입</h3>
+        {purchasePaymentBreakdown.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-6">표시할 데이터가 없습니다.</p>
+        ) : (
+          <div className="space-y-2">
+            {purchasePaymentBreakdown.map(([pm, amt]) => (
+              <div key={pm}>
+                <div className="flex justify-between text-[11px] font-bold text-slate-700 mb-0.5">
+                  <span>{pm}</span>
+                  <span>{amt.toLocaleString()}원</span>
+                </div>
+                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-sky-400 rounded-full"
+                    style={{ width: `${(amt / maxPurchasePayment) * 100}%` }}
+                  />
                 </div>
               </div>
-            </div>
-
-            <div className="border border-slate-200 rounded-xl overflow-hidden overflow-x-auto">
-              <table className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
-                <colgroup>
-                  <col style={{ width: '92px' }} />
-                  <col style={{ width: 'auto' }} />
-                  <col style={{ width: '60px' }} />
-                  <col style={{ width: '92px' }} />
-                  <col style={{ width: '92px' }} />
-                </colgroup>
-                <thead>
-                  <tr className="bg-slate-100 text-slate-600 text-[11px] font-bold">
-                    <th className="py-2 px-2 whitespace-nowrap">일자</th>
-                    <th className="py-2 px-2">품목</th>
-                    <th className="py-2 px-2 text-right">수량</th>
-                    <th className="py-2 px-2 text-right whitespace-nowrap">단가</th>
-                    <th className="py-2 px-2 text-right whitespace-nowrap">금액</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {vendorHistory.map(p => (
-                    <tr key={p.id} className="border-t border-slate-100 text-xs">
-                      <td className="py-2 px-2 whitespace-nowrap text-slate-600">{p.date}</td>
-                      <td className="py-2 px-2 text-slate-800 font-medium overflow-hidden text-ellipsis whitespace-nowrap">{p.item_name}</td>
-                      <td className="py-2 px-2 text-right text-slate-600">{Number(p.quantity).toLocaleString()}</td>
-                      <td className="py-2 px-2 text-right whitespace-nowrap text-slate-600">{Number(p.unit_price).toLocaleString()}원</td>
-                      <td className="py-2 px-2 text-right whitespace-nowrap font-bold text-slate-900">{Number(p.amount).toLocaleString()}원</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-2">💡 같은 품목의 단가 변동을 여기서 확인하고 다음 매입 시 참고할 수 있습니다.</p>
+            ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
