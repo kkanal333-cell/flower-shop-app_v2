@@ -4342,8 +4342,8 @@ export default function App() {
         )}
 
         {activeMenu === 'dashboard' && (
-          <div className="max-w-3xl mx-auto space-y-4">
-            <div className="flex gap-2">
+          <div className="space-y-4">
+            <div className={`flex gap-2 ${salesMenuTab === 'sales' ? 'max-w-3xl mx-auto' : ''}`}>
               <button
                 onClick={() => setSalesMenuTab('sales')}
                 className={`px-4 py-2 rounded-lg text-xs md:text-sm font-bold cursor-pointer border-2 transition-colors ${
@@ -4362,7 +4362,8 @@ export default function App() {
               </button>
             </div>
 
-            {salesMenuTab === 'sales' && (<>
+            {salesMenuTab === 'sales' && (
+            <div className="max-w-3xl mx-auto space-y-4">
             <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
               <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
                 <h2 className="text-base md:text-xl font-bold text-slate-900 flex items-center gap-2">
@@ -4744,10 +4745,13 @@ export default function App() {
                 )}
               </div>
             </div>
-            </>)}
+            </div>
+            )}
 
             {salesMenuTab === 'purchase' && (
-              <PurchaseTab purchases={purchases} fetchPurchases={fetchPurchases} />
+              <div className="max-w-6xl mx-auto">
+                <PurchaseTab purchases={purchases} fetchPurchases={fetchPurchases} />
+              </div>
             )}
           </div>
         )}
