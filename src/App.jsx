@@ -288,6 +288,7 @@ export default function App() {
   const [highlightedOrderId, setHighlightedOrderId] = useState(null); // 전체 주문 목록: 행을 클릭하면 음영 표시만 됨 (체크박스 선택과는 무관)
   const [selectedCustomerIds, setSelectedCustomerIds] = useState([]);
   const [customerHistoryModal, setCustomerHistoryModal] = useState(null); // 고객 클릭 시 그동안의 주문 내역 팝업 (고객 객체 또는 null)
+  const [editingCustomer, setEditingCustomer] = useState(null); // 고객 정보 수정 팝업 - { id, name, phone, notes } 또는 null
 
   // 휴지통 내부 선택 상태 관리
   const [selectedTrashOrderIds, setSelectedTrashOrderIds] = useState([]);
@@ -2664,6 +2665,29 @@ export default function App() {
     return '#0f172a'; // slate-900 (검정에 가까움)
   };
 
+  // 고객 정보 수정
+  const startEditCustomer = (c) => {
+    setEditingCustomer({ id: c.id, name: c.name || '', phone: c.phone || '', notes: c.notes || '' });
+  };
+
+  const handleUpdateCustomer = async () => {
+    if (!editingCustomer.name.trim()) return alert('고객 성명을 입력해주세요.');
+
+    const { error } = await supabase.from('customers').update({
+      name: editingCustomer.name.trim(),
+      phone: editingCustomer.phone,
+      notes: editingCustomer.notes
+    }).eq('id', editingCustomer.id);
+
+    if (error) {
+      alert('고객 정보 수정 실패: ' + error.message);
+      return;
+    }
+
+    setEditingCustomer(null);
+    fetchData();
+  };
+
   const TimePickerCustom = ({ value, onChange, bgClass = "bg-white" }) => {
     const { ampm, hour, minute } = parseTimeToParts(value);
 
@@ -4799,7 +4823,9 @@ export default function App() {
                       </span>
                     </th>
                     <th className="py-2.5 px-3">연락처</th>
+                    <th className="py-2.5 px-3">고객정보</th>
                     <th className="py-2.5 px-3">최근 픽업일</th>
+                    <th className="py-2.5 px-3 text-center">관리</th>
                     <th className="py-2.5 px-3 text-center">
                       <input
                         type="checkbox"
@@ -4813,7 +4839,7 @@ export default function App() {
                 <tbody>
                   {filteredCustomers.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-6 text-center text-slate-500 text-xs md:text-sm">
+                      <td colSpan={7} className="py-6 text-center text-slate-500 text-xs md:text-sm">
                         검색 결과가 없습니다.
                       </td>
                     </tr>
@@ -4831,7 +4857,17 @@ export default function App() {
                             {c.name}
                           </td>
                           <td className="py-2.5 px-3 text-slate-700 font-medium">{c.phone || '-'}</td>
+                          <td className="py-2.5 px-3 text-slate-600 font-medium max-w-[160px] truncate" title={c.notes || ''}>{c.notes || '-'}</td>
                           <td className="py-2.5 px-3 text-slate-600 font-medium">{getCustomerPickupDate(c.id, c.name)}</td>
+                          <td className="py-2.5 px-3 text-center">
+                            <button
+                              onClick={() => startEditCustomer(c)}
+                              className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                              title="고객 정보 수정"
+                            >
+                              ✏️
+                            </button>
+                          </td>
                           <td className="py-2.5 px-3 text-center">
                             <input
                               type="checkbox"
@@ -4846,6 +4882,68 @@ export default function App() {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {editingCustomer && (
+          <div
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 md:p-4"
+            style={{ zIndex: 9999 }}
+            onClick={() => setEditingCustomer(null)}
+          >
+            <div
+              className="bg-white rounded-2xl p-4 md:p-6 max-w-md w-full shadow-2xl border border-slate-200 space-y-3"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-start">
+                <h3 className="text-base md:text-lg font-bold text-slate-900">✏️ 고객 정보 수정</h3>
+                <button onClick={() => setEditingCustomer(null)} className="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer">✕</button>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700">성명 *</label>
+                <input
+                  type="text"
+                  value={editingCustomer.name}
+                  onChange={e => setEditingCustomer({ ...editingCustomer, name: e.target.value })}
+                  className="w-full p-2.5 border border-slate-300 rounded-xl mt-1 text-sm bg-white text-slate-900"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-700">휴대폰 번호</label>
+                <input
+                  type="text"
+                  value={editingCustomer.phone}
+                  onChange={e => setEditingCustomer({ ...editingCustomer, phone: formatPhone(e.target.value) })}
+                  className="w-full p-2.5 border border-slate-300 rounded-xl mt-1 text-sm bg-white text-slate-900"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-700">고객정보 (아파트 동·호수 등)</label>
+                <textarea
+                  value={editingCustomer.notes}
+                  onChange={e => setEditingCustomer({ ...editingCustomer, notes: e.target.value })}
+                  rows={3}
+                  placeholder="예) 화사한아파트 101동 502호"
+                  className="w-full p-2.5 border border-slate-300 rounded-xl mt-1 text-sm bg-white text-slate-900 resize-none"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => setEditingCustomer(null)}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-300 cursor-pointer"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleUpdateCustomer}
+                  className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
+                >
+                  저장
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -4995,7 +5093,10 @@ export default function App() {
                     return (
                       <div key={log.id} className="text-xs">
                         {/* 가로모드·PC(640px 이상): 한 줄 표시 */}
-                        <div className="hidden sm:flex items-center gap-2 px-4 py-2">
+                        <div
+                          className="hidden sm:flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-slate-50"
+                          onClick={() => relatedOrder ? handlePrintSingleOrder(relatedOrder) : alert('연결된 주문 정보를 찾을 수 없습니다. (삭제되었거나 오래된 기록일 수 있습니다)')}
+                        >
                           <span
                             className={`px-1.5 py-0.5 rounded font-bold whitespace-nowrap shrink-0 ${
                               log.success ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-red-100 text-red-800 border border-red-300 cursor-help'
@@ -5027,7 +5128,10 @@ export default function App() {
                         </div>
 
                         {/* 모바일 세로모드(640px 미만): 여러 줄로 나눠서 표시 */}
-                        <div className="sm:hidden px-4 py-2.5">
+                        <div
+                          className="sm:hidden px-4 py-2.5 cursor-pointer hover:bg-slate-50"
+                          onClick={() => relatedOrder ? handlePrintSingleOrder(relatedOrder) : alert('연결된 주문 정보를 찾을 수 없습니다. (삭제되었거나 오래된 기록일 수 있습니다)')}
+                        >
                           <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                             <span
                               className={`px-1.5 py-0.5 rounded font-bold whitespace-nowrap ${
