@@ -309,6 +309,13 @@ export default function App() {
   const [onsiteMatchedCustomerList, setOnsiteMatchedCustomerList] = useState([]); // 현장판매 탭 성명 매칭 후보
 
   const [showBackupAlertModal, setShowBackupAlertModal] = useState(false);
+  // 백업/복원 메뉴에 모아둔 각 내보내기 기능의 기간 선택 (비워두면 전체 기간)
+  const [backupExportStart, setBackupExportStart] = useState('');
+  const [backupExportEnd, setBackupExportEnd] = useState('');
+  const [salesExportStart, setSalesExportStart] = useState('');
+  const [salesExportEnd, setSalesExportEnd] = useState('');
+  const [purchaseExportStart, setPurchaseExportStart] = useState('');
+  const [purchaseExportEnd, setPurchaseExportEnd] = useState('');
   const [orderConfirmModal, setOrderConfirmModal] = useState(false); // 신규예약주문: "저장하시겠습니까?" 확인 팝업 (출력/저장/취소). true일 때만 실제 저장이 진행됩니다.
   const [isMemoAutofilled, setIsMemoAutofilled] = useState(false);
   const [receiptTimeAutoUpdate, setReceiptTimeAutoUpdate] = useState(true); // true면 접수일시가 현재 시각을 계속 따라감 (접수일시를 직접 수정하면 false로 바뀌어 멈춤)
@@ -1009,6 +1016,10 @@ export default function App() {
       const cNameClean = c.name.toLowerCase();
       const baseNameClean = cNameClean.replace(/[0-9]/g, '');
       return cNameClean.includes(cleanInput) || baseNameClean.includes(cleanInput);
+    }).sort((a, b) => {
+      const countDiff = getCustomerOrderCount(b.id, b.name) - getCustomerOrderCount(a.id, a.name);
+      if (countDiff !== 0) return countDiff;
+      return (a.name || '').localeCompare(b.name || '', 'ko');
     });
 
     setMatchedCustomerList(matches);
@@ -1037,6 +1048,10 @@ export default function App() {
       const cNameClean = c.name.toLowerCase();
       const baseNameClean = cNameClean.replace(/[0-9]/g, '');
       return cNameClean.includes(cleanInput) || baseNameClean.includes(cleanInput);
+    }).sort((a, b) => {
+      const countDiff = getCustomerOrderCount(b.id, b.name) - getCustomerOrderCount(a.id, a.name);
+      if (countDiff !== 0) return countDiff;
+      return (a.name || '').localeCompare(b.name || '', 'ko');
     });
 
     setOnsiteMatchedCustomerList(matches);
@@ -1535,12 +1550,15 @@ export default function App() {
   };
 
   // 날짜별 매출 요약을 CSV로 내보냅니다. (기간 필터와 무관하게 전체 데이터 기준)
-  const handleExportSalesSummaryCSV = () => {
+  // startDate/endDate(YYYY-MM-DD)를 지정하면 그 기간만, 생략하면 전체 기간을 내보냅니다.
+  const handleExportSalesSummaryCSV = (startDate, endDate) => {
     const validOrders = (orders || []).filter(o => !o.deleted_at);
     const byDate = {};
     validOrders.forEach(o => {
       const d = (o.created_at || '').replace(' ', 'T').split('T')[0];
       if (!d) return;
+      if (startDate && d < startDate) return;
+      if (endDate && d > endDate) return;
       if (!byDate[d]) byDate[d] = { reservation: 0, onsite: 0, count: 0, byPayment: {} };
       const amt = Number(o.amount) || 0;
       if (o.order_type === '현장판매') byDate[d].onsite += amt;
@@ -1550,6 +1568,10 @@ export default function App() {
       byDate[d].byPayment[pm] = (byDate[d].byPayment[pm] || 0) + 1;
     });
     const dates = Object.keys(byDate).sort();
+    if (dates.length === 0) {
+      alert('선택한 기간에 매출 데이터가 없습니다.');
+      return;
+    }
     const headers = ['날짜', '예약매출', '현장매출', '합계매출', '건수', ...PAYMENT_OPTIONS];
     const rows = dates.map(d => [
       d,
@@ -1561,6 +1583,34 @@ export default function App() {
     ]);
     const today = getKoreaNowFormatted().date;
     downloadCSV(headers, rows, `export_sales_summary_${today}.csv`);
+  };
+
+  // 매입 내역을 상세(건별)로 내보냅니다. startDate/endDate로 기간을 제한할 수 있습니다.
+  const handleExportPurchaseDetailCSV = (startDate, endDate) => {
+    const filtered = (purchases || []).filter(p => {
+      if (!p.date) return false;
+      if (startDate && p.date < startDate) return false;
+      if (endDate && p.date > endDate) return false;
+      return true;
+    }).sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.created_at || '').localeCompare(b.created_at || ''));
+
+    if (filtered.length === 0) {
+      alert('선택한 기간에 매입 데이터가 없습니다.');
+      return;
+    }
+
+    const headers = ['일자', '거래방식', '업체', '품목', '수량', '단가', '금액'];
+    const rows = filtered.map(p => [
+      p.date,
+      p.payment_method || '',
+      p.vendor || '',
+      p.item_name || '',
+      Number(p.quantity || 0).toLocaleString(),
+      Number(p.unit_price || 0).toLocaleString(),
+      Number(p.amount || 0).toLocaleString()
+    ]);
+    const today = getKoreaNowFormatted().date;
+    downloadCSV(headers, rows, `export_purchase_detail_${today}.csv`);
   };
 
   const startEditOrder = (order) => {
@@ -2278,7 +2328,8 @@ export default function App() {
     fetchData();
   };
 
-  const handleExportCSV = () => {
+  // startDate/endDate(YYYY-MM-DD)가 있으면 주문(orders)만 그 기간으로 제한합니다. 고객(customers)은 항상 전체를 내보냅니다.
+  const handleExportCSV = (startDate, endDate) => {
     try {
       const today = getKoreaNowFormatted().date;
 
@@ -2287,7 +2338,15 @@ export default function App() {
         photoColHeaders.push(`사진${i}파일명`, `사진${i}저장경로`, `사진${i}URL`, `사진${i}크기(KB)`);
       }
       const orderHeaders = ['주문ID', '고객명', '연락처', '상품명', '금액', '픽업일시', '접수일시', '결제수단', '메모', ...photoColHeaders];
-      const orderRows = orders.map(o => {
+      const ordersInRange = orders.filter(o => {
+        if (!startDate && !endDate) return true;
+        const d = (o.created_at || '').replace(' ', 'T').split('T')[0];
+        if (!d) return false;
+        if (startDate && d < startDate) return false;
+        if (endDate && d > endDate) return false;
+        return true;
+      });
+      const orderRows = ordersInRange.map(o => {
         const photos = photoMap[String(o.id)] || [];
         const photoCols = [];
         for (let i = 0; i < MAX_ORDER_PHOTOS; i++) {
@@ -2312,6 +2371,10 @@ export default function App() {
           ...photoCols
         ];
       });
+      if (ordersInRange.length === 0) {
+        alert('선택한 기간에 주문 데이터가 없습니다.');
+        return;
+      }
       downloadCSV(orderHeaders, orderRows, `export_orders_${today}.csv`);
 
       setTimeout(() => {
@@ -2773,7 +2836,7 @@ export default function App() {
             </p>
             <div className="flex gap-2 pt-2">
               <button
-                onClick={handleExportCSV}
+                onClick={() => handleExportCSV(null, null)}
                 className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
               >
                 📥 지금 바로 백업 다운로드
@@ -4347,7 +4410,7 @@ export default function App() {
 
         {activeMenu === 'dashboard' && (
           <div className="space-y-4">
-            <div className="flex gap-2 max-w-3xl mx-auto">
+            <div className="flex gap-2 max-w-6xl mx-auto">
               <button
                 onClick={() => setSalesMenuTab('sales')}
                 className={`px-4 py-2 rounded-lg text-xs md:text-sm font-bold cursor-pointer border-2 transition-colors ${
@@ -4367,91 +4430,13 @@ export default function App() {
             </div>
 
             {salesMenuTab === 'sales' && (
-            <div className="max-w-3xl mx-auto space-y-4">
+            <div className="max-w-6xl mx-auto space-y-4">
             <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
               <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
                 <h2 className="text-base md:text-xl font-bold text-slate-900 flex items-center gap-2">
                   <span>📊</span> 매출 대시보드
                 </h2>
-                <div className="flex items-center gap-2">
-                  <label
-                    className={`text-xs font-bold border px-3 py-1.5 rounded-lg inline-flex items-center gap-1 ${
-                      payhereImportLoading
-                        ? 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
-                        : 'bg-white hover:bg-slate-100 border-slate-800 text-slate-900 cursor-pointer'
-                    }`}
-                  >
-                    페이히어 가져오기
-                    <input
-                      type="file"
-                      accept=".xlsx,.xls"
-                      onChange={handlePayhereFileSelect}
-                      disabled={payhereImportLoading}
-                      className="hidden"
-                    />
-                  </label>
-                  <button
-                    onClick={handleExportSalesSummaryCSV}
-                    className="text-xs font-bold bg-white hover:bg-slate-100 border border-slate-800 text-slate-900 px-3 py-1.5 rounded-lg cursor-pointer"
-                  >
-                    매출요약 내보내기
-                  </button>
-                </div>
               </div>
-
-              {payhereImportLoading && <p className="text-xs text-slate-500 mb-3">파일을 읽는 중...</p>}
-
-              {payhereImportRows.length > 0 && (
-                <div className="border border-slate-200 rounded-xl bg-white overflow-hidden mb-4">
-                  <div className="flex items-center justify-between px-3 py-2 bg-slate-100 border-b border-slate-200 text-xs font-bold text-slate-700">
-                    <span>총 {payhereImportRows.length}건 · 선택됨 {payhereImportRows.filter(r => r.selected).length}건</span>
-                    <span className="text-rose-600">
-                      선택 합계 {payhereImportRows.filter(r => r.selected).reduce((s, r) => s + r.amount, 0).toLocaleString()}원
-                    </span>
-                  </div>
-                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
-                    {payhereImportRows.map(r => (
-                      <label
-                        key={r.key}
-                        className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer ${r.selected ? 'bg-white' : 'bg-slate-50'}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={r.selected}
-                          onChange={() => handleTogglePayhereRow(r.key)}
-                          className="w-4 h-4 accent-rose-600 cursor-pointer shrink-0"
-                        />
-                        <span className="text-slate-400 whitespace-nowrap">{r.date.slice(5)} {r.time.slice(0, 5)}</span>
-                        <span className="font-bold text-slate-800 truncate flex-1">{r.product_name}</span>
-                        <span className={`px-1.5 py-0.5 rounded border whitespace-nowrap ${
-                          r.isOnline ? 'bg-sky-50 border-sky-300 text-sky-700' : 'bg-slate-100 border-slate-300 text-slate-700'
-                        }`}>
-                          {r.payment_method}
-                        </span>
-                        {r.hasReservationKeyword && (
-                          <span className="px-1.5 py-0.5 rounded bg-indigo-100 border border-indigo-300 text-indigo-800 whitespace-nowrap font-bold">
-                            예약표시
-                          </span>
-                        )}
-                        {r.isDuplicate && !r.hasReservationKeyword && (
-                          <span className="px-1.5 py-0.5 rounded bg-amber-100 border border-amber-300 text-amber-800 whitespace-nowrap">
-                            중복의심
-                          </span>
-                        )}
-                        <span className="font-bold text-black whitespace-nowrap">{r.amount.toLocaleString()}원</span>
-                      </label>
-                    ))}
-                  </div>
-                  <div className="p-2 border-t border-slate-200">
-                    <button
-                      onClick={handleConfirmPayhereImport}
-                      className="w-full py-2 bg-rose-200 hover:bg-rose-300 text-slate-900 font-extrabold rounded-xl text-xs shadow-xs transition-colors cursor-pointer border border-rose-400"
-                    >
-                      ✅ 선택 항목 현장판매로 가져오기
-                    </button>
-                  </div>
-                </div>
-              )}
 
               <div className="flex gap-1.5 mb-4">
                 {[
@@ -5105,10 +5090,10 @@ export default function App() {
           <div className="bg-white p-4 md:p-8 rounded-2xl border border-slate-200 shadow-sm max-w-xl mx-auto space-y-6">
             <div>
               <h2 className="text-base md:text-xl font-bold text-slate-900 flex items-center gap-2 mb-1">
-                <span>💾</span> CSV 백업 및 복원
+                <span>💾</span> 백업 / 복원 / 내보내기
               </h2>
               <p className="text-xs text-slate-500">
-                주문정보와 고객정보를 2개의 CSV 파일로 내보내거나 가져올 수 있습니다.
+                모든 데이터 내보내기·가져오기 기능이 이 화면에 모여 있습니다. 기간을 지정하지 않으면 전체 기간이 내보내집니다.
               </p>
             </div>
 
@@ -5131,14 +5116,29 @@ export default function App() {
             </div>
 
             <div className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-3">
-              <h3 className="font-bold text-xs md:text-sm text-slate-800">1. CSV 파일로 내보내기 (Export)</h3>
+              <h3 className="font-bold text-xs md:text-sm text-slate-800">1. 전체 백업 CSV 내보내기 (주문+고객)</h3>
               <p className="text-xs text-slate-500">
-                클릭 시 오늘 날짜가 포함된 2개의 파일이 자동으로 다운로드됩니다.<br />
+                아래 기간을 지정하면 <strong>주문</strong> 데이터만 그 기간으로 제한되어 내보내집니다 (고객 정보는 항상 전체가 포함됩니다).<br />
                 - <code className="text-rose-600 font-bold">export_orders_{getKoreaNowFormatted().date}.csv</code> (작품 사진 정보 포함)<br />
                 - <code className="text-rose-600 font-bold">export_customers_{getKoreaNowFormatted().date}.csv</code>
               </p>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="date"
+                  value={backupExportStart}
+                  onChange={e => setBackupExportStart(e.target.value)}
+                  className="flex-1 min-w-0 p-2 border border-slate-300 rounded-lg text-xs bg-white text-slate-900"
+                />
+                <span className="text-slate-400 text-xs">~</span>
+                <input
+                  type="date"
+                  value={backupExportEnd}
+                  onChange={e => setBackupExportEnd(e.target.value)}
+                  className="flex-1 min-w-0 p-2 border border-slate-300 rounded-lg text-xs bg-white text-slate-900"
+                />
+              </div>
               <button
-                onClick={handleExportCSV}
+                onClick={() => handleExportCSV(backupExportStart || null, backupExportEnd || null)}
                 className="w-full py-2.5 px-4 bg-rose-200 hover:bg-rose-300 text-slate-900 font-extrabold rounded-xl text-xs md:text-sm shadow-xs transition-colors cursor-pointer border border-rose-400"
               >
                 📥 CSV 백업 파일 2개 다운로드
@@ -5158,6 +5158,133 @@ export default function App() {
                 onChange={handleImportCSV}
                 className="w-full text-xs text-slate-700 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border file:border-slate-300 file:text-xs file:font-bold file:bg-white file:text-slate-800 hover:file:bg-slate-100 cursor-pointer"
               />
+            </div>
+
+            <div className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-3">
+              <h3 className="font-bold text-xs md:text-sm text-slate-800">3. 매출 내보내기 (날짜별 요약)</h3>
+              <p className="text-xs text-slate-500">기간을 지정하지 않으면 전체 기간의 날짜별 매출 요약이 내보내집니다.</p>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="date"
+                  value={salesExportStart}
+                  onChange={e => setSalesExportStart(e.target.value)}
+                  className="flex-1 min-w-0 p-2 border border-slate-300 rounded-lg text-xs bg-white text-slate-900"
+                />
+                <span className="text-slate-400 text-xs">~</span>
+                <input
+                  type="date"
+                  value={salesExportEnd}
+                  onChange={e => setSalesExportEnd(e.target.value)}
+                  className="flex-1 min-w-0 p-2 border border-slate-300 rounded-lg text-xs bg-white text-slate-900"
+                />
+              </div>
+              <button
+                onClick={() => handleExportSalesSummaryCSV(salesExportStart || null, salesExportEnd || null)}
+                className="w-full py-2.5 px-4 bg-white hover:bg-slate-100 border border-slate-800 text-slate-900 font-bold rounded-xl text-xs md:text-sm cursor-pointer"
+              >
+                📥 매출요약 내보내기
+              </button>
+            </div>
+
+            <div className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-3">
+              <h3 className="font-bold text-xs md:text-sm text-slate-800">4. 매입내역 내보내기 (건별 상세)</h3>
+              <p className="text-xs text-slate-500">기간을 지정하지 않으면 전체 매입 건이 상세(일자·거래방식·업체·품목·수량·단가·금액)로 내보내집니다.</p>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="date"
+                  value={purchaseExportStart}
+                  onChange={e => setPurchaseExportStart(e.target.value)}
+                  className="flex-1 min-w-0 p-2 border border-slate-300 rounded-lg text-xs bg-white text-slate-900"
+                />
+                <span className="text-slate-400 text-xs">~</span>
+                <input
+                  type="date"
+                  value={purchaseExportEnd}
+                  onChange={e => setPurchaseExportEnd(e.target.value)}
+                  className="flex-1 min-w-0 p-2 border border-slate-300 rounded-lg text-xs bg-white text-slate-900"
+                />
+              </div>
+              <button
+                onClick={() => handleExportPurchaseDetailCSV(purchaseExportStart || null, purchaseExportEnd || null)}
+                className="w-full py-2.5 px-4 bg-white hover:bg-slate-100 border border-slate-800 text-slate-900 font-bold rounded-xl text-xs md:text-sm cursor-pointer"
+              >
+                📥 매입내역 내보내기
+              </button>
+            </div>
+
+            <div className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-3">
+              <h3 className="font-bold text-xs md:text-sm text-slate-800">5. 페이히어 매출 가져오기</h3>
+              <p className="text-xs text-slate-500">페이히어 앱에서 내보낸 엑셀 파일을 선택하면 현장판매 매출로 가져올 수 있습니다.</p>
+              <label
+                className={`text-xs font-bold border px-3 py-2 rounded-lg inline-flex items-center gap-1 ${
+                  payhereImportLoading
+                    ? 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
+                    : 'bg-white hover:bg-slate-100 border-slate-800 text-slate-900 cursor-pointer'
+                }`}
+              >
+                파일 선택
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handlePayhereFileSelect}
+                  disabled={payhereImportLoading}
+                  className="hidden"
+                />
+              </label>
+
+              {payhereImportLoading && <p className="text-xs text-slate-500">파일을 읽는 중...</p>}
+
+              {payhereImportRows.length > 0 && (
+                <div className="border border-slate-200 rounded-xl bg-white overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2 bg-slate-100 border-b border-slate-200 text-xs font-bold text-slate-700">
+                    <span>총 {payhereImportRows.length}건 · 선택됨 {payhereImportRows.filter(r => r.selected).length}건</span>
+                    <span className="text-rose-600">
+                      선택 합계 {payhereImportRows.filter(r => r.selected).reduce((s, r) => s + r.amount, 0).toLocaleString()}원
+                    </span>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                    {payhereImportRows.map(r => (
+                      <label
+                        key={r.key}
+                        className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer ${r.selected ? 'bg-white' : 'bg-slate-50'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={r.selected}
+                          onChange={() => handleTogglePayhereRow(r.key)}
+                          className="w-4 h-4 accent-rose-600 cursor-pointer shrink-0"
+                        />
+                        <span className="text-slate-400 whitespace-nowrap">{r.date.slice(5)} {r.time.slice(0, 5)}</span>
+                        <span className="font-bold text-slate-800 truncate flex-1">{r.product_name}</span>
+                        <span className={`px-1.5 py-0.5 rounded border whitespace-nowrap ${
+                          r.isOnline ? 'bg-sky-50 border-sky-300 text-sky-700' : 'bg-slate-100 border-slate-300 text-slate-700'
+                        }`}>
+                          {r.payment_method}
+                        </span>
+                        {r.hasReservationKeyword && (
+                          <span className="px-1.5 py-0.5 rounded bg-indigo-100 border border-indigo-300 text-indigo-800 whitespace-nowrap font-bold">
+                            예약표시
+                          </span>
+                        )}
+                        {r.isDuplicate && !r.hasReservationKeyword && (
+                          <span className="px-1.5 py-0.5 rounded bg-amber-100 border border-amber-300 text-amber-800 whitespace-nowrap">
+                            중복의심
+                          </span>
+                        )}
+                        <span className="font-bold text-black whitespace-nowrap">{r.amount.toLocaleString()}원</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="p-2 border-t border-slate-200">
+                    <button
+                      onClick={handleConfirmPayhereImport}
+                      className="w-full py-2 bg-rose-200 hover:bg-rose-300 text-slate-900 font-extrabold rounded-xl text-xs shadow-xs transition-colors cursor-pointer border border-rose-400"
+                    >
+                      ✅ 선택 항목 현장판매로 가져오기
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -5605,11 +5732,13 @@ function PurchaseTab({ purchases, fetchPurchases }) {
   const [period, setPeriod] = useState('today'); // today | week | month | year
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [trendGranularity, setTrendGranularity] = useState('daily'); // daily | weekly | monthly | yearly
-  const [selectedVendor, setSelectedVendor] = useState(null); // 업체명 문자열 | null (고정 화면에 표시)
-  const [vendorPeriod, setVendorPeriod] = useState('month'); // week | month | year | custom
-  const [vendorCustomStart, setVendorCustomStart] = useState(todayStr);
-  const [vendorCustomEnd, setVendorCustomEnd] = useState(todayStr);
   const [saving, setSaving] = useState(false);
+
+  // 매입이력 (업체/거래방식/품목 클릭 시 고정 화면에 표시)
+  const [historyFilter, setHistoryFilter] = useState(null); // { type: 'vendor'|'payment'|'item', value } | null
+  const [historyPeriod, setHistoryPeriod] = useState('month'); // week | month | year | custom
+  const [historyCustomStart, setHistoryCustomStart] = useState(todayStr);
+  const [historyCustomEnd, setHistoryCustomEnd] = useState(todayStr);
 
   const [form, setForm] = useState({
     date: todayStr,
@@ -5622,7 +5751,8 @@ function PurchaseTab({ purchases, fetchPurchases }) {
 
   const computedAmount = (Number(form.quantity) || 0) * (Number(form.unit_price) || 0);
 
-  const vendorList = [...new Set((purchases || []).map(p => p.vendor).filter(Boolean))];
+  const vendorList = [...new Set((purchases || []).map(p => p.vendor).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'));
+  const itemNameList = [...new Set((purchases || []).map(p => p.item_name).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'));
 
   const handleAddPurchase = async () => {
     if (!form.vendor.trim()) return alert('업체명을 입력해주세요.');
@@ -5696,29 +5826,6 @@ function PurchaseTab({ purchases, fetchPurchases }) {
   });
   const purchasePaymentBreakdown = Object.entries(byPurchasePayment).sort((a, b) => b[1] - a[1]);
   const maxPurchasePayment = purchasePaymentBreakdown.reduce((m, [, v]) => Math.max(m, v), 0) || 1;
-
-  // 매입요약 CSV 내보내기 (날짜별 합계 + 거래방식별 건수, 매출요약 내보내기와 동일한 형식)
-  const handleExportPurchaseSummaryCSV = () => {
-    const byDate = {};
-    (purchases || []).forEach(p => {
-      const d = p.date;
-      if (!d) return;
-      if (!byDate[d]) byDate[d] = { amount: 0, count: 0, byPayment: {} };
-      byDate[d].amount += Number(p.amount) || 0;
-      byDate[d].count += 1;
-      const pm = p.payment_method || '미지정';
-      byDate[d].byPayment[pm] = (byDate[d].byPayment[pm] || 0) + 1;
-    });
-    const dates = Object.keys(byDate).sort();
-    const headers = ['날짜', '매입금액', '건수', ...PURCHASE_PAYMENT_OPTIONS];
-    const rows = dates.map(d => [
-      d,
-      byDate[d].amount.toLocaleString(),
-      byDate[d].count,
-      ...PURCHASE_PAYMENT_OPTIONS.map(pm => byDate[d].byPayment[pm] || 0)
-    ]);
-    downloadCSV(headers, rows, `export_purchase_summary_${todayStr}.csv`);
-  };
 
   // 매입 달력용: 날짜별 합계
   const purchaseByDateAll = {};
@@ -5794,39 +5901,55 @@ function PurchaseTab({ purchases, fetchPurchases }) {
   }
   const trendMaxAmt = trendPoints.reduce((m, p) => Math.max(m, p.amt), 0) || 1;
 
-  // 업체별 이력 (업체명 클릭 시, 고정 화면에 기간 필터와 함께 표시)
-  const vendorRange = (() => {
-    if (vendorPeriod === 'custom') return { start: vendorCustomStart, end: vendorCustomEnd };
+  // 매입이력 기간 범위 계산
+  const historyRange = (() => {
+    if (historyPeriod === 'custom') return { start: historyCustomStart, end: historyCustomEnd };
     const end = new Date(nowDate);
     const start = new Date(nowDate);
-    if (vendorPeriod === 'week') start.setDate(nowDate.getDate() - 7);
-    else if (vendorPeriod === 'month') start.setMonth(nowDate.getMonth() - 1);
-    else if (vendorPeriod === 'year') start.setFullYear(nowDate.getFullYear() - 1);
+    if (historyPeriod === 'week') start.setDate(nowDate.getDate() - 7);
+    else if (historyPeriod === 'month') start.setMonth(nowDate.getMonth() - 1);
+    else if (historyPeriod === 'year') start.setFullYear(nowDate.getFullYear() - 1);
     return { start: fmtDate(start), end: fmtDate(end) };
   })();
 
-  const vendorHistory = selectedVendor
+  const historyList = historyFilter
     ? (purchases || [])
-        .filter(p => p.vendor === selectedVendor && p.date >= vendorRange.start && p.date <= vendorRange.end)
+        .filter(p => {
+          const field = historyFilter.type === 'vendor' ? p.vendor : historyFilter.type === 'item' ? p.item_name : p.payment_method;
+          return field === historyFilter.value && p.date >= historyRange.start && p.date <= historyRange.end;
+        })
         .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.created_at || '').localeCompare(a.created_at || ''))
     : [];
+
+  // 매입이력 표: 유형에 따라 표시할 컬럼이 달라집니다 (자기 자신과 같은 값인 컬럼은 생략)
+  const HISTORY_COL_LABEL = { date: '일자', vendor: '업체', item: '품목', qty: '수량', price: '단가', amount: '금액' };
+  const HISTORY_COL_WIDTH = { date: 62, vendor: 80, item: 90, qty: 36, price: 64, amount: 64 };
+  const historyColumns = !historyFilter ? [] :
+    historyFilter.type === 'vendor' ? ['date', 'item', 'qty', 'price', 'amount'] :
+    historyFilter.type === 'item' ? ['date', 'vendor', 'qty', 'price', 'amount'] :
+    ['date', 'vendor', 'item', 'qty', 'price', 'amount'];
+  const historyTableWidth = historyColumns.reduce((s, c) => s + HISTORY_COL_WIDTH[c], 0);
+  const historyCellValue = (p, col) => {
+    if (col === 'date') return p.date;
+    if (col === 'vendor') return p.vendor;
+    if (col === 'item') return p.item_name;
+    if (col === 'qty') return Number(p.quantity).toLocaleString();
+    if (col === 'price') return Number(p.unit_price).toLocaleString() + '원';
+    if (col === 'amount') return Number(p.amount).toLocaleString() + '원';
+    return '';
+  };
+  const historyTitleIcon = historyFilter?.type === 'vendor' ? '🏭' : historyFilter?.type === 'item' ? '📦' : '💳';
 
   const inputCls = "p-2 border border-slate-300 rounded-lg text-xs bg-white text-slate-900";
 
   return (
     <div className="space-y-4">
-      {/* 매입 관리 타이틀 + 요약 내보내기 */}
+      {/* 매입 관리 타이틀 + 기간 필터 + 총매입 */}
       <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
           <h2 className="text-base md:text-xl font-bold text-slate-900 flex items-center gap-2">
             <span>🧾</span> 매입 관리
           </h2>
-          <button
-            onClick={handleExportPurchaseSummaryCSV}
-            className="text-xs font-bold bg-white hover:bg-slate-100 border border-slate-800 text-slate-900 px-3 py-1.5 rounded-lg cursor-pointer"
-          >
-            매입요약 내보내기
-          </button>
         </div>
 
         <div className="flex gap-1.5 mb-4 flex-wrap">
@@ -5947,12 +6070,16 @@ function PurchaseTab({ purchases, fetchPurchases }) {
                 <td className="py-1.5 px-1">
                   <input
                     type="text"
+                    list="purchase-item-list"
                     value={form.item_name}
                     onChange={e => setForm({ ...form, item_name: e.target.value })}
                     placeholder="품목명"
                     className={inputCls}
                     style={{ width: '120px' }}
                   />
+                  <datalist id="purchase-item-list">
+                    {itemNameList.map(v => <option key={v} value={v} />)}
+                  </datalist>
                 </td>
                 <td className="py-1.5 px-1">
                   <input
@@ -5999,14 +6126,24 @@ function PurchaseTab({ purchases, fetchPurchases }) {
                 selectedDateList.map(p => (
                   <tr key={p.id} className="border-b border-slate-100 text-xs">
                     <td className="py-2 px-2 text-slate-600">{p.date}</td>
-                    <td className="py-2 px-2 text-slate-600">{p.payment_method}</td>
+                    <td
+                      className="py-2 px-2 font-bold text-emerald-700 hover:underline cursor-pointer"
+                      onClick={() => setHistoryFilter({ type: 'payment', value: p.payment_method })}
+                    >
+                      {p.payment_method}
+                    </td>
                     <td
                       className="py-2 px-2 font-bold text-sky-700 hover:underline cursor-pointer"
-                      onClick={() => setSelectedVendor(p.vendor)}
+                      onClick={() => setHistoryFilter({ type: 'vendor', value: p.vendor })}
                     >
                       {p.vendor}
                     </td>
-                    <td className="py-2 px-2 text-slate-800">{p.item_name}</td>
+                    <td
+                      className="py-2 px-2 font-bold text-purple-700 hover:underline cursor-pointer"
+                      onClick={() => setHistoryFilter({ type: 'item', value: p.item_name })}
+                    >
+                      {p.item_name}
+                    </td>
                     <td className="py-2 px-2 text-right text-slate-600">{Number(p.quantity).toLocaleString()}</td>
                     <td className="py-2 px-2 text-right text-slate-600">{Number(p.unit_price).toLocaleString()}원</td>
                     <td className="py-2 px-2 text-right font-bold text-slate-900">{Number(p.amount).toLocaleString()}원</td>
@@ -6025,16 +6162,16 @@ function PurchaseTab({ purchases, fetchPurchases }) {
             </tbody>
           </table>
         </div>
-        <p className="text-[11px] text-slate-400 mt-2">💡 업체명을 클릭하면 아래에 그 업체의 매입 이력(품목·단가)이 표시됩니다.</p>
+        <p className="text-[11px] text-slate-400 mt-2">💡 업체·거래방식·품목을 클릭하면 아래에 해당 이력이 표시됩니다.</p>
       </div>
 
-      {/* 업체별 매입 이력 (고정 화면 - 업체명 클릭 시 표시) */}
-      {selectedVendor && (
+      {/* 매입이력 (고정 화면 - 업체/거래방식/품목 클릭 시 표시) */}
+      {historyFilter && (
         <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-            <h3 className="text-sm md:text-base font-bold text-slate-900">🏭 {selectedVendor} 매입 이력</h3>
+            <h3 className="text-sm md:text-base font-bold text-slate-900">{historyTitleIcon} {historyFilter.value} 매입 이력</h3>
             <button
-              onClick={() => setSelectedVendor(null)}
+              onClick={() => setHistoryFilter(null)}
               className="text-xs font-bold text-slate-500 hover:text-slate-700 cursor-pointer"
             >
               ✕ 닫기
@@ -6050,27 +6187,27 @@ function PurchaseTab({ purchases, fetchPurchases }) {
             ].map(v => (
               <button
                 key={v.id}
-                onClick={() => setVendorPeriod(v.id)}
+                onClick={() => setHistoryPeriod(v.id)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-2 ${
-                  vendorPeriod === v.id ? 'bg-sky-100 border-sky-400 shadow-sm' : 'bg-white border-transparent hover:bg-slate-100'
+                  historyPeriod === v.id ? 'bg-sky-100 border-sky-400 shadow-sm' : 'bg-white border-transparent hover:bg-slate-100'
                 }`}
               >
                 {v.label}
               </button>
             ))}
-            {vendorPeriod === 'custom' && (
+            {historyPeriod === 'custom' && (
               <div className="flex items-center gap-1.5 ml-1">
                 <input
                   type="date"
-                  value={vendorCustomStart}
-                  onChange={e => setVendorCustomStart(e.target.value)}
+                  value={historyCustomStart}
+                  onChange={e => setHistoryCustomStart(e.target.value)}
                   className="p-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-900"
                 />
                 <span className="text-slate-400 text-xs">~</span>
                 <input
                   type="date"
-                  value={vendorCustomEnd}
-                  onChange={e => setVendorCustomEnd(e.target.value)}
+                  value={historyCustomEnd}
+                  onChange={e => setHistoryCustomEnd(e.target.value)}
                   className="p-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-900"
                 />
               </div>
@@ -6080,52 +6217,56 @@ function PurchaseTab({ purchases, fetchPurchases }) {
           <div className="grid grid-cols-2 gap-2 mb-4">
             <div className="p-2.5 rounded-xl bg-sky-50 border border-sky-200 text-center">
               <div className="text-[10px] font-bold text-sky-700">총 매입건수</div>
-              <div className="text-sm md:text-base font-extrabold text-sky-700 mt-0.5">{vendorHistory.length}건</div>
+              <div className="text-sm md:text-base font-extrabold text-sky-700 mt-0.5">{historyList.length}건</div>
             </div>
             <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-center">
               <div className="text-[10px] font-bold text-slate-700">총 매입금액</div>
               <div className="text-sm md:text-base font-extrabold text-slate-700 mt-0.5">
-                {vendorHistory.reduce((s, p) => s + (Number(p.amount) || 0), 0).toLocaleString()}원
+                {historyList.reduce((s, p) => s + (Number(p.amount) || 0), 0).toLocaleString()}원
               </div>
             </div>
           </div>
 
-          {vendorHistory.length === 0 ? (
+          {historyList.length === 0 ? (
             <p className="text-xs text-slate-400 text-center py-6">선택한 기간에 매입 내역이 없습니다.</p>
           ) : (
-            <div className="border border-slate-200 rounded-xl overflow-hidden overflow-x-auto">
-              <table className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+            <div className="border border-slate-200 rounded-xl overflow-x-auto">
+              <table className="text-left border-collapse" style={{ tableLayout: 'fixed', width: `${historyTableWidth}px` }}>
                 <colgroup>
-                  <col style={{ width: '92px' }} />
-                  <col style={{ width: 'auto' }} />
-                  <col style={{ width: '60px' }} />
-                  <col style={{ width: '92px' }} />
-                  <col style={{ width: '92px' }} />
+                  {historyColumns.map(c => <col key={c} style={{ width: `${HISTORY_COL_WIDTH[c]}px` }} />)}
                 </colgroup>
                 <thead>
                   <tr className="bg-slate-100 text-slate-600 text-[11px] font-bold">
-                    <th className="py-2 px-2 whitespace-nowrap">일자</th>
-                    <th className="py-2 px-2">품목</th>
-                    <th className="py-2 px-2 text-right">수량</th>
-                    <th className="py-2 px-2 text-right whitespace-nowrap">단가</th>
-                    <th className="py-2 px-2 text-right whitespace-nowrap">금액</th>
+                    {historyColumns.map(c => (
+                      <th
+                        key={c}
+                        className={`py-2 px-2 whitespace-nowrap ${['qty', 'price', 'amount'].includes(c) ? 'text-right' : ''}`}
+                      >
+                        {HISTORY_COL_LABEL[c]}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {vendorHistory.map(p => (
+                  {historyList.map(p => (
                     <tr key={p.id} className="border-t border-slate-100 text-xs">
-                      <td className="py-2 px-2 whitespace-nowrap text-slate-600">{p.date}</td>
-                      <td className="py-2 px-2 text-slate-800 font-medium overflow-hidden text-ellipsis whitespace-nowrap">{p.item_name}</td>
-                      <td className="py-2 px-2 text-right text-slate-600">{Number(p.quantity).toLocaleString()}</td>
-                      <td className="py-2 px-2 text-right whitespace-nowrap text-slate-600">{Number(p.unit_price).toLocaleString()}원</td>
-                      <td className="py-2 px-2 text-right whitespace-nowrap font-bold text-slate-900">{Number(p.amount).toLocaleString()}원</td>
+                      {historyColumns.map(c => (
+                        <td
+                          key={c}
+                          className={`py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis ${
+                            ['qty', 'price', 'amount'].includes(c) ? 'text-right text-slate-600' : 'text-slate-800'
+                          } ${c === 'amount' ? 'font-bold text-slate-900' : ''}`}
+                        >
+                          {historyCellValue(p, c)}
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
-          <p className="text-[11px] text-slate-400 mt-2">💡 같은 품목의 단가 변동을 여기서 확인하고 다음 매입 시 참고할 수 있습니다.</p>
+          <p className="text-[11px] text-slate-400 mt-2">💡 좌우로 스크롤하면 금액까지 확인할 수 있습니다.</p>
         </div>
       )}
 
