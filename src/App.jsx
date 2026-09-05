@@ -313,10 +313,6 @@ export default function App() {
   // 백업/복원 메뉴에 모아둔 각 내보내기 기능의 기간 선택 (비워두면 전체 기간)
   const [backupExportStart, setBackupExportStart] = useState('');
   const [backupExportEnd, setBackupExportEnd] = useState('');
-  const [salesExportStart, setSalesExportStart] = useState('');
-  const [salesExportEnd, setSalesExportEnd] = useState('');
-  const [purchaseExportStart, setPurchaseExportStart] = useState('');
-  const [purchaseExportEnd, setPurchaseExportEnd] = useState('');
   const [orderConfirmModal, setOrderConfirmModal] = useState(false); // 신규예약주문: "저장하시겠습니까?" 확인 팝업 (출력/저장/취소). true일 때만 실제 저장이 진행됩니다.
   const [isMemoAutofilled, setIsMemoAutofilled] = useState(false);
   const [receiptTimeAutoUpdate, setReceiptTimeAutoUpdate] = useState(true); // true면 접수일시가 현재 시각을 계속 따라감 (접수일시를 직접 수정하면 false로 바뀌어 멈춤)
@@ -1551,69 +1547,6 @@ export default function App() {
   };
 
   // 날짜별 매출 요약을 CSV로 내보냅니다. (기간 필터와 무관하게 전체 데이터 기준)
-  // startDate/endDate(YYYY-MM-DD)를 지정하면 그 기간만, 생략하면 전체 기간을 내보냅니다.
-  const handleExportSalesSummaryCSV = (startDate, endDate) => {
-    const validOrders = (orders || []).filter(o => !o.deleted_at);
-    const byDate = {};
-    validOrders.forEach(o => {
-      const d = (o.created_at || '').replace(' ', 'T').split('T')[0];
-      if (!d) return;
-      if (startDate && d < startDate) return;
-      if (endDate && d > endDate) return;
-      if (!byDate[d]) byDate[d] = { reservation: 0, onsite: 0, count: 0, byPayment: {} };
-      const amt = Number(o.amount) || 0;
-      if (o.order_type === '현장판매') byDate[d].onsite += amt;
-      else byDate[d].reservation += amt;
-      byDate[d].count += 1;
-      const pm = o.payment_method || '미지정';
-      byDate[d].byPayment[pm] = (byDate[d].byPayment[pm] || 0) + 1;
-    });
-    const dates = Object.keys(byDate).sort();
-    if (dates.length === 0) {
-      alert('선택한 기간에 매출 데이터가 없습니다.');
-      return;
-    }
-    const headers = ['날짜', '예약매출', '현장매출', '합계매출', '건수', ...PAYMENT_OPTIONS];
-    const rows = dates.map(d => [
-      d,
-      byDate[d].reservation.toLocaleString(),
-      byDate[d].onsite.toLocaleString(),
-      (byDate[d].reservation + byDate[d].onsite).toLocaleString(),
-      byDate[d].count,
-      ...PAYMENT_OPTIONS.map(pm => byDate[d].byPayment[pm] || 0)
-    ]);
-    const today = getKoreaNowFormatted().date;
-    downloadCSV(headers, rows, `export_sales_summary_${today}.csv`);
-  };
-
-  // 매입 내역을 상세(건별)로 내보냅니다. startDate/endDate로 기간을 제한할 수 있습니다.
-  const handleExportPurchaseDetailCSV = (startDate, endDate) => {
-    const filtered = (purchases || []).filter(p => {
-      if (!p.date) return false;
-      if (startDate && p.date < startDate) return false;
-      if (endDate && p.date > endDate) return false;
-      return true;
-    }).sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.created_at || '').localeCompare(b.created_at || ''));
-
-    if (filtered.length === 0) {
-      alert('선택한 기간에 매입 데이터가 없습니다.');
-      return;
-    }
-
-    const headers = ['일자', '거래방식', '업체', '품목', '수량', '단가', '금액'];
-    const rows = filtered.map(p => [
-      p.date,
-      p.payment_method || '',
-      p.vendor || '',
-      p.item_name || '',
-      Number(p.quantity || 0).toLocaleString(),
-      Number(p.unit_price || 0).toLocaleString(),
-      Number(p.amount || 0).toLocaleString()
-    ]);
-    const today = getKoreaNowFormatted().date;
-    downloadCSV(headers, rows, `export_purchase_detail_${today}.csv`);
-  };
-
   const startEditOrder = (order) => {
     const kstNow = getKoreaNowFormatted();
     const pickup = parseDateTime(order.pickup_datetime, kstNow.date, '14:00');
@@ -1746,6 +1679,7 @@ export default function App() {
       <html>
       <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>영수증</title>
         <style>
           @page { size: 80mm auto; margin: 0; }
@@ -1833,6 +1767,7 @@ export default function App() {
       <html>
       <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>선택 주문서 일괄 출력</title>
         <style>
           html, body { background: #e5e5e5; }
@@ -1923,6 +1858,7 @@ export default function App() {
       <html>
       <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>리본 문구 인쇄</title>
         <link rel="stylesheet" href="${RIBBON_GOOGLE_FONTS_URL}">
         <style>
@@ -2330,10 +2266,14 @@ export default function App() {
   };
 
   // startDate/endDate(YYYY-MM-DD)가 있으면 주문(orders)만 그 기간으로 제한합니다. 고객(customers)은 항상 전체를 내보냅니다.
-  const handleExportCSV = (startDate, endDate) => {
+  // 전체 데이터를 엑셀(.xlsx) 한 파일로, 시트별로 구분해서 내보냅니다. (주문/고객/매출요약/매입요약/매입상세)
+  // startDate/endDate(YYYY-MM-DD)를 지정하면 주문·매출·매입 항목이 그 기간으로 제한됩니다. (고객은 항상 전체)
+  const handleExportAllExcel = (startDate, endDate) => {
     try {
       const today = getKoreaNowFormatted().date;
+      const wb = XLSX.utils.book_new();
 
+      // 1. 주문
       const photoColHeaders = [];
       for (let i = 1; i <= MAX_ORDER_PHOTOS; i++) {
         photoColHeaders.push(`사진${i}파일명`, `사진${i}저장경로`, `사진${i}URL`, `사진${i}크기(KB)`);
@@ -2364,7 +2304,7 @@ export default function App() {
           o.customers?.name || '',
           o.customers?.phone || '',
           o.product_name || '',
-          o.amount ? Number(o.amount).toLocaleString() : 0,
+          Number(o.amount) || 0,
           o.pickup_datetime || '',
           o.created_at || '',
           o.payment_method || '',
@@ -2372,120 +2312,247 @@ export default function App() {
           ...photoCols
         ];
       });
-      if (ordersInRange.length === 0) {
-        alert('선택한 기간에 주문 데이터가 없습니다.');
-        return;
-      }
-      downloadCSV(orderHeaders, orderRows, `export_orders_${today}.csv`);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([orderHeaders, ...orderRows]), '주문');
 
-      setTimeout(() => {
-        const custHeaders = ['ID', '이름', '연락처', '등록일'];
-        const custRows = customers.map(c => [
-          c.id,
-          c.name || '',
-          c.phone || '',
-          c.created_at || ''
-        ]);
-        downloadCSV(custHeaders, custRows, `export_customers_${today}.csv`);
-      }, 300);
+      // 2. 고객 (항상 전체)
+      const custHeaders = ['ID', '이름', '연락처', '고객정보', '등록일'];
+      const custRows = customers.map(c => [c.id, c.name || '', c.phone || '', c.notes || '', c.created_at || '']);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([custHeaders, ...custRows]), '고객');
 
-      alert(`주문정보 및 고객정보 파일 다운로드가 시작되었습니다.`);
+      // 3. 매출요약 (날짜별)
+      const salesByDate = {};
+      (orders || []).filter(o => !o.deleted_at).forEach(o => {
+        const d = (o.created_at || '').replace(' ', 'T').split('T')[0];
+        if (!d) return;
+        if (startDate && d < startDate) return;
+        if (endDate && d > endDate) return;
+        if (!salesByDate[d]) salesByDate[d] = { reservation: 0, onsite: 0, count: 0, byPayment: {} };
+        const amt = Number(o.amount) || 0;
+        if (o.order_type === '현장판매') salesByDate[d].onsite += amt;
+        else salesByDate[d].reservation += amt;
+        salesByDate[d].count += 1;
+        const pm = o.payment_method || '미지정';
+        salesByDate[d].byPayment[pm] = (salesByDate[d].byPayment[pm] || 0) + 1;
+      });
+      const salesDates = Object.keys(salesByDate).sort();
+      const salesHeaders = ['날짜', '예약매출', '현장매출', '합계매출', '건수', ...PAYMENT_OPTIONS];
+      const salesRows = salesDates.map(d => [
+        d,
+        salesByDate[d].reservation,
+        salesByDate[d].onsite,
+        salesByDate[d].reservation + salesByDate[d].onsite,
+        salesByDate[d].count,
+        ...PAYMENT_OPTIONS.map(pm => salesByDate[d].byPayment[pm] || 0)
+      ]);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([salesHeaders, ...salesRows]), '매출요약');
+
+      // 4. 매입요약 (날짜별)
+      const purchByDate = {};
+      (purchases || []).forEach(p => {
+        const d = p.date;
+        if (!d) return;
+        if (startDate && d < startDate) return;
+        if (endDate && d > endDate) return;
+        if (!purchByDate[d]) purchByDate[d] = { amount: 0, count: 0, byPayment: {} };
+        purchByDate[d].amount += Number(p.amount) || 0;
+        purchByDate[d].count += 1;
+        const pm = p.payment_method || '미지정';
+        purchByDate[d].byPayment[pm] = (purchByDate[d].byPayment[pm] || 0) + 1;
+      });
+      const purchDates = Object.keys(purchByDate).sort();
+      const purchSummaryHeaders = ['날짜', '매입금액', '건수', ...PURCHASE_PAYMENT_OPTIONS];
+      const purchSummaryRows = purchDates.map(d => [
+        d,
+        purchByDate[d].amount,
+        purchByDate[d].count,
+        ...PURCHASE_PAYMENT_OPTIONS.map(pm => purchByDate[d].byPayment[pm] || 0)
+      ]);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([purchSummaryHeaders, ...purchSummaryRows]), '매입요약');
+
+      // 5. 매입상세 (건별)
+      const purchDetailFiltered = (purchases || []).filter(p => {
+        if (!p.date) return false;
+        if (startDate && p.date < startDate) return false;
+        if (endDate && p.date > endDate) return false;
+        return true;
+      }).sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.created_at || '').localeCompare(b.created_at || ''));
+      const purchDetailHeaders = ['일자', '거래방식', '업체', '품목', '수량', '단가', '금액'];
+      const purchDetailRows = purchDetailFiltered.map(p => [
+        p.date, p.payment_method || '', p.vendor || '', p.item_name || '',
+        Number(p.quantity) || 0, Number(p.unit_price) || 0, Number(p.amount) || 0
+      ]);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([purchDetailHeaders, ...purchDetailRows]), '매입상세');
+
+      XLSX.writeFile(wb, `전체백업_${today}.xlsx`);
       handleCloseBackupModal();
     } catch (err) {
       console.error(err);
-      alert('CSV 백업 중 오류가 발생했습니다.');
+      alert('전체 백업 내보내기 중 오류가 발생했습니다.');
     }
   };
 
-  const handleImportCSV = async (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length === 0) return;
+  // CSV 또는 엑셀(.xlsx) 파일에서 행 데이터를 읽어옵니다. 엑셀이면 sheetNameHint 시트(없으면 첫 시트)를 사용합니다.
+  const readRowsFromFile = async (file, sheetNameHint) => {
+    const isExcel = /\.xlsx?$/i.test(file.name);
+    if (isExcel) {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const sheetName = wb.SheetNames.includes(sheetNameHint) ? sheetNameHint : wb.SheetNames[0];
+      const sheet = wb.Sheets[sheetName];
+      return XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    }
+    const text = await file.text();
+    return parseCSVText(text);
+  };
 
-    if (!window.confirm(`선택한 ${files.length}개 CSV 파일 데이터를 Supabase 데이터베이스에 추가 등록하시겠습니까?`)) {
+  // 쉼표가 섞인 문자열("50,000")도 안전하게 숫자로 변환합니다.
+  const toNum = (v) => {
+    const n = Number(String(v ?? '').replace(/,/g, '').trim());
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const handleImportOrdersFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!window.confirm('선택한 파일의 주문 데이터를 추가로 등록하시겠습니까?')) {
       e.target.value = '';
       return;
     }
 
     try {
-      let importedCustCount = 0;
+      const parsedRows = await readRowsFromFile(file, '주문');
       let importedOrderCount = 0;
+      const { data: updatedCustomers } = await supabase.from('customers').select('*');
 
-      for (const file of files) {
-        const text = await file.text();
-        const parsedRows = parseCSVText(text);
+      for (const row of parsedRows) {
+        let custId = null;
+        if (row['연락처'] && updatedCustomers) {
+          const matched = updatedCustomers.find(c => c.phone === row['연락처']);
+          if (matched) custId = matched.id;
+        }
 
-        if (parsedRows.length === 0) continue;
+        const { data: insertedOrder, error: insertError } = await supabase.from('orders').insert([{
+          customer_id: custId,
+          product_name: row['상품명'] || '꽃다발',
+          product: row['상품명'] || '꽃다발',
+          amount: toNum(row['금액']),
+          pickup_datetime: row['픽업일시'] || null,
+          created_at: row['접수일시'] || null,
+          payment_method: row['결제수단'] || '신용카드',
+          status: row['결제수단'] || '신용카드',
+          memo: row['메모'] || ''
+        }]).select().single();
 
-        const sampleKeys = Object.keys(parsedRows[0]);
+        if (insertError) {
+          console.error('주문 복원 실패:', insertError.message);
+          continue;
+        }
+        importedOrderCount++;
 
-        if (sampleKeys.includes('이름') && sampleKeys.includes('연락처') && !sampleKeys.includes('주문ID')) {
-          for (const row of parsedRows) {
-            if (row['이름'] && row['연락처']) {
-              await supabase.from('customers').upsert([{ name: row['이름'], phone: row['연락처'] }], { onConflict: 'phone' });
-              importedCustCount++;
-            }
-          }
-        } 
-        else if (sampleKeys.includes('주문ID') || sampleKeys.includes('상품명')) {
-          const { data: updatedCustomers } = await supabase.from('customers').select('*');
-
-          for (const row of parsedRows) {
-            let custId = null;
-            if (row['연락처'] && updatedCustomers) {
-              const matched = updatedCustomers.find(c => c.phone === row['연락처']);
-              if (matched) custId = matched.id;
-            }
-
-            const { data: insertedOrder, error: insertError } = await supabase.from('orders').insert([{
-              customer_id: custId,
-              product_name: row['상품명'] || '꽃다발',
-              product: row['상품명'] || '꽃다발',
-              amount: Number(row['금액']) || 0,
-              pickup_datetime: row['픽업일시'] || null,
-              created_at: row['접수일시'] || null,
-              payment_method: row['결제수단'] || '신용카드',
-              status: row['결제수단'] || '신용카드',
-              memo: row['메모'] || ''
-            }]).select().single();
-
-            if (insertError) {
-              console.error('주문 복원 실패:', insertError.message);
-              continue;
-            }
-            importedOrderCount++;
-
-            // 사진 정보(경로/URL)가 CSV에 있고, Storage에 실제 파일이 여전히 남아있다면
-            // 새로 생성된 주문ID로 order_photos 레코드를 다시 연결합니다. (최대 MAX_ORDER_PHOTOS장)
-            // (실제 이미지 파일 자체는 CSV에 담기지 않으므로, Storage 버킷에서 파일이 삭제된 경우 복원되지 않습니다.)
-            if (insertedOrder) {
-              for (let i = 1; i <= MAX_ORDER_PHOTOS; i++) {
-                const photoStoragePath = row[`사진${i}저장경로`];
-                const photoPublicUrl = row[`사진${i}URL`];
-                if (!photoStoragePath && !photoPublicUrl) continue;
-                try {
-                  const sizeKB = Number(row[`사진${i}크기(KB)`]);
-                  await supabase.from('order_photos').insert([{
-                    order_id: insertedOrder.id,
-                    storage_path: photoStoragePath || null,
-                    public_url: photoPublicUrl || null,
-                    original_name: row[`사진${i}파일명`] || null,
-                    size_bytes: Number.isFinite(sizeKB) && sizeKB > 0 ? Math.round(sizeKB * 1024) : null,
-                    updated_at: new Date().toISOString()
-                  }]);
-                } catch (photoErr) {
-                  console.warn('사진 정보 재연결 실패 (주문ID: ' + insertedOrder.id + '):', photoErr.message);
-                }
-              }
+        // 사진 정보(경로/URL)가 있고, Storage에 실제 파일이 여전히 남아있다면 새 주문ID로 다시 연결합니다.
+        if (insertedOrder) {
+          for (let i = 1; i <= MAX_ORDER_PHOTOS; i++) {
+            const photoStoragePath = row[`사진${i}저장경로`];
+            const photoPublicUrl = row[`사진${i}URL`];
+            if (!photoStoragePath && !photoPublicUrl) continue;
+            try {
+              const sizeKB = toNum(row[`사진${i}크기(KB)`]);
+              await supabase.from('order_photos').insert([{
+                order_id: insertedOrder.id,
+                storage_path: photoStoragePath || null,
+                public_url: photoPublicUrl || null,
+                original_name: row[`사진${i}파일명`] || null,
+                size_bytes: sizeKB > 0 ? Math.round(sizeKB * 1024) : null,
+                updated_at: new Date().toISOString()
+              }]);
+            } catch (photoErr) {
+              console.warn('사진 정보 재연결 실패 (주문ID: ' + insertedOrder.id + '):', photoErr.message);
             }
           }
         }
       }
 
-      alert(`복원 완료: 고객 (${importedCustCount}건), 주문 (${importedOrderCount}건)`);
+      alert(`주문 복원 완료: ${importedOrderCount}건`);
       fetchData();
     } catch (err) {
       console.error(err);
-      alert('CSV 복원 중 오류가 발생했습니다.');
+      alert('주문 복원 중 오류가 발생했습니다.');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleImportCustomersFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!window.confirm('선택한 파일의 고객 데이터를 추가로 등록하시겠습니까?')) {
+      e.target.value = '';
+      return;
+    }
+
+    try {
+      const parsedRows = await readRowsFromFile(file, '고객');
+      let importedCustCount = 0;
+
+      for (const row of parsedRows) {
+        if (row['이름'] && row['연락처']) {
+          await supabase.from('customers').upsert(
+            [{ name: row['이름'], phone: row['연락처'], notes: row['고객정보'] || null }],
+            { onConflict: 'phone' }
+          );
+          importedCustCount++;
+        }
+      }
+
+      alert(`고객 복원 완료: ${importedCustCount}건`);
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      alert('고객 복원 중 오류가 발생했습니다.');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleImportPurchasesFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!window.confirm('선택한 파일의 매입 데이터를 추가로 등록하시겠습니까?')) {
+      e.target.value = '';
+      return;
+    }
+
+    try {
+      const parsedRows = await readRowsFromFile(file, '매입상세');
+      let importedCount = 0;
+
+      for (const row of parsedRows) {
+        const date = row['일자'];
+        const vendor = row['업체'];
+        const itemName = row['품목'];
+        if (!date || !vendor || !itemName) continue;
+
+        const quantity = toNum(row['수량']);
+        const unitPrice = toNum(row['단가']);
+        const amount = toNum(row['금액']) || quantity * unitPrice;
+
+        const { error } = await supabase.from('purchases').insert([{
+          date,
+          payment_method: row['거래방식'] || '현금',
+          vendor,
+          item_name: itemName,
+          quantity,
+          unit_price: unitPrice,
+          amount
+        }]);
+        if (!error) importedCount++;
+      }
+
+      alert(`매입 복원 완료: ${importedCount}건`);
+      fetchPurchases();
+    } catch (err) {
+      console.error(err);
+      alert('매입 복원 중 오류가 발생했습니다.');
     } finally {
       e.target.value = '';
     }
@@ -2624,8 +2691,9 @@ export default function App() {
     const cleanSearchPhone = q.replace(/[^0-9]/g, '');
     const cleanCustomerPhone = (c.phone || '').replace(/[^0-9]/g, '');
     const phoneMatch = cleanSearchPhone !== '' && cleanCustomerPhone.includes(cleanSearchPhone);
+    const notesMatch = c.notes && c.notes.toLowerCase().includes(q);
 
-    return nameMatch || phoneMatch;
+    return nameMatch || phoneMatch || notesMatch;
   }).sort((a, b) => {
     if (customerNameSort === 'asc') return (a.name || '').localeCompare(b.name || '', 'ko');
     if (customerNameSort === 'desc') return (b.name || '').localeCompare(a.name || '', 'ko');
@@ -2860,7 +2928,7 @@ export default function App() {
             </p>
             <div className="flex gap-2 pt-2">
               <button
-                onClick={() => handleExportCSV(null, null)}
+                onClick={() => handleExportAllExcel(null, null)}
                 className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
               >
                 📥 지금 바로 백업 다운로드
@@ -4794,7 +4862,7 @@ export default function App() {
                 type="text"
                 value={customerSearch}
                 onChange={e => handleCustomerSearchChange(e.target.value)}
-                placeholder="🔍 고객 이름 또는 전화번호 검색"
+                placeholder="🔍 고객 이름·전화번호·고객정보 검색"
                 className="flex-1 min-w-0 p-2.5 md:p-3 border border-slate-300 rounded-xl text-xs md:text-sm bg-white text-slate-900 focus:outline-none focus:border-rose-500"
               />
               <div className="flex items-center gap-1 shrink-0" title="주문 횟수별 색상: 1회=검정, 2회=그린, 3회=블루, 4회 이상=퍼플">
@@ -5220,11 +5288,10 @@ export default function App() {
             </div>
 
             <div className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-3">
-              <h3 className="font-bold text-xs md:text-sm text-slate-800">1. 전체 백업 CSV 내보내기 (주문+고객)</h3>
+              <h3 className="font-bold text-xs md:text-sm text-slate-800">1. 전체 내보내기 (엑셀 1개 파일, 시트별 구분)</h3>
               <p className="text-xs text-slate-500">
-                아래 기간을 지정하면 <strong>주문</strong> 데이터만 그 기간으로 제한되어 내보내집니다 (고객 정보는 항상 전체가 포함됩니다).<br />
-                - <code className="text-rose-600 font-bold">export_orders_{getKoreaNowFormatted().date}.csv</code> (작품 사진 정보 포함)<br />
-                - <code className="text-rose-600 font-bold">export_customers_{getKoreaNowFormatted().date}.csv</code>
+                주문·고객·매출요약·매입요약·매입상세가 시트로 나뉜 엑셀(.xlsx) 파일 1개로 내보내집니다.<br />
+                기간을 지정하면 <strong>고객을 제외한</strong> 나머지 항목이 그 기간으로 제한됩니다.
               </p>
               <div className="flex items-center gap-1.5">
                 <input
@@ -5242,153 +5309,128 @@ export default function App() {
                 />
               </div>
               <button
-                onClick={() => handleExportCSV(backupExportStart || null, backupExportEnd || null)}
+                onClick={() => handleExportAllExcel(backupExportStart || null, backupExportEnd || null)}
                 className="w-full py-2.5 px-4 bg-rose-200 hover:bg-rose-300 text-slate-900 font-extrabold rounded-xl text-xs md:text-sm shadow-xs transition-colors cursor-pointer border border-rose-400"
               >
-                📥 CSV 백업 파일 2개 다운로드
+                📥 전체 엑셀 파일 다운로드
               </button>
             </div>
 
-            <div className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-3">
-              <h3 className="font-bold text-xs md:text-sm text-slate-800">2. CSV 파일 가져오기 (Import)</h3>
-              <p className="text-xs text-slate-500">
-                백업했던 CSV 파일 2개를 <strong>Ctrl 키(또는 Shift 키)를 누른 채 동시에 선택</strong>하여 한번에 올려주세요.<br />
-                주문 CSV에 사진 정보가 있으면, 해당 사진 파일이 Storage에 그대로 남아있는 경우 자동으로 다시 연결됩니다.
-              </p>
-              <input
-                type="file"
-                accept=".csv"
-                multiple
-                onChange={handleImportCSV}
-                className="w-full text-xs text-slate-700 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border file:border-slate-300 file:text-xs file:font-bold file:bg-white file:text-slate-800 hover:file:bg-slate-100 cursor-pointer"
-              />
-            </div>
-
-            <div className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-3">
-              <h3 className="font-bold text-xs md:text-sm text-slate-800">3. 매출 내보내기 (날짜별 요약)</h3>
-              <p className="text-xs text-slate-500">기간을 지정하지 않으면 전체 기간의 날짜별 매출 요약이 내보내집니다.</p>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="date"
-                  value={salesExportStart}
-                  onChange={e => setSalesExportStart(e.target.value)}
-                  className="flex-1 min-w-0 p-2 border border-slate-300 rounded-lg text-xs bg-white text-slate-900"
-                />
-                <span className="text-slate-400 text-xs">~</span>
-                <input
-                  type="date"
-                  value={salesExportEnd}
-                  onChange={e => setSalesExportEnd(e.target.value)}
-                  className="flex-1 min-w-0 p-2 border border-slate-300 rounded-lg text-xs bg-white text-slate-900"
-                />
+            <div className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-4">
+              <div>
+                <h3 className="font-bold text-xs md:text-sm text-slate-800">2. 가져오기 (Import)</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  항목별로 따로 가져올 수 있습니다. 위에서 받은 전체 엑셀 파일을 그대로 올려도 되고(해당 시트를 자동으로 찾습니다),
+                  예전 방식의 CSV 파일을 올려도 됩니다.<br />
+                  ※ 매출은 별도 데이터가 없고 주문에서 자동 계산되므로, 매출을 되살리려면 <strong>주문 가져오기</strong>를 사용하세요.
+                </p>
               </div>
-              <button
-                onClick={() => handleExportSalesSummaryCSV(salesExportStart || null, salesExportEnd || null)}
-                className="w-full py-2.5 px-4 bg-white hover:bg-slate-100 border border-slate-800 text-slate-900 font-bold rounded-xl text-xs md:text-sm cursor-pointer"
-              >
-                📥 매출요약 내보내기
-              </button>
-            </div>
 
-            <div className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-3">
-              <h3 className="font-bold text-xs md:text-sm text-slate-800">4. 매입내역 내보내기 (건별 상세)</h3>
-              <p className="text-xs text-slate-500">기간을 지정하지 않으면 전체 매입 건이 상세(일자·거래방식·업체·품목·수량·단가·금액)로 내보내집니다.</p>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="date"
-                  value={purchaseExportStart}
-                  onChange={e => setPurchaseExportStart(e.target.value)}
-                  className="flex-1 min-w-0 p-2 border border-slate-300 rounded-lg text-xs bg-white text-slate-900"
-                />
-                <span className="text-slate-400 text-xs">~</span>
-                <input
-                  type="date"
-                  value={purchaseExportEnd}
-                  onChange={e => setPurchaseExportEnd(e.target.value)}
-                  className="flex-1 min-w-0 p-2 border border-slate-300 rounded-lg text-xs bg-white text-slate-900"
-                />
-              </div>
-              <button
-                onClick={() => handleExportPurchaseDetailCSV(purchaseExportStart || null, purchaseExportEnd || null)}
-                className="w-full py-2.5 px-4 bg-white hover:bg-slate-100 border border-slate-800 text-slate-900 font-bold rounded-xl text-xs md:text-sm cursor-pointer"
-              >
-                📥 매입내역 내보내기
-              </button>
-            </div>
-
-            <div className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-3">
-              <h3 className="font-bold text-xs md:text-sm text-slate-800">5. 페이히어 매출 가져오기</h3>
-              <p className="text-xs text-slate-500">페이히어 앱에서 내보낸 엑셀 파일을 선택하면 현장판매 매출로 가져올 수 있습니다.</p>
-              <label
-                className={`text-xs font-bold border px-3 py-2 rounded-lg inline-flex items-center gap-1 ${
-                  payhereImportLoading
-                    ? 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
-                    : 'bg-white hover:bg-slate-100 border-slate-800 text-slate-900 cursor-pointer'
-                }`}
-              >
-                파일 선택
+              <div>
+                <label className="text-[11px] font-bold text-slate-700">📋 주문</label>
                 <input
                   type="file"
-                  accept=".xlsx,.xls"
-                  onChange={handlePayhereFileSelect}
-                  disabled={payhereImportLoading}
-                  className="hidden"
+                  accept=".csv,.xlsx,.xls"
+                  onChange={handleImportOrdersFile}
+                  className="w-full mt-1 text-xs text-slate-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-slate-300 file:text-xs file:font-bold file:bg-white file:text-slate-800 hover:file:bg-slate-100 cursor-pointer"
                 />
-              </label>
+              </div>
 
-              {payhereImportLoading && <p className="text-xs text-slate-500">파일을 읽는 중...</p>}
+              <div>
+                <label className="text-[11px] font-bold text-slate-700">🎂 고객</label>
+                <input
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  onChange={handleImportCustomersFile}
+                  className="w-full mt-1 text-xs text-slate-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-slate-300 file:text-xs file:font-bold file:bg-white file:text-slate-800 hover:file:bg-slate-100 cursor-pointer"
+                />
+              </div>
 
-              {payhereImportRows.length > 0 && (
-                <div className="border border-slate-200 rounded-xl bg-white overflow-hidden">
-                  <div className="flex items-center justify-between px-3 py-2 bg-slate-100 border-b border-slate-200 text-xs font-bold text-slate-700">
-                    <span>총 {payhereImportRows.length}건 · 선택됨 {payhereImportRows.filter(r => r.selected).length}건</span>
-                    <span className="text-rose-600">
-                      선택 합계 {payhereImportRows.filter(r => r.selected).reduce((s, r) => s + r.amount, 0).toLocaleString()}원
-                    </span>
-                  </div>
-                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
-                    {payhereImportRows.map(r => (
-                      <label
-                        key={r.key}
-                        className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer ${r.selected ? 'bg-white' : 'bg-slate-50'}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={r.selected}
-                          onChange={() => handleTogglePayhereRow(r.key)}
-                          className="w-4 h-4 accent-rose-600 cursor-pointer shrink-0"
-                        />
-                        <span className="text-slate-400 whitespace-nowrap">{r.date.slice(5)} {r.time.slice(0, 5)}</span>
-                        <span className="font-bold text-slate-800 truncate flex-1">{r.product_name}</span>
-                        <span className={`px-1.5 py-0.5 rounded border whitespace-nowrap ${
-                          r.isOnline ? 'bg-sky-50 border-sky-300 text-sky-700' : 'bg-slate-100 border-slate-300 text-slate-700'
-                        }`}>
-                          {r.payment_method}
-                        </span>
-                        {r.hasReservationKeyword && (
-                          <span className="px-1.5 py-0.5 rounded bg-indigo-100 border border-indigo-300 text-indigo-800 whitespace-nowrap font-bold">
-                            예약표시
-                          </span>
-                        )}
-                        {r.isDuplicate && !r.hasReservationKeyword && (
-                          <span className="px-1.5 py-0.5 rounded bg-amber-100 border border-amber-300 text-amber-800 whitespace-nowrap">
-                            중복의심
-                          </span>
-                        )}
-                        <span className="font-bold text-black whitespace-nowrap">{r.amount.toLocaleString()}원</span>
-                      </label>
-                    ))}
-                  </div>
-                  <div className="p-2 border-t border-slate-200">
-                    <button
-                      onClick={handleConfirmPayhereImport}
-                      className="w-full py-2 bg-rose-200 hover:bg-rose-300 text-slate-900 font-extrabold rounded-xl text-xs shadow-xs transition-colors cursor-pointer border border-rose-400"
-                    >
-                      ✅ 선택 항목 현장판매로 가져오기
-                    </button>
-                  </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-700">🧾 매입</label>
+                <input
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  onChange={handleImportPurchasesFile}
+                  className="w-full mt-1 text-xs text-slate-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-slate-300 file:text-xs file:font-bold file:bg-white file:text-slate-800 hover:file:bg-slate-100 cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700">🌐 페이히어 (현장판매 매출)</label>
+                <div className="mt-1">
+                  <label
+                    className={`text-xs font-bold border px-3 py-1.5 rounded-lg inline-flex items-center gap-1 ${
+                      payhereImportLoading
+                        ? 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
+                        : 'bg-white hover:bg-slate-100 border-slate-800 text-slate-900 cursor-pointer'
+                    }`}
+                  >
+                    파일 선택
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={handlePayhereFileSelect}
+                      disabled={payhereImportLoading}
+                      className="hidden"
+                    />
+                  </label>
                 </div>
-              )}
+
+                {payhereImportLoading && <p className="text-xs text-slate-500 mt-2">파일을 읽는 중...</p>}
+
+                {payhereImportRows.length > 0 && (
+                  <div className="border border-slate-200 rounded-xl bg-white overflow-hidden mt-2">
+                    <div className="flex items-center justify-between px-3 py-2 bg-slate-100 border-b border-slate-200 text-xs font-bold text-slate-700">
+                      <span>총 {payhereImportRows.length}건 · 선택됨 {payhereImportRows.filter(r => r.selected).length}건</span>
+                      <span className="text-rose-600">
+                        선택 합계 {payhereImportRows.filter(r => r.selected).reduce((s, r) => s + r.amount, 0).toLocaleString()}원
+                      </span>
+                    </div>
+                    <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                      {payhereImportRows.map(r => (
+                        <label
+                          key={r.key}
+                          className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer ${r.selected ? 'bg-white' : 'bg-slate-50'}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={r.selected}
+                            onChange={() => handleTogglePayhereRow(r.key)}
+                            className="w-4 h-4 accent-rose-600 cursor-pointer shrink-0"
+                          />
+                          <span className="text-slate-400 whitespace-nowrap">{r.date.slice(5)} {r.time.slice(0, 5)}</span>
+                          <span className="font-bold text-slate-800 truncate flex-1">{r.product_name}</span>
+                          <span className={`px-1.5 py-0.5 rounded border whitespace-nowrap ${
+                            r.isOnline ? 'bg-sky-50 border-sky-300 text-sky-700' : 'bg-slate-100 border-slate-300 text-slate-700'
+                          }`}>
+                            {r.payment_method}
+                          </span>
+                          {r.hasReservationKeyword && (
+                            <span className="px-1.5 py-0.5 rounded bg-indigo-100 border border-indigo-300 text-indigo-800 whitespace-nowrap font-bold">
+                              예약표시
+                            </span>
+                          )}
+                          {r.isDuplicate && !r.hasReservationKeyword && (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-100 border border-amber-300 text-amber-800 whitespace-nowrap">
+                              중복의심
+                            </span>
+                          )}
+                          <span className="font-bold text-black whitespace-nowrap">{r.amount.toLocaleString()}원</span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="p-2 border-t border-slate-200">
+                      <button
+                        onClick={handleConfirmPayhereImport}
+                        className="w-full py-2 bg-rose-200 hover:bg-rose-300 text-slate-900 font-extrabold rounded-xl text-xs shadow-xs transition-colors cursor-pointer border border-rose-400"
+                      >
+                        ✅ 선택 항목 현장판매로 가져오기
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -6027,7 +6069,7 @@ function PurchaseTab({ purchases, fetchPurchases }) {
 
   // 매입이력 표: 유형에 따라 표시할 컬럼이 달라집니다 (자기 자신과 같은 값인 컬럼은 생략)
   const HISTORY_COL_LABEL = { date: '일자', vendor: '업체', item: '품목', qty: '수량', price: '단가', amount: '금액' };
-  const HISTORY_COL_WIDTH = { date: 62, vendor: 80, item: 90, qty: 36, price: 64, amount: 64 };
+  const HISTORY_COL_WIDTH = { date: 88, vendor: 140, item: 150, qty: 56, price: 90, amount: 100 };
   const historyColumns = !historyFilter ? [] :
     historyFilter.type === 'vendor' ? ['date', 'item', 'qty', 'price', 'amount'] :
     historyFilter.type === 'item' ? ['date', 'vendor', 'qty', 'price', 'amount'] :
