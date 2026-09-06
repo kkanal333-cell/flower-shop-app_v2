@@ -313,6 +313,9 @@ export default function App() {
   // 백업/복원 메뉴에 모아둔 각 내보내기 기능의 기간 선택 (비워두면 전체 기간)
   const [backupExportStart, setBackupExportStart] = useState('');
   const [backupExportEnd, setBackupExportEnd] = useState('');
+  const [orderImportRows, setOrderImportRows] = useState([]);
+  const [customerImportRows, setCustomerImportRows] = useState([]);
+  const [purchaseImportRows, setPurchaseImportRows] = useState([]);
   const [orderConfirmModal, setOrderConfirmModal] = useState(false); // 신규예약주문: "저장하시겠습니까?" 확인 팝업 (출력/저장/취소). true일 때만 실제 저장이 진행됩니다.
   const [isMemoAutofilled, setIsMemoAutofilled] = useState(false);
   const [receiptTimeAutoUpdate, setReceiptTimeAutoUpdate] = useState(true); // true면 접수일시가 현재 시각을 계속 따라감 (접수일시를 직접 수정하면 false로 바뀌어 멈춤)
@@ -1682,20 +1685,30 @@ export default function App() {
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>영수증</title>
         <style>
-          @page { size: 80mm auto; margin: 0; }
           html, body { background: #e5e5e5; }
-          body { font-family: 'Arial', sans-serif; margin: 0; padding: 2mm; width: 74mm; box-sizing: border-box; font-size: 13px; line-height: 1.4; color: #000; background: #fff; }
+          body { font-family: 'Arial', sans-serif; margin: 0; padding: 2mm; box-sizing: border-box; line-height: 1.4; color: #000; background: #fff; }
           .center { text-align: center; }
-          .title { font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
           .row { margin-bottom: 5px; } .row .label { display: inline-block; width: 52px; vertical-align: top; }
           .label { font-weight: bold; white-space: nowrap; }
           .value { font-weight: bold; }
-          .big-text { font-size: 26px !important; font-weight: bold; }
           .memo { margin-top: 10px; padding-top: 5px; border-top: 1px dashed #000; }
-          .footer { margin-top: 20px; text-align: center; font-size: 12px; }
+
+          /* 화면에서 미리 볼 때: 확대 없이 바로 잘 보이도록 화면 폭에 맞춰 크게 표시 */
+          @media screen {
+            body { width: 100%; max-width: 420px; margin: 0 auto; font-size: 17px; padding: 16px; }
+            .title { font-size: 26px; font-weight: bold; margin-bottom: 14px; border-bottom: 2px solid #000; padding-bottom: 8px; }
+            .big-text { font-size: 32px !important; font-weight: bold; }
+            .footer { margin-top: 20px; text-align: center; font-size: 15px; }
+          }
+
+          /* 실제 인쇄 시에는 74mm 감열지 폭에 맞춥니다 */
           @media print {
+            @page { size: 80mm auto; margin: 0; }
             html, body { background: #fff; }
-            body { margin: 0; padding: 2mm; width: 74mm; }
+            body { margin: 0; padding: 2mm; width: 74mm; font-size: 13px; }
+            .title { font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
+            .big-text { font-size: 26px !important; font-weight: bold; }
+            .footer { margin-top: 20px; text-align: center; font-size: 12px; }
             button { display: none; }
           }
         </style>
@@ -1771,15 +1784,12 @@ export default function App() {
         <title>선택 주문서 일괄 출력</title>
         <style>
           html, body { background: #e5e5e5; }
-          body { font-family: 'Arial', sans-serif; margin: 0; padding: 2mm; width: 74mm; box-sizing: border-box; font-size: 13px; line-height: 1.4; color: #000; background: #fff; }
+          body { font-family: 'Arial', sans-serif; margin: 0; padding: 2mm; box-sizing: border-box; line-height: 1.4; color: #000; background: #fff; }
           .center { text-align: center; }
-          .title { font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
           .row { margin-bottom: 5px; } .row .label { display: inline-block; width: 52px; vertical-align: top; }
           .label { font-weight: bold; white-space: nowrap; }
-          .big-text { font-size: 26px !important; font-weight: bold; }
           .memo { margin-top: 10px; padding-top: 5px; border-top: 1px dashed #000; margin-bottom: 10px; }
-          .footer { margin-top: 15px; text-align: center; font-size: 12px; }
-          
+
           .ticket-page {
             page-break-after: always;
             break-after: page;
@@ -1792,13 +1802,25 @@ export default function App() {
             margin-bottom: 0;
           }
 
+          /* 화면에서 미리 볼 때: 확대 없이 바로 잘 보이도록 화면 폭에 맞춰 크게 표시 */
+          @media screen {
+            body { width: 100%; max-width: 420px; margin: 0 auto; font-size: 17px; padding: 16px; }
+            .title { font-size: 26px; font-weight: bold; margin-bottom: 14px; border-bottom: 2px solid #000; padding-bottom: 8px; }
+            .big-text { font-size: 32px !important; font-weight: bold; }
+            .footer { margin-top: 20px; text-align: center; font-size: 15px; }
+          }
+
+          /* 실제 인쇄 시에는 74mm 감열지 폭에 맞춥니다 */
           @media print {
             @page {
               size: 80mm auto;
               margin: 0;
             }
             html, body { background: #fff; }
-            body { margin: 0; padding: 2mm; width: 74mm; }
+            body { margin: 0; padding: 2mm; width: 74mm; font-size: 13px; }
+            .title { font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
+            .big-text { font-size: 26px !important; font-weight: bold; }
+            .footer { margin-top: 15px; text-align: center; font-size: 12px; }
             .no-print { display: none; }
           }
         </style>
@@ -2235,6 +2257,13 @@ export default function App() {
     setPayhereImportRows(prev => prev.map(r => r.key === key ? { ...r, selected: !r.selected } : r));
   };
 
+  const handleToggleAllPayhereRows = () => {
+    setPayhereImportRows(prev => {
+      const allSelected = prev.every(r => r.selected);
+      return prev.map(r => ({ ...r, selected: !allSelected }));
+    });
+  };
+
   const handleConfirmPayhereImport = async () => {
     const toImport = payhereImportRows.filter(r => r.selected);
     if (toImport.length === 0) return alert('가져올 항목을 선택해주세요.');
@@ -2414,148 +2443,239 @@ export default function App() {
   const handleImportOrdersFile = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (!window.confirm('선택한 파일의 주문 데이터를 추가로 등록하시겠습니까?')) {
-      e.target.value = '';
-      return;
-    }
 
     try {
       const parsedRows = await readRowsFromFile(file, '주문');
-      let importedOrderCount = 0;
-      const { data: updatedCustomers } = await supabase.from('customers').select('*');
-
-      for (const row of parsedRows) {
-        let custId = null;
-        if (row['연락처'] && updatedCustomers) {
-          const matched = updatedCustomers.find(c => c.phone === row['연락처']);
-          if (matched) custId = matched.id;
-        }
-
-        const { data: insertedOrder, error: insertError } = await supabase.from('orders').insert([{
-          customer_id: custId,
+      const preview = parsedRows
+        .filter(row => row['상품명'] || row['금액'])
+        .map((row, idx) => ({
+          key: `order_${idx}`,
+          selected: true,
           product_name: row['상품명'] || '꽃다발',
-          product: row['상품명'] || '꽃다발',
           amount: toNum(row['금액']),
-          pickup_datetime: row['픽업일시'] || null,
-          created_at: row['접수일시'] || null,
+          pickup_datetime: row['픽업일시'] || '',
+          created_at: row['접수일시'] || '',
           payment_method: row['결제수단'] || '신용카드',
-          status: row['결제수단'] || '신용카드',
-          memo: row['메모'] || ''
-        }]).select().single();
+          phone: row['연락처'] || '',
+          customer_name: row['고객명'] || '',
+          raw: row
+        }));
 
-        if (insertError) {
-          console.error('주문 복원 실패:', insertError.message);
-          continue;
-        }
-        importedOrderCount++;
-
-        // 사진 정보(경로/URL)가 있고, Storage에 실제 파일이 여전히 남아있다면 새 주문ID로 다시 연결합니다.
-        if (insertedOrder) {
-          for (let i = 1; i <= MAX_ORDER_PHOTOS; i++) {
-            const photoStoragePath = row[`사진${i}저장경로`];
-            const photoPublicUrl = row[`사진${i}URL`];
-            if (!photoStoragePath && !photoPublicUrl) continue;
-            try {
-              const sizeKB = toNum(row[`사진${i}크기(KB)`]);
-              await supabase.from('order_photos').insert([{
-                order_id: insertedOrder.id,
-                storage_path: photoStoragePath || null,
-                public_url: photoPublicUrl || null,
-                original_name: row[`사진${i}파일명`] || null,
-                size_bytes: sizeKB > 0 ? Math.round(sizeKB * 1024) : null,
-                updated_at: new Date().toISOString()
-              }]);
-            } catch (photoErr) {
-              console.warn('사진 정보 재연결 실패 (주문ID: ' + insertedOrder.id + '):', photoErr.message);
-            }
-          }
-        }
+      if (preview.length === 0) {
+        alert('가져올 수 있는 주문 데이터가 없습니다.');
+        return;
       }
-
-      alert(`주문 복원 완료: ${importedOrderCount}건`);
-      fetchData();
+      setOrderImportRows(preview);
     } catch (err) {
       console.error(err);
-      alert('주문 복원 중 오류가 발생했습니다.');
+      alert('파일을 읽는 중 오류가 발생했습니다: ' + err.message);
     } finally {
       e.target.value = '';
     }
+  };
+
+  const handleToggleOrderImportRow = (key) => {
+    setOrderImportRows(prev => prev.map(r => r.key === key ? { ...r, selected: !r.selected } : r));
+  };
+
+  const handleToggleAllOrderImportRows = () => {
+    setOrderImportRows(prev => {
+      const allSelected = prev.every(r => r.selected);
+      return prev.map(r => ({ ...r, selected: !allSelected }));
+    });
+  };
+
+  const handleConfirmOrderImport = async () => {
+    const toImport = orderImportRows.filter(r => r.selected);
+    if (toImport.length === 0) return alert('가져올 항목을 선택해주세요.');
+    if (!window.confirm(`선택한 ${toImport.length}건의 주문을 등록하시겠습니까?`)) return;
+
+    let importedOrderCount = 0;
+    const { data: updatedCustomers } = await supabase.from('customers').select('*');
+
+    for (const r of toImport) {
+      const row = r.raw;
+      let custId = null;
+      if (r.phone && updatedCustomers) {
+        const matched = updatedCustomers.find(c => c.phone === r.phone);
+        if (matched) custId = matched.id;
+      }
+
+      const { data: insertedOrder, error: insertError } = await supabase.from('orders').insert([{
+        customer_id: custId,
+        product_name: r.product_name,
+        product: r.product_name,
+        amount: r.amount,
+        pickup_datetime: r.pickup_datetime || null,
+        created_at: r.created_at || null,
+        payment_method: r.payment_method,
+        status: r.payment_method,
+        memo: row['메모'] || ''
+      }]).select().single();
+
+      if (insertError) {
+        console.error('주문 복원 실패:', insertError.message);
+        continue;
+      }
+      importedOrderCount++;
+
+      // 사진 정보(경로/URL)가 있고, Storage에 실제 파일이 여전히 남아있다면 새 주문ID로 다시 연결합니다.
+      if (insertedOrder) {
+        for (let i = 1; i <= MAX_ORDER_PHOTOS; i++) {
+          const photoStoragePath = row[`사진${i}저장경로`];
+          const photoPublicUrl = row[`사진${i}URL`];
+          if (!photoStoragePath && !photoPublicUrl) continue;
+          try {
+            const sizeKB = toNum(row[`사진${i}크기(KB)`]);
+            await supabase.from('order_photos').insert([{
+              order_id: insertedOrder.id,
+              storage_path: photoStoragePath || null,
+              public_url: photoPublicUrl || null,
+              original_name: row[`사진${i}파일명`] || null,
+              size_bytes: sizeKB > 0 ? Math.round(sizeKB * 1024) : null,
+              updated_at: new Date().toISOString()
+            }]);
+          } catch (photoErr) {
+            console.warn('사진 정보 재연결 실패 (주문ID: ' + insertedOrder.id + '):', photoErr.message);
+          }
+        }
+      }
+    }
+
+    alert(`주문 복원 완료: ${importedOrderCount}건`);
+    setOrderImportRows([]);
+    fetchData();
   };
 
   const handleImportCustomersFile = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (!window.confirm('선택한 파일의 고객 데이터를 추가로 등록하시겠습니까?')) {
-      e.target.value = '';
-      return;
-    }
 
     try {
       const parsedRows = await readRowsFromFile(file, '고객');
-      let importedCustCount = 0;
+      const preview = parsedRows
+        .filter(row => row['이름'] && row['연락처'])
+        .map((row, idx) => ({
+          key: `cust_${idx}`,
+          selected: true,
+          name: row['이름'],
+          phone: row['연락처'],
+          notes: row['고객정보'] || ''
+        }));
 
-      for (const row of parsedRows) {
-        if (row['이름'] && row['연락처']) {
-          await supabase.from('customers').upsert(
-            [{ name: row['이름'], phone: row['연락처'], notes: row['고객정보'] || null }],
-            { onConflict: 'phone' }
-          );
-          importedCustCount++;
-        }
+      if (preview.length === 0) {
+        alert('가져올 수 있는 고객 데이터가 없습니다.');
+        return;
       }
-
-      alert(`고객 복원 완료: ${importedCustCount}건`);
-      fetchData();
+      setCustomerImportRows(preview);
     } catch (err) {
       console.error(err);
-      alert('고객 복원 중 오류가 발생했습니다.');
+      alert('파일을 읽는 중 오류가 발생했습니다: ' + err.message);
     } finally {
       e.target.value = '';
     }
   };
 
+  const handleToggleCustomerImportRow = (key) => {
+    setCustomerImportRows(prev => prev.map(r => r.key === key ? { ...r, selected: !r.selected } : r));
+  };
+
+  const handleToggleAllCustomerImportRows = () => {
+    setCustomerImportRows(prev => {
+      const allSelected = prev.every(r => r.selected);
+      return prev.map(r => ({ ...r, selected: !allSelected }));
+    });
+  };
+
+  const handleConfirmCustomerImport = async () => {
+    const toImport = customerImportRows.filter(r => r.selected);
+    if (toImport.length === 0) return alert('가져올 항목을 선택해주세요.');
+    if (!window.confirm(`선택한 ${toImport.length}명의 고객을 등록하시겠습니까?`)) return;
+
+    let importedCustCount = 0;
+    for (const r of toImport) {
+      const { error } = await supabase.from('customers').upsert(
+        [{ name: r.name, phone: r.phone, notes: r.notes || null }],
+        { onConflict: 'phone' }
+      );
+      if (!error) importedCustCount++;
+    }
+
+    alert(`고객 복원 완료: ${importedCustCount}건`);
+    setCustomerImportRows([]);
+    fetchData();
+  };
+
   const handleImportPurchasesFile = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (!window.confirm('선택한 파일의 매입 데이터를 추가로 등록하시겠습니까?')) {
-      e.target.value = '';
-      return;
-    }
 
     try {
       const parsedRows = await readRowsFromFile(file, '매입상세');
-      let importedCount = 0;
+      const preview = parsedRows
+        .filter(row => row['일자'] && row['업체'] && row['품목'])
+        .map((row, idx) => {
+          const quantity = toNum(row['수량']);
+          const unitPrice = toNum(row['단가']);
+          return {
+            key: `purch_${idx}`,
+            selected: true,
+            date: row['일자'],
+            payment_method: row['거래방식'] || '현금',
+            vendor: row['업체'],
+            item_name: row['품목'],
+            quantity,
+            unit_price: unitPrice,
+            amount: toNum(row['금액']) || quantity * unitPrice
+          };
+        });
 
-      for (const row of parsedRows) {
-        const date = row['일자'];
-        const vendor = row['업체'];
-        const itemName = row['품목'];
-        if (!date || !vendor || !itemName) continue;
-
-        const quantity = toNum(row['수량']);
-        const unitPrice = toNum(row['단가']);
-        const amount = toNum(row['금액']) || quantity * unitPrice;
-
-        const { error } = await supabase.from('purchases').insert([{
-          date,
-          payment_method: row['거래방식'] || '현금',
-          vendor,
-          item_name: itemName,
-          quantity,
-          unit_price: unitPrice,
-          amount
-        }]);
-        if (!error) importedCount++;
+      if (preview.length === 0) {
+        alert('가져올 수 있는 매입 데이터가 없습니다.');
+        return;
       }
-
-      alert(`매입 복원 완료: ${importedCount}건`);
-      fetchPurchases();
+      setPurchaseImportRows(preview);
     } catch (err) {
       console.error(err);
-      alert('매입 복원 중 오류가 발생했습니다.');
+      alert('파일을 읽는 중 오류가 발생했습니다: ' + err.message);
     } finally {
       e.target.value = '';
     }
+  };
+
+  const handleToggleGetPurchaseImportRow = (key) => {
+    setPurchaseImportRows(prev => prev.map(r => r.key === key ? { ...r, selected: !r.selected } : r));
+  };
+
+  const handleToggleAllPurchaseImportRows = () => {
+    setPurchaseImportRows(prev => {
+      const allSelected = prev.every(r => r.selected);
+      return prev.map(r => ({ ...r, selected: !allSelected }));
+    });
+  };
+
+  const handleConfirmPurchaseImport = async () => {
+    const toImport = purchaseImportRows.filter(r => r.selected);
+    if (toImport.length === 0) return alert('가져올 항목을 선택해주세요.');
+    if (!window.confirm(`선택한 ${toImport.length}건의 매입을 등록하시겠습니까?`)) return;
+
+    let importedCount = 0;
+    for (const r of toImport) {
+      const { error } = await supabase.from('purchases').insert([{
+        date: r.date,
+        payment_method: r.payment_method,
+        vendor: r.vendor,
+        item_name: r.item_name,
+        quantity: r.quantity,
+        unit_price: r.unit_price,
+        amount: r.amount
+      }]);
+      if (!error) importedCount++;
+    }
+
+    alert(`매입 복원 완료: ${importedCount}건`);
+    setPurchaseImportRows([]);
+    fetchPurchases();
   };
 
   const getCalendarEvents = () => {
@@ -5334,6 +5454,48 @@ export default function App() {
                   onChange={handleImportOrdersFile}
                   className="w-full mt-1 text-xs text-slate-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-slate-300 file:text-xs file:font-bold file:bg-white file:text-slate-800 hover:file:bg-slate-100 cursor-pointer"
                 />
+                {orderImportRows.length > 0 && (
+                  <div className="border border-slate-200 rounded-xl bg-white overflow-hidden mt-2">
+                    <label className="flex items-center gap-2 px-3 py-2 bg-slate-100 border-b border-slate-200 text-xs font-bold text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={orderImportRows.every(r => r.selected)}
+                        onChange={handleToggleAllOrderImportRows}
+                        className="w-4 h-4 accent-rose-600 cursor-pointer shrink-0"
+                      />
+                      <span>전체 선택/해제</span>
+                      <span className="ml-auto text-slate-500 font-normal">
+                        총 {orderImportRows.length}건 · 선택됨 {orderImportRows.filter(r => r.selected).length}건
+                      </span>
+                    </label>
+                    <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
+                      {orderImportRows.map(r => (
+                        <label
+                          key={r.key}
+                          className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer ${r.selected ? 'bg-white' : 'bg-slate-50'}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={r.selected}
+                            onChange={() => handleToggleOrderImportRow(r.key)}
+                            className="w-4 h-4 accent-rose-600 cursor-pointer shrink-0"
+                          />
+                          <span className="text-slate-400 whitespace-nowrap">{(r.created_at || '').slice(0, 16)}</span>
+                          <span className="font-bold text-slate-800 truncate flex-1">{r.product_name}</span>
+                          <span className="font-bold text-black whitespace-nowrap">{r.amount.toLocaleString()}원</span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="p-2 border-t border-slate-200">
+                      <button
+                        onClick={handleConfirmOrderImport}
+                        className="w-full py-2 bg-rose-200 hover:bg-rose-300 text-slate-900 font-extrabold rounded-xl text-xs shadow-xs transition-colors cursor-pointer border border-rose-400"
+                      >
+                        ✅ 선택 항목 주문으로 가져오기
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -5344,6 +5506,47 @@ export default function App() {
                   onChange={handleImportCustomersFile}
                   className="w-full mt-1 text-xs text-slate-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-slate-300 file:text-xs file:font-bold file:bg-white file:text-slate-800 hover:file:bg-slate-100 cursor-pointer"
                 />
+                {customerImportRows.length > 0 && (
+                  <div className="border border-slate-200 rounded-xl bg-white overflow-hidden mt-2">
+                    <label className="flex items-center gap-2 px-3 py-2 bg-slate-100 border-b border-slate-200 text-xs font-bold text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={customerImportRows.every(r => r.selected)}
+                        onChange={handleToggleAllCustomerImportRows}
+                        className="w-4 h-4 accent-rose-600 cursor-pointer shrink-0"
+                      />
+                      <span>전체 선택/해제</span>
+                      <span className="ml-auto text-slate-500 font-normal">
+                        총 {customerImportRows.length}건 · 선택됨 {customerImportRows.filter(r => r.selected).length}건
+                      </span>
+                    </label>
+                    <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
+                      {customerImportRows.map(r => (
+                        <label
+                          key={r.key}
+                          className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer ${r.selected ? 'bg-white' : 'bg-slate-50'}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={r.selected}
+                            onChange={() => handleToggleCustomerImportRow(r.key)}
+                            className="w-4 h-4 accent-rose-600 cursor-pointer shrink-0"
+                          />
+                          <span className="font-bold text-slate-800 truncate flex-1">{r.name}</span>
+                          <span className="text-slate-500 whitespace-nowrap">{r.phone}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="p-2 border-t border-slate-200">
+                      <button
+                        onClick={handleConfirmCustomerImport}
+                        className="w-full py-2 bg-rose-200 hover:bg-rose-300 text-slate-900 font-extrabold rounded-xl text-xs shadow-xs transition-colors cursor-pointer border border-rose-400"
+                      >
+                        ✅ 선택 항목 고객으로 가져오기
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -5354,6 +5557,49 @@ export default function App() {
                   onChange={handleImportPurchasesFile}
                   className="w-full mt-1 text-xs text-slate-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-slate-300 file:text-xs file:font-bold file:bg-white file:text-slate-800 hover:file:bg-slate-100 cursor-pointer"
                 />
+                {purchaseImportRows.length > 0 && (
+                  <div className="border border-slate-200 rounded-xl bg-white overflow-hidden mt-2">
+                    <label className="flex items-center gap-2 px-3 py-2 bg-slate-100 border-b border-slate-200 text-xs font-bold text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={purchaseImportRows.every(r => r.selected)}
+                        onChange={handleToggleAllPurchaseImportRows}
+                        className="w-4 h-4 accent-rose-600 cursor-pointer shrink-0"
+                      />
+                      <span>전체 선택/해제</span>
+                      <span className="ml-auto text-slate-500 font-normal">
+                        총 {purchaseImportRows.length}건 · 선택됨 {purchaseImportRows.filter(r => r.selected).length}건
+                      </span>
+                    </label>
+                    <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
+                      {purchaseImportRows.map(r => (
+                        <label
+                          key={r.key}
+                          className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer ${r.selected ? 'bg-white' : 'bg-slate-50'}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={r.selected}
+                            onChange={() => handleToggleGetPurchaseImportRow(r.key)}
+                            className="w-4 h-4 accent-rose-600 cursor-pointer shrink-0"
+                          />
+                          <span className="text-slate-400 whitespace-nowrap">{r.date}</span>
+                          <span className="text-slate-600 whitespace-nowrap">{r.vendor}</span>
+                          <span className="font-bold text-slate-800 truncate flex-1">{r.item_name}</span>
+                          <span className="font-bold text-black whitespace-nowrap">{r.amount.toLocaleString()}원</span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="p-2 border-t border-slate-200">
+                      <button
+                        onClick={handleConfirmPurchaseImport}
+                        className="w-full py-2 bg-rose-200 hover:bg-rose-300 text-slate-900 font-extrabold rounded-xl text-xs shadow-xs transition-colors cursor-pointer border border-rose-400"
+                      >
+                        ✅ 선택 항목 매입으로 가져오기
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -5381,6 +5627,15 @@ export default function App() {
 
                 {payhereImportRows.length > 0 && (
                   <div className="border border-slate-200 rounded-xl bg-white overflow-hidden mt-2">
+                    <label className="flex items-center gap-2 px-3 py-2 bg-slate-100 border-b border-slate-200 text-xs font-bold text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={payhereImportRows.every(r => r.selected)}
+                        onChange={handleToggleAllPayhereRows}
+                        className="w-4 h-4 accent-rose-600 cursor-pointer shrink-0"
+                      />
+                      <span>전체 선택/해제</span>
+                    </label>
                     <div className="flex items-center justify-between px-3 py-2 bg-slate-100 border-b border-slate-200 text-xs font-bold text-slate-700">
                       <span>총 {payhereImportRows.length}건 · 선택됨 {payhereImportRows.filter(r => r.selected).length}건</span>
                       <span className="text-rose-600">
