@@ -310,6 +310,9 @@ export default function App() {
   const [onsiteMatchedCustomerList, setOnsiteMatchedCustomerList] = useState([]); // 현장판매 탭 성명 매칭 후보
 
   const [showBackupAlertModal, setShowBackupAlertModal] = useState(false);
+  const [autoBackupDates, setAutoBackupDates] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('auto_backup_dates') || '[]'); } catch { return []; }
+  });
   // 백업/복원 메뉴에 모아둔 각 내보내기 기능의 기간 선택 (비워두면 전체 기간)
   const [backupExportStart, setBackupExportStart] = useState('');
   const [backupExportEnd, setBackupExportEnd] = useState('');
@@ -540,6 +543,16 @@ export default function App() {
       if (nowInfo.dayOfWeek === 1 && nowInfo.currentHour >= 12) {
         const lastNotified = localStorage.getItem('last_backup_notice_date');
         if (lastNotified !== nowInfo.date) {
+          // 주간 백업 시간이 되면 전체 백업 엑셀 파일을 자동으로 다운로드 폴더에 저장합니다.
+          handleExportAllExcel(null, null);
+          localStorage.setItem('last_backup_notice_date', nowInfo.date);
+
+          setAutoBackupDates(prev => {
+            const updated = [...prev, nowInfo.date].slice(-20); // 최근 20건까지만 보관
+            localStorage.setItem('auto_backup_dates', JSON.stringify(updated));
+            return updated;
+          });
+
           setShowBackupAlertModal(true);
         }
       }
@@ -548,11 +561,9 @@ export default function App() {
     checkBackupSchedule();
     const interval = setInterval(checkBackupSchedule, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [orders, customers, purchases, photoMap]);
 
   const handleCloseBackupModal = () => {
-    const nowInfo = getKoreaNowFormatted();
-    localStorage.setItem('last_backup_notice_date', nowInfo.date);
     setShowBackupAlertModal(false);
   };
 
@@ -3040,24 +3051,24 @@ export default function App() {
       {showBackupAlertModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border-2 border-rose-400 text-center space-y-4">
-            <div className="text-4xl animate-bounce">📢</div>
-            <h3 className="text-lg font-bold text-slate-900">주간 CSV 백업 알림</h3>
+            <div className="text-4xl animate-bounce">✅</div>
+            <h3 className="text-lg font-bold text-slate-900">주간 자동 백업 완료</h3>
             <p className="text-xs md:text-sm text-slate-600 leading-relaxed">
-              매주 <strong>월요일 낮 12시 정기 백업 시간</strong>입니다.<br />
-              소중한 주문 및 고객 데이터를 안전하게 저장해주세요!
+              <strong>월요일 낮 12시 정기 백업</strong>이 자동으로 실행되어<br />
+              전체 백업 엑셀 파일이 이 기기의 <strong>다운로드 폴더</strong>에 저장되었습니다.
             </p>
             <div className="flex gap-2 pt-2">
               <button
                 onClick={() => handleExportAllExcel(null, null)}
-                className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
+                className="flex-1 py-2.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
               >
-                📥 지금 바로 백업 다운로드
+                📥 다시 받기
               </button>
               <button
                 onClick={handleCloseBackupModal}
-                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-300 cursor-pointer"
+                className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
               >
-                닫기
+                확인
               </button>
             </div>
           </div>
@@ -5252,8 +5263,21 @@ export default function App() {
             <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl space-y-2">
               <h3 className="font-bold text-sm text-rose-800">📅 주간 백업 자동 안내 시스템</h3>
               <p className="text-xs text-rose-700 leading-relaxed">
-                매주 월요일 낮 12시 이후 앱에 접속하시거나 화면을 켜두시면 백업 팝업 알림창이 자동으로 작동합니다.
+                매주 월요일 낮 12시 이후 앱을 열어두시면, 전체 백업 엑셀 파일이 자동으로 이 기기의 다운로드 폴더에 저장됩니다.<br />
+                (앱이 완전히 꺼져있는 동안에는 실행되지 않으니, 월요일 낮에 한 번은 화면을 켜주세요.)
               </p>
+              {autoBackupDates.length > 0 && (
+                <div className="pt-1">
+                  <div className="text-[11px] font-bold text-rose-800 mb-1">✅ 자동 백업된 날짜</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[...autoBackupDates].reverse().map(d => (
+                      <span key={d} className="px-2 py-0.5 rounded-md bg-white border border-rose-200 text-[11px] text-rose-700 font-bold">
+                        {d}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="border border-slate-200 rounded-xl overflow-hidden">
