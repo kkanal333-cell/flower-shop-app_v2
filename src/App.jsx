@@ -1693,33 +1693,22 @@ export default function App() {
       <html>
       <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>영수증</title>
         <style>
+          @page { size: 80mm auto; margin: 0; }
           html, body { background: #e5e5e5; }
-          body { font-family: 'Arial', sans-serif; margin: 0; padding: 2mm; box-sizing: border-box; line-height: 1.4; color: #000; background: #fff; }
+          body { font-family: 'Arial', sans-serif; margin: 0; padding: 2mm; width: 74mm; box-sizing: border-box; font-size: 13px; line-height: 1.4; color: #000; background: #fff; }
           .center { text-align: center; }
+          .title { font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
           .row { margin-bottom: 5px; } .row .label { display: inline-block; width: 52px; vertical-align: top; }
           .label { font-weight: bold; white-space: nowrap; }
           .value { font-weight: bold; }
+          .big-text { font-size: 26px !important; font-weight: bold; }
           .memo { margin-top: 10px; padding-top: 5px; border-top: 1px dashed #000; }
-
-          /* 화면에서 미리 볼 때: 확대 없이 바로 잘 보이도록 화면 폭에 맞춰 크게 표시 */
-          @media screen {
-            body { width: 100%; max-width: 420px; margin: 0 auto; font-size: 17px; padding: 16px; }
-            .title { font-size: 26px; font-weight: bold; margin-bottom: 14px; border-bottom: 2px solid #000; padding-bottom: 8px; }
-            .big-text { font-size: 32px !important; font-weight: bold; }
-            .footer { margin-top: 20px; text-align: center; font-size: 15px; }
-          }
-
-          /* 실제 인쇄 시에는 74mm 감열지 폭에 맞춥니다 */
+          .footer { margin-top: 20px; text-align: center; font-size: 12px; }
           @media print {
-            @page { size: 80mm auto; margin: 0; }
             html, body { background: #fff; }
-            body { margin: 0; padding: 2mm; width: 74mm; font-size: 13px; }
-            .title { font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
-            .big-text { font-size: 26px !important; font-weight: bold; }
-            .footer { margin-top: 20px; text-align: center; font-size: 12px; }
+            body { margin: 0; padding: 2mm; width: 74mm; }
             button { display: none; }
           }
         </style>
@@ -1791,16 +1780,18 @@ export default function App() {
       <html>
       <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>선택 주문서 일괄 출력</title>
         <style>
           html, body { background: #e5e5e5; }
-          body { font-family: 'Arial', sans-serif; margin: 0; padding: 2mm; box-sizing: border-box; line-height: 1.4; color: #000; background: #fff; }
+          body { font-family: 'Arial', sans-serif; margin: 0; padding: 2mm; width: 74mm; box-sizing: border-box; font-size: 13px; line-height: 1.4; color: #000; background: #fff; }
           .center { text-align: center; }
+          .title { font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
           .row { margin-bottom: 5px; } .row .label { display: inline-block; width: 52px; vertical-align: top; }
           .label { font-weight: bold; white-space: nowrap; }
+          .big-text { font-size: 26px !important; font-weight: bold; }
           .memo { margin-top: 10px; padding-top: 5px; border-top: 1px dashed #000; margin-bottom: 10px; }
-
+          .footer { margin-top: 15px; text-align: center; font-size: 12px; }
+          
           .ticket-page {
             page-break-after: always;
             break-after: page;
@@ -1813,25 +1804,13 @@ export default function App() {
             margin-bottom: 0;
           }
 
-          /* 화면에서 미리 볼 때: 확대 없이 바로 잘 보이도록 화면 폭에 맞춰 크게 표시 */
-          @media screen {
-            body { width: 100%; max-width: 420px; margin: 0 auto; font-size: 17px; padding: 16px; }
-            .title { font-size: 26px; font-weight: bold; margin-bottom: 14px; border-bottom: 2px solid #000; padding-bottom: 8px; }
-            .big-text { font-size: 32px !important; font-weight: bold; }
-            .footer { margin-top: 20px; text-align: center; font-size: 15px; }
-          }
-
-          /* 실제 인쇄 시에는 74mm 감열지 폭에 맞춥니다 */
           @media print {
             @page {
               size: 80mm auto;
               margin: 0;
             }
             html, body { background: #fff; }
-            body { margin: 0; padding: 2mm; width: 74mm; font-size: 13px; }
-            .title { font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
-            .big-text { font-size: 26px !important; font-weight: bold; }
-            .footer { margin-top: 15px; text-align: center; font-size: 12px; }
+            body { margin: 0; padding: 2mm; width: 74mm; }
             .no-print { display: none; }
           }
         </style>
