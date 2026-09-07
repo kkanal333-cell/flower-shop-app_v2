@@ -1460,13 +1460,20 @@ export default function App() {
   }, [orders, dashboardPeriod]);
 
   const [trendGranularity, setTrendGranularity] = useState('daily'); // daily | weekly | monthly | yearly
+  const [trendOffset, setTrendOffset] = useState(0); // 0=현재 구간, 1=한 구간 전, ... (‹ › 화살표로 이동)
 
-  // 매출 추이 그래프 데이터 (일/주/월/년 단위 선택, 기간 필터 버튼과 무관하게 항상 "지금부터 N개" 고정)
+  // 매출 추이 그래프 데이터 (일/주/월/년 단위 선택, 화살표로 이전/다음 구간 이동 가능)
   const trendData = useMemo(() => {
     const now = getKoreaNowFormatted();
     const nowDate = now.kstDateObj;
     const pad = n => String(n).padStart(2, '0');
     const fmtDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+    const refDate = new Date(nowDate);
+    if (trendGranularity === 'daily') refDate.setDate(nowDate.getDate() - trendOffset * 7);
+    else if (trendGranularity === 'weekly') refDate.setDate(nowDate.getDate() - trendOffset * 49);
+    else if (trendGranularity === 'monthly') refDate.setMonth(nowDate.getMonth() - trendOffset * 12);
+    else if (trendGranularity === 'yearly') refDate.setFullYear(nowDate.getFullYear() - trendOffset * 5);
 
     const validOrders = (orders || []).filter(o => !o.deleted_at);
     const byDateAll = {};
@@ -1480,15 +1487,15 @@ export default function App() {
 
     if (trendGranularity === 'daily') {
       for (let i = 6; i >= 0; i--) {
-        const dt = new Date(nowDate);
-        dt.setDate(nowDate.getDate() - i);
+        const dt = new Date(refDate);
+        dt.setDate(refDate.getDate() - i);
         const dStr = fmtDate(dt);
         points.push({ key: dStr, label: `${pad(dt.getMonth() + 1)}/${pad(dt.getDate())}`, amt: byDateAll[dStr] || 0 });
       }
     } else if (trendGranularity === 'weekly') {
-      const dayOfWeek = nowDate.getDay(); // 0:일 ~ 6:토
-      const thisSunday = new Date(nowDate);
-      thisSunday.setDate(nowDate.getDate() - dayOfWeek); // 이번 주 일요일 (달력 표시와 동일하게 일~토 기준)
+      const dayOfWeek = refDate.getDay(); // 0:일 ~ 6:토
+      const thisSunday = new Date(refDate);
+      thisSunday.setDate(refDate.getDate() - dayOfWeek); // 이번 주 일요일 (달력 표시와 동일하게 일~토 기준)
       for (let i = 6; i >= 0; i--) {
         const start = new Date(thisSunday);
         start.setDate(thisSunday.getDate() - i * 7);
@@ -1502,7 +1509,7 @@ export default function App() {
       }
     } else if (trendGranularity === 'monthly') {
       for (let i = 11; i >= 0; i--) {
-        const dt = new Date(nowDate.getFullYear(), nowDate.getMonth() - i, 1);
+        const dt = new Date(refDate.getFullYear(), refDate.getMonth() - i, 1);
         const ymStr = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}`;
         let sum = 0;
         dateEntries.forEach(([d, v]) => { if (d.slice(0, 7) === ymStr) sum += v; });
@@ -1510,7 +1517,7 @@ export default function App() {
       }
     } else if (trendGranularity === 'yearly') {
       for (let i = 4; i >= 0; i--) {
-        const y = nowDate.getFullYear() - i;
+        const y = refDate.getFullYear() - i;
         let sum = 0;
         dateEntries.forEach(([d, v]) => { if (d.slice(0, 4) === String(y)) sum += v; });
         points.push({ key: String(y), label: `${y}`, amt: sum });
@@ -1519,7 +1526,7 @@ export default function App() {
 
     const maxAmt = points.reduce((m, p) => Math.max(m, p.amt), 0) || 1;
     return { points, maxAmt };
-  }, [orders, trendGranularity]);
+  }, [orders, trendGranularity, trendOffset]);
 
   // 선택한 특정 날짜의 매출 리스트 (접수일시 기준)
   const dashboardDateOrders = useMemo(() => {
@@ -4818,7 +4825,26 @@ export default function App() {
             <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
                 <h3 className="text-sm md:text-base font-bold text-slate-900">📈 매출 추이</h3>
-                <div className="flex gap-1 flex-wrap">
+                <div className="flex gap-1 flex-wrap items-center">
+                  <button
+                    onClick={() => setTrendOffset(o => o + 1)}
+                    className="w-6 h-6 flex items-center justify-center rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold cursor-pointer"
+                    aria-label="이전 구간"
+                  >
+                    ‹
+                  </button>
+                  <button
+                    onClick={() => setTrendOffset(o => Math.max(0, o - 1))}
+                    disabled={trendOffset === 0}
+                    className={`w-6 h-6 flex items-center justify-center rounded-lg border text-xs font-bold ${
+                      trendOffset === 0
+                        ? 'border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed'
+                        : 'border-slate-300 bg-white hover:bg-slate-100 text-slate-700 cursor-pointer'
+                    }`}
+                    aria-label="다음 구간"
+                  >
+                    ›
+                  </button>
                   {[
                     { id: 'daily', label: '일간' },
                     { id: 'weekly', label: '주간' },
@@ -4827,7 +4853,7 @@ export default function App() {
                   ].map(g => (
                     <button
                       key={g.id}
-                      onClick={() => setTrendGranularity(g.id)}
+                      onClick={() => { setTrendGranularity(g.id); setTrendOffset(0); }}
                       className={`px-2.5 py-1 rounded-lg text-[11px] md:text-xs font-bold cursor-pointer border-2 whitespace-nowrap ${
                         trendGranularity === g.id
                           ? 'bg-violet-100 border-violet-400 shadow-sm'
@@ -6150,6 +6176,7 @@ function PurchaseTab({ purchases, fetchPurchases }) {
   const [period, setPeriod] = useState('today'); // today | week | month | year
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [trendGranularity, setTrendGranularity] = useState('daily'); // daily | weekly | monthly | yearly
+  const [trendOffset, setTrendOffset] = useState(0); // 0=현재 구간, 1=한 구간 전, ... (‹ › 화살표로 이동)
   const [saving, setSaving] = useState(false);
 
   // 매입이력 (업체/거래방식/품목 클릭 시 고정 화면에 표시)
@@ -6272,24 +6299,30 @@ function PurchaseTab({ purchases, fetchPurchases }) {
     .filter(p => p.date === selectedDate)
     .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
 
-  // 매입 추이 (일/주/월/년)
+  // 매입 추이 (일/주/월/년, 화살표로 이전/다음 구간 이동 가능)
   const pad = n => String(n).padStart(2, '0');
   const fmtDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const byDateAll = {};
   (purchases || []).forEach(p => { if (p.date) byDateAll[p.date] = (byDateAll[p.date] || 0) + (Number(p.amount) || 0); });
   const dateEntries = Object.entries(byDateAll);
 
+  const trendRefDate = new Date(nowDate);
+  if (trendGranularity === 'daily') trendRefDate.setDate(nowDate.getDate() - trendOffset * 7);
+  else if (trendGranularity === 'weekly') trendRefDate.setDate(nowDate.getDate() - trendOffset * 49);
+  else if (trendGranularity === 'monthly') trendRefDate.setMonth(nowDate.getMonth() - trendOffset * 12);
+  else if (trendGranularity === 'yearly') trendRefDate.setFullYear(nowDate.getFullYear() - trendOffset * 5);
+
   let trendPoints = [];
   if (trendGranularity === 'daily') {
     for (let i = 6; i >= 0; i--) {
-      const dt = new Date(nowDate);
-      dt.setDate(nowDate.getDate() - i);
+      const dt = new Date(trendRefDate);
+      dt.setDate(trendRefDate.getDate() - i);
       const dStr = fmtDate(dt);
       trendPoints.push({ key: dStr, label: `${pad(dt.getMonth() + 1)}/${pad(dt.getDate())}`, amt: byDateAll[dStr] || 0 });
     }
   } else if (trendGranularity === 'weekly') {
-    const thisSunday = new Date(nowDate);
-    thisSunday.setDate(nowDate.getDate() - dayOfWeek);
+    const thisSunday = new Date(trendRefDate);
+    thisSunday.setDate(trendRefDate.getDate() - trendRefDate.getDay());
     for (let i = 6; i >= 0; i--) {
       const start = new Date(thisSunday);
       start.setDate(thisSunday.getDate() - i * 7);
@@ -6303,7 +6336,7 @@ function PurchaseTab({ purchases, fetchPurchases }) {
     }
   } else if (trendGranularity === 'monthly') {
     for (let i = 11; i >= 0; i--) {
-      const dt = new Date(nowDate.getFullYear(), nowDate.getMonth() - i, 1);
+      const dt = new Date(trendRefDate.getFullYear(), trendRefDate.getMonth() - i, 1);
       const ymStr = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}`;
       let sum = 0;
       dateEntries.forEach(([d, v]) => { if (d.slice(0, 7) === ymStr) sum += v; });
@@ -6311,7 +6344,7 @@ function PurchaseTab({ purchases, fetchPurchases }) {
     }
   } else if (trendGranularity === 'yearly') {
     for (let i = 4; i >= 0; i--) {
-      const y = nowDate.getFullYear() - i;
+      const y = trendRefDate.getFullYear() - i;
       let sum = 0;
       dateEntries.forEach(([d, v]) => { if (d.slice(0, 4) === String(y)) sum += v; });
       trendPoints.push({ key: String(y), label: `${y}`, amt: sum });
@@ -6692,7 +6725,26 @@ function PurchaseTab({ purchases, fetchPurchases }) {
       <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
           <h3 className="text-sm md:text-base font-bold text-slate-900">📈 매입 추이</h3>
-          <div className="flex gap-1 flex-wrap">
+          <div className="flex gap-1 flex-wrap items-center">
+            <button
+              onClick={() => setTrendOffset(o => o + 1)}
+              className="w-6 h-6 flex items-center justify-center rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold cursor-pointer"
+              aria-label="이전 구간"
+            >
+              ‹
+            </button>
+            <button
+              onClick={() => setTrendOffset(o => Math.max(0, o - 1))}
+              disabled={trendOffset === 0}
+              className={`w-6 h-6 flex items-center justify-center rounded-lg border text-xs font-bold ${
+                trendOffset === 0
+                  ? 'border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed'
+                  : 'border-slate-300 bg-white hover:bg-slate-100 text-slate-700 cursor-pointer'
+              }`}
+              aria-label="다음 구간"
+            >
+              ›
+            </button>
             {[
               { id: 'daily', label: '일간' },
               { id: 'weekly', label: '주간' },
@@ -6701,7 +6753,7 @@ function PurchaseTab({ purchases, fetchPurchases }) {
             ].map(g => (
               <button
                 key={g.id}
-                onClick={() => setTrendGranularity(g.id)}
+                onClick={() => { setTrendGranularity(g.id); setTrendOffset(0); }}
                 className={`px-2.5 py-1 rounded-lg text-[11px] md:text-xs font-bold cursor-pointer border-2 whitespace-nowrap ${
                   trendGranularity === g.id ? 'bg-sky-100 border-sky-400 shadow-sm' : 'bg-white border-transparent hover:bg-slate-100'
                 }`}
@@ -6778,6 +6830,7 @@ function StatsTab({ orders, purchases }) {
   const todayStr = getKoreaNowFormatted().date;
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [trendGranularity, setTrendGranularity] = useState('daily'); // daily | weekly | monthly | yearly
+  const [trendOffset, setTrendOffset] = useState(0); // 0=현재 구간, 1=한 구간 전, ... (‹ › 화살표로 이동)
   const [period, setPeriod] = useState('today'); // today | week | month | year
 
   const nowDate = getKoreaNowFormatted().kstDateObj;
@@ -6858,22 +6911,28 @@ function StatsTab({ orders, purchases }) {
   const selectedPurch = purchByDate[selectedDate] || 0;
   const selectedProfit = selectedSales - selectedPurch;
 
-  // 수익 추이 (일/주/월/년)
+  // 수익 추이 (일/주/월/년, 화살표로 이전/다음 구간 이동 가능)
   const pad = n => String(n).padStart(2, '0');
   const fmtDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  const trendRefDate = new Date(nowDate);
+  if (trendGranularity === 'daily') trendRefDate.setDate(nowDate.getDate() - trendOffset * 7);
+  else if (trendGranularity === 'weekly') trendRefDate.setDate(nowDate.getDate() - trendOffset * 49);
+  else if (trendGranularity === 'monthly') trendRefDate.setMonth(nowDate.getMonth() - trendOffset * 12);
+  else if (trendGranularity === 'yearly') trendRefDate.setFullYear(nowDate.getFullYear() - trendOffset * 5);
 
   let trendPoints = [];
   if (trendGranularity === 'daily') {
     for (let i = 6; i >= 0; i--) {
-      const dt = new Date(nowDate);
-      dt.setDate(nowDate.getDate() - i);
+      const dt = new Date(trendRefDate);
+      dt.setDate(trendRefDate.getDate() - i);
       const dStr = fmtDate(dt);
       const profit = (salesByDate[dStr] || 0) - (purchByDate[dStr] || 0);
       trendPoints.push({ key: dStr, label: `${pad(dt.getMonth() + 1)}/${pad(dt.getDate())}`, amt: profit });
     }
   } else if (trendGranularity === 'weekly') {
-    const thisSunday = new Date(nowDate);
-    thisSunday.setDate(nowDate.getDate() - dayOfWeek);
+    const thisSunday = new Date(trendRefDate);
+    thisSunday.setDate(trendRefDate.getDate() - trendRefDate.getDay());
     for (let i = 6; i >= 0; i--) {
       const start = new Date(thisSunday);
       start.setDate(thisSunday.getDate() - i * 7);
@@ -6887,7 +6946,7 @@ function StatsTab({ orders, purchases }) {
     }
   } else if (trendGranularity === 'monthly') {
     for (let i = 11; i >= 0; i--) {
-      const dt = new Date(nowDate.getFullYear(), nowDate.getMonth() - i, 1);
+      const dt = new Date(trendRefDate.getFullYear(), trendRefDate.getMonth() - i, 1);
       const ymStr = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}`;
       let sum = 0;
       allDates.forEach(d => { if (d.slice(0, 7) === ymStr) sum += (salesByDate[d] || 0) - (purchByDate[d] || 0); });
@@ -6895,7 +6954,7 @@ function StatsTab({ orders, purchases }) {
     }
   } else if (trendGranularity === 'yearly') {
     for (let i = 4; i >= 0; i--) {
-      const y = nowDate.getFullYear() - i;
+      const y = trendRefDate.getFullYear() - i;
       let sum = 0;
       allDates.forEach(d => { if (d.slice(0, 4) === String(y)) sum += (salesByDate[d] || 0) - (purchByDate[d] || 0); });
       trendPoints.push({ key: String(y), label: `${y}`, amt: sum });
@@ -6950,8 +7009,7 @@ function StatsTab({ orders, purchases }) {
         <div className="flex items-center gap-3 mt-4 text-[11px] text-slate-500">
           <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ backgroundColor: '#fbe7e8' }}></span> 매출</span>
           <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ backgroundColor: '#e0f2fe' }}></span> 매입</span>
-          <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ backgroundColor: '#dcfce7' }}></span> 수익(+)</span>
-          <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ backgroundColor: '#fee2e2' }}></span> 수익(-)</span>
+          <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ backgroundColor: '#dcfce7' }}></span> 수익</span>
         </div>
       </div>
 
@@ -7032,7 +7090,26 @@ function StatsTab({ orders, purchases }) {
       <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
           <h3 className="text-sm md:text-base font-bold text-slate-900">📊 수익 추이</h3>
-          <div className="flex gap-1 flex-wrap">
+          <div className="flex gap-1 flex-wrap items-center">
+            <button
+              onClick={() => setTrendOffset(o => o + 1)}
+              className="w-6 h-6 flex items-center justify-center rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold cursor-pointer"
+              aria-label="이전 구간"
+            >
+              ‹
+            </button>
+            <button
+              onClick={() => setTrendOffset(o => Math.max(0, o - 1))}
+              disabled={trendOffset === 0}
+              className={`w-6 h-6 flex items-center justify-center rounded-lg border text-xs font-bold ${
+                trendOffset === 0
+                  ? 'border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed'
+                  : 'border-slate-300 bg-white hover:bg-slate-100 text-slate-700 cursor-pointer'
+              }`}
+              aria-label="다음 구간"
+            >
+              ›
+            </button>
             {[
               { id: 'daily', label: '일간' },
               { id: 'weekly', label: '주간' },
@@ -7041,7 +7118,7 @@ function StatsTab({ orders, purchases }) {
             ].map(g => (
               <button
                 key={g.id}
-                onClick={() => setTrendGranularity(g.id)}
+                onClick={() => { setTrendGranularity(g.id); setTrendOffset(0); }}
                 className={`px-2.5 py-1 rounded-lg text-[11px] md:text-xs font-bold cursor-pointer border-2 whitespace-nowrap ${
                   trendGranularity === g.id ? 'bg-emerald-100 border-emerald-400 shadow-sm' : 'bg-white border-transparent hover:bg-slate-100'
                 }`}
