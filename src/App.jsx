@@ -6824,34 +6824,32 @@ function StatsTab({ orders, purchases }) {
       const sales = salesByDate[d] || 0;
       const purch = purchByDate[d] || 0;
       const profit = sales - purch;
+      if (sales === 0 && purch === 0) return;
 
-      if (sales > 0) {
-        events.push({
-          id: d + '-sales', start: d, allDay: true, title: sales.toLocaleString(),
-          backgroundColor: '#fbe7e8',
-          textColor: '#be123c',
-          borderColor: 'transparent',
-          extendedProps: { order: 1 }
-        });
-      }
-      if (purch > 0) {
-        events.push({
-          id: d + '-purch', start: d, allDay: true, title: purch.toLocaleString(),
-          backgroundColor: '#e0f2fe',
-          textColor: '#0369a1',
-          borderColor: 'transparent',
-          extendedProps: { order: 2 }
-        });
-      }
-      if (sales > 0 || purch > 0) {
-        events.push({
-          id: d + '-profit', start: d, allDay: true, title: (profit >= 0 ? '+' : '') + profit.toLocaleString(),
-          backgroundColor: profit >= 0 ? '#dcfce7' : '#fee2e2',
-          textColor: profit >= 0 ? '#15803d' : '#b91c1c',
-          borderColor: 'transparent',
-          extendedProps: { order: 3 }
-        });
-      }
+      // 매출/매입/수익 항상 1·2·3번 자리를 유지합니다 (해당 항목이 없는 날은 빈 자리로 둠 - 수익 위치가 오르내리지 않도록)
+      events.push({
+        id: d + '-sales', start: d, allDay: true,
+        title: sales > 0 ? sales.toLocaleString() : '',
+        backgroundColor: sales > 0 ? '#fbe7e8' : 'transparent',
+        textColor: '#be123c',
+        borderColor: 'transparent',
+        extendedProps: { order: 1 }
+      });
+      events.push({
+        id: d + '-purch', start: d, allDay: true,
+        title: purch > 0 ? purch.toLocaleString() : '',
+        backgroundColor: purch > 0 ? '#e0f2fe' : 'transparent',
+        textColor: '#0369a1',
+        borderColor: 'transparent',
+        extendedProps: { order: 2 }
+      });
+      events.push({
+        id: d + '-profit', start: d, allDay: true, title: (profit >= 0 ? '+' : '') + profit.toLocaleString(),
+        backgroundColor: '#dcfce7', // 수익 박스는 +/- 상관없이 항상 연두톤 배경
+        textColor: profit >= 0 ? '#15803d' : '#b91c1c', // 숫자 색만 +면 초록, -면 빨강
+        borderColor: 'transparent',
+        extendedProps: { order: 3 }
+      });
     });
     return events;
   };
@@ -6975,16 +6973,17 @@ function StatsTab({ orders, purchases }) {
               <div style={{
                 backgroundColor: arg.event.backgroundColor,
                 color: arg.event.textColor,
-                fontSize: '8px',
+                fontSize: '7px',
                 fontWeight: 700,
                 lineHeight: '1.4',
-                padding: '0px 3px',
+                padding: '0px 1px',
                 borderRadius: '3px',
                 width: '100%',
                 boxSizing: 'border-box',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                letterSpacing: '-0.3px'
               }}>
                 {arg.event.title}
               </div>
