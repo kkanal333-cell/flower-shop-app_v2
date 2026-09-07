@@ -6824,13 +6824,12 @@ function StatsTab({ orders, purchases }) {
       const sales = salesByDate[d] || 0;
       const purch = purchByDate[d] || 0;
       const profit = sales - purch;
-      const isPast = d < todayStr;
 
       if (sales > 0) {
         events.push({
           id: d + '-sales', start: d, allDay: true, title: sales.toLocaleString(),
-          backgroundColor: isPast ? '#f1f5f9' : '#fbe7e8',
-          textColor: isPast ? '#94a3b8' : '#be123c',
+          backgroundColor: '#fbe7e8',
+          textColor: '#be123c',
           borderColor: 'transparent',
           extendedProps: { order: 1 }
         });
@@ -6838,8 +6837,8 @@ function StatsTab({ orders, purchases }) {
       if (purch > 0) {
         events.push({
           id: d + '-purch', start: d, allDay: true, title: purch.toLocaleString(),
-          backgroundColor: isPast ? '#f1f5f9' : '#e0f2fe',
-          textColor: isPast ? '#94a3b8' : '#0369a1',
+          backgroundColor: '#e0f2fe',
+          textColor: '#0369a1',
           borderColor: 'transparent',
           extendedProps: { order: 2 }
         });
@@ -6847,8 +6846,8 @@ function StatsTab({ orders, purchases }) {
       if (sales > 0 || purch > 0) {
         events.push({
           id: d + '-profit', start: d, allDay: true, title: (profit >= 0 ? '+' : '') + profit.toLocaleString(),
-          backgroundColor: isPast ? '#f1f5f9' : (profit >= 0 ? '#dcfce7' : '#fee2e2'),
-          textColor: isPast ? '#94a3b8' : (profit >= 0 ? '#15803d' : '#b91c1c'),
+          backgroundColor: profit >= 0 ? '#dcfce7' : '#fee2e2',
+          textColor: profit >= 0 ? '#15803d' : '#b91c1c',
           borderColor: 'transparent',
           extendedProps: { order: 3 }
         });
