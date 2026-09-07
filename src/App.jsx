@@ -272,7 +272,7 @@ export default function App() {
   
   const [orders, setOrders] = useState([]);
   const [purchases, setPurchases] = useState([]);
-  const [salesMenuTab, setSalesMenuTab] = useState('sales'); // 'sales' | 'purchase' - 매출/매입 탭
+  const [salesMenuTab, setSalesMenuTab] = useState('sales'); // 'sales' | 'purchase' | 'stats' - 매출/매입/통계 탭
   const [customers, setCustomers] = useState([]);
 
   // 휴지통 상태 관리 (Supabase의 deleted_at 컬럼 기준으로 관리 -> 모바일/PC 등 모든 기기에서 동일하게 동기화됨)
@@ -4629,6 +4629,14 @@ export default function App() {
               >
                 🧾 매입
               </button>
+              <button
+                onClick={() => setSalesMenuTab('stats')}
+                className={`px-4 py-2 rounded-lg text-xs md:text-sm font-bold cursor-pointer border-2 transition-colors ${
+                  salesMenuTab === 'stats' ? 'bg-rose-50 border-rose-400 text-rose-700 shadow-sm' : 'bg-white border-transparent text-slate-500 hover:bg-slate-100'
+                }`}
+              >
+                📈 통계
+              </button>
             </div>
 
             {salesMenuTab === 'sales' && (
@@ -4942,6 +4950,12 @@ export default function App() {
             {salesMenuTab === 'purchase' && (
               <div className="max-w-6xl mx-auto">
                 <PurchaseTab purchases={purchases} fetchPurchases={fetchPurchases} />
+              </div>
+            )}
+
+            {salesMenuTab === 'stats' && (
+              <div className="max-w-6xl mx-auto">
+                <StatsTab orders={orders} purchases={purchases} />
               </div>
             )}
           </div>
@@ -6752,6 +6766,285 @@ function PurchaseTab({ purchases, fetchPurchases }) {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ===================== 통계(순수익) 탭 =====================
+function StatsTab({ orders, purchases }) {
+  const todayStr = getKoreaNowFormatted().date;
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+  const [trendGranularity, setTrendGranularity] = useState('daily'); // daily | weekly | monthly | yearly
+
+  const nowDate = getKoreaNowFormatted().kstDateObj;
+  const dayOfWeek = nowDate.getDay();
+
+  // 날짜별 매출 합계 (삭제된 주문 제외)
+  const salesByDate = {};
+  (orders || []).filter(o => !o.deleted_at).forEach(o => {
+    const d = (o.created_at || '').replace(' ', 'T').split('T')[0];
+    if (!d) return;
+    salesByDate[d] = (salesByDate[d] || 0) + (Number(o.amount) || 0);
+  });
+
+  // 날짜별 매입 합계
+  const purchByDate = {};
+  (purchases || []).forEach(p => {
+    if (!p.date) return;
+    purchByDate[p.date] = (purchByDate[p.date] || 0) + (Number(p.amount) || 0);
+  });
+
+  const allDates = Array.from(new Set([...Object.keys(salesByDate), ...Object.keys(purchByDate)]));
+
+  // 수익 달력 이벤트: 한 날짜에 매출/매입/수익 3줄
+  const getProfitCalendarEvents = () => {
+    const events = [];
+    allDates.forEach(d => {
+      const sales = salesByDate[d] || 0;
+      const purch = purchByDate[d] || 0;
+      const profit = sales - purch;
+      const isPast = d < todayStr;
+
+      if (sales > 0) {
+        events.push({
+          id: d + '-sales', start: d, allDay: true, title: sales.toLocaleString(),
+          backgroundColor: isPast ? '#f1f5f9' : '#fbe7e8',
+          textColor: isPast ? '#94a3b8' : '#be123c',
+          borderColor: 'transparent',
+          extendedProps: { order: 1 }
+        });
+      }
+      if (purch > 0) {
+        events.push({
+          id: d + '-purch', start: d, allDay: true, title: purch.toLocaleString(),
+          backgroundColor: isPast ? '#f1f5f9' : '#e0f2fe',
+          textColor: isPast ? '#94a3b8' : '#0369a1',
+          borderColor: 'transparent',
+          extendedProps: { order: 2 }
+        });
+      }
+      if (sales > 0 || purch > 0) {
+        events.push({
+          id: d + '-profit', start: d, allDay: true, title: (profit >= 0 ? '+' : '') + profit.toLocaleString(),
+          backgroundColor: isPast ? '#f1f5f9' : (profit >= 0 ? '#dcfce7' : '#fee2e2'),
+          textColor: isPast ? '#94a3b8' : (profit >= 0 ? '#15803d' : '#b91c1c'),
+          borderColor: 'transparent',
+          extendedProps: { order: 3 }
+        });
+      }
+    });
+    return events;
+  };
+
+  const selectedSales = salesByDate[selectedDate] || 0;
+  const selectedPurch = purchByDate[selectedDate] || 0;
+  const selectedProfit = selectedSales - selectedPurch;
+
+  // 수익 추이 (일/주/월/년)
+  const pad = n => String(n).padStart(2, '0');
+  const fmtDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  let trendPoints = [];
+  if (trendGranularity === 'daily') {
+    for (let i = 6; i >= 0; i--) {
+      const dt = new Date(nowDate);
+      dt.setDate(nowDate.getDate() - i);
+      const dStr = fmtDate(dt);
+      const profit = (salesByDate[dStr] || 0) - (purchByDate[dStr] || 0);
+      trendPoints.push({ key: dStr, label: `${pad(dt.getMonth() + 1)}/${pad(dt.getDate())}`, amt: profit });
+    }
+  } else if (trendGranularity === 'weekly') {
+    const thisSunday = new Date(nowDate);
+    thisSunday.setDate(nowDate.getDate() - dayOfWeek);
+    for (let i = 6; i >= 0; i--) {
+      const start = new Date(thisSunday);
+      start.setDate(thisSunday.getDate() - i * 7);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      const startStr = fmtDate(start);
+      const endStr = fmtDate(end);
+      let sum = 0;
+      allDates.forEach(d => { if (d >= startStr && d <= endStr) sum += (salesByDate[d] || 0) - (purchByDate[d] || 0); });
+      trendPoints.push({ key: startStr, label: `${pad(start.getMonth() + 1)}/${pad(start.getDate())}`, amt: sum });
+    }
+  } else if (trendGranularity === 'monthly') {
+    for (let i = 11; i >= 0; i--) {
+      const dt = new Date(nowDate.getFullYear(), nowDate.getMonth() - i, 1);
+      const ymStr = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}`;
+      let sum = 0;
+      allDates.forEach(d => { if (d.slice(0, 7) === ymStr) sum += (salesByDate[d] || 0) - (purchByDate[d] || 0); });
+      trendPoints.push({ key: ymStr, label: `${String(dt.getFullYear()).slice(2)}/${pad(dt.getMonth() + 1)}`, amt: sum });
+    }
+  } else if (trendGranularity === 'yearly') {
+    for (let i = 4; i >= 0; i--) {
+      const y = nowDate.getFullYear() - i;
+      let sum = 0;
+      allDates.forEach(d => { if (d.slice(0, 4) === String(y)) sum += (salesByDate[d] || 0) - (purchByDate[d] || 0); });
+      trendPoints.push({ key: String(y), label: `${y}`, amt: sum });
+    }
+  }
+  const trendMaxAbs = trendPoints.reduce((m, p) => Math.max(m, Math.abs(p.amt)), 0) || 1;
+
+  return (
+    <div className="space-y-4">
+      {/* 수익 통계 타이틀 */}
+      <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <h2 className="text-base md:text-xl font-bold text-slate-900 flex items-center gap-2">
+          <span>📈</span> 수익 통계
+        </h2>
+        <div className="flex items-center gap-3 mt-2 text-[11px] text-slate-500">
+          <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ backgroundColor: '#fbe7e8' }}></span> 매출</span>
+          <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ backgroundColor: '#e0f2fe' }}></span> 매입</span>
+          <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ backgroundColor: '#dcfce7' }}></span> 수익(+)</span>
+          <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ backgroundColor: '#fee2e2' }}></span> 수익(-)</span>
+        </div>
+      </div>
+
+      {/* 수익 달력 */}
+      <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <h3 className="text-sm md:text-base font-bold text-slate-900 mb-3">🗓️ 수익 달력</h3>
+        <div className="calendar-compact">
+          <FullCalendar
+            plugins={[dayGridPlugin, interactionPlugin]}
+            initialView="dayGridMonth"
+            locale="ko"
+            aspectRatio={1.5}
+            fixedWeekCount={false}
+            dayMaxEventRows={4}
+            contentHeight="auto"
+            events={getProfitCalendarEvents()}
+            eventOrder="extendedProps.order"
+            eventContent={(arg) => (
+              <span style={{ fontSize: '8px', fontWeight: 700, lineHeight: '1.3' }}>{arg.event.title}</span>
+            )}
+            dayCellDidMount={(arg) => {
+              const cellDateStr = `${arg.date.getFullYear()}-${String(arg.date.getMonth() + 1).padStart(2, '0')}-${String(arg.date.getDate()).padStart(2, '0')}`;
+              if (cellDateStr === selectedDate) {
+                arg.el.style.backgroundColor = '#fef08a';
+              }
+            }}
+            dateClick={(info) => setSelectedDate(info.dateStr)}
+            eventClick={(info) => setSelectedDate(info.event.startStr)}
+          />
+        </div>
+      </div>
+
+      {/* 날짜별 수익 */}
+      <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <h3 className="text-sm md:text-base font-bold text-slate-900">📆 날짜별 수익</h3>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={e => setSelectedDate(e.target.value)}
+            className="p-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-900"
+          />
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="p-3 rounded-xl text-center" style={{ backgroundColor: '#fbe7e8', border: '1px solid #f4b8bd' }}>
+            <div className="text-[11px] font-bold" style={{ color: '#be123c' }}>매출</div>
+            <div className="text-sm md:text-lg font-extrabold mt-1" style={{ color: '#be123c' }}>{selectedSales.toLocaleString()}원</div>
+          </div>
+          <div className="p-3 rounded-xl text-center" style={{ backgroundColor: '#e0f2fe', border: '1px solid #93c5fd' }}>
+            <div className="text-[11px] font-bold" style={{ color: '#0369a1' }}>매입</div>
+            <div className="text-sm md:text-lg font-extrabold mt-1" style={{ color: '#0369a1' }}>{selectedPurch.toLocaleString()}원</div>
+          </div>
+          <div className="p-3 rounded-xl text-center" style={{ backgroundColor: selectedProfit >= 0 ? '#dcfce7' : '#fee2e2', border: selectedProfit >= 0 ? '1px solid #86efac' : '1px solid #fca5a5' }}>
+            <div className="text-[11px] font-bold" style={{ color: selectedProfit >= 0 ? '#15803d' : '#b91c1c' }}>수익</div>
+            <div className="text-sm md:text-lg font-extrabold mt-1" style={{ color: selectedProfit >= 0 ? '#15803d' : '#b91c1c' }}>
+              {selectedProfit >= 0 ? '+' : ''}{selectedProfit.toLocaleString()}원
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 수익 추이 */}
+      <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <h3 className="text-sm md:text-base font-bold text-slate-900">📊 수익 추이</h3>
+          <div className="flex gap-1 flex-wrap">
+            {[
+              { id: 'daily', label: '일간' },
+              { id: 'weekly', label: '주간' },
+              { id: 'monthly', label: '월간' },
+              { id: 'yearly', label: '년간' },
+            ].map(g => (
+              <button
+                key={g.id}
+                onClick={() => setTrendGranularity(g.id)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] md:text-xs font-bold cursor-pointer border-2 whitespace-nowrap ${
+                  trendGranularity === g.id ? 'bg-emerald-100 border-emerald-400 shadow-sm' : 'bg-white border-transparent hover:bg-slate-100'
+                }`}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {trendPoints.every(p => p.amt === 0) ? (
+          <p className="text-xs text-slate-400 text-center py-6">표시할 데이터가 없습니다.</p>
+        ) : (
+          <div style={{ width: '100%' }}>
+            <div style={{ display: 'flex', gap: '4px', width: '100%', height: '150px' }}>
+              {trendPoints.map(p => {
+                const barPx = Math.max(2, Math.round((Math.abs(p.amt) / trendMaxAbs) * 65));
+                const isPos = p.amt >= 0;
+                return (
+                  <div
+                    key={p.key}
+                    style={{ flex: '1 1 0%', minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%' }}
+                  >
+                    {/* 위쪽 절반: 양수 막대가 아래(0선)에서 위로 자람 */}
+                    <div style={{ height: '75px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center' }}>
+                      {isPos && p.amt !== 0 && (
+                        <div style={{ fontSize: '9px', color: '#15803d', fontWeight: 'bold', marginBottom: '2px', whiteSpace: 'nowrap' }}>
+                          +{p.amt.toLocaleString()}
+                        </div>
+                      )}
+                      {isPos && (
+                        <div style={{ width: '66%', height: `${barPx}px`, backgroundColor: '#4ade80', borderRadius: '3px 3px 0 0' }} />
+                      )}
+                    </div>
+                    {/* 0선 */}
+                    <div style={{ height: '1px', backgroundColor: '#cbd5e1', width: '100%' }} />
+                    {/* 아래쪽 절반: 음수 막대가 위(0선)에서 아래로 자람 */}
+                    <div style={{ height: '75px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      {!isPos && (
+                        <div style={{ width: '66%', height: `${barPx}px`, backgroundColor: '#f87171', borderRadius: '0 0 3px 3px' }} />
+                      )}
+                      {!isPos && (
+                        <div style={{ fontSize: '9px', color: '#b91c1c', fontWeight: 'bold', marginTop: '2px', whiteSpace: 'nowrap' }}>
+                          {p.amt.toLocaleString()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: 'flex', gap: '4px', width: '100%', marginTop: '4px' }}>
+              {trendPoints.map(p => {
+                const [labelTop, labelBottom] = trendGranularity === 'monthly' ? p.label.split('/') : [null, null];
+                return (
+                  <div key={p.key} style={{ flex: '1 1 0%', minWidth: 0, textAlign: 'center' }}>
+                    {trendGranularity === 'monthly' ? (
+                      <div style={{ fontSize: '9px', color: '#94a3b8', lineHeight: '1.2' }}>
+                        <div>{labelTop}</div>
+                        <div>{labelBottom}</div>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '9px', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {p.label}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
