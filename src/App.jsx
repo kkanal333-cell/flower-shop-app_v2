@@ -6826,10 +6826,10 @@ function StatsTab({ orders, purchases }) {
       const profit = sales - purch;
       if (sales === 0 && purch === 0) return;
 
-      // 매출/매입/수익 항상 1·2·3번 자리를 유지합니다 (해당 항목이 없는 날은 빈 자리로 둠 - 수익 위치가 오르내리지 않도록)
+      // 매출/매입/수익 항상 1·2·3번 자리를 유지합니다 (해당 항목이 없는 날은 투명한 빈 줄로 채워서 높이를 유지 - 수익 위치가 오르내리지 않도록)
       events.push({
         id: d + '-sales', start: d, allDay: true,
-        title: sales > 0 ? sales.toLocaleString() : '',
+        title: sales > 0 ? sales.toLocaleString() : '\u00A0',
         backgroundColor: sales > 0 ? '#fbe7e8' : 'transparent',
         textColor: '#be123c',
         borderColor: 'transparent',
@@ -6837,7 +6837,7 @@ function StatsTab({ orders, purchases }) {
       });
       events.push({
         id: d + '-purch', start: d, allDay: true,
-        title: purch > 0 ? purch.toLocaleString() : '',
+        title: purch > 0 ? purch.toLocaleString() : '\u00A0',
         backgroundColor: purch > 0 ? '#e0f2fe' : 'transparent',
         textColor: '#0369a1',
         borderColor: 'transparent',
@@ -6973,17 +6973,16 @@ function StatsTab({ orders, purchases }) {
               <div style={{
                 backgroundColor: arg.event.backgroundColor,
                 color: arg.event.textColor,
-                fontSize: '7px',
+                fontSize: '9px',
                 fontWeight: 700,
                 lineHeight: '1.4',
-                padding: '0px 1px',
+                padding: '0px 2px',
                 borderRadius: '3px',
                 width: '100%',
                 boxSizing: 'border-box',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                letterSpacing: '-0.3px'
+                whiteSpace: 'nowrap'
               }}>
                 {arg.event.title}
               </div>
