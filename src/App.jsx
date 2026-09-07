@@ -6778,9 +6778,23 @@ function StatsTab({ orders, purchases }) {
   const todayStr = getKoreaNowFormatted().date;
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [trendGranularity, setTrendGranularity] = useState('daily'); // daily | weekly | monthly | yearly
+  const [period, setPeriod] = useState('today'); // today | week | month | year
 
   const nowDate = getKoreaNowFormatted().kstDateObj;
   const dayOfWeek = nowDate.getDay();
+  const sunday = new Date(nowDate);
+  sunday.setDate(nowDate.getDate() - dayOfWeek);
+  const sundayStr = `${sunday.getFullYear()}-${String(sunday.getMonth() + 1).padStart(2, '0')}-${String(sunday.getDate()).padStart(2, '0')}`;
+  const monthStr = todayStr.slice(0, 7);
+  const yearStr = todayStr.slice(0, 4);
+
+  const inPeriod = (d) => {
+    if (period === 'today') return d === todayStr;
+    if (period === 'week') return d >= sundayStr;
+    if (period === 'month') return d.slice(0, 7) === monthStr;
+    if (period === 'year') return d.slice(0, 4) === yearStr;
+    return true;
+  };
 
   // 날짜별 매출 합계 (삭제된 주문 제외)
   const salesByDate = {};
@@ -6798,6 +6812,10 @@ function StatsTab({ orders, purchases }) {
   });
 
   const allDates = Array.from(new Set([...Object.keys(salesByDate), ...Object.keys(purchByDate)]));
+
+  const periodSales = allDates.filter(inPeriod).reduce((s, d) => s + (salesByDate[d] || 0), 0);
+  const periodPurch = allDates.filter(inPeriod).reduce((s, d) => s + (purchByDate[d] || 0), 0);
+  const periodProfit = periodSales - periodPurch;
 
   // 수익 달력 이벤트: 한 날짜에 매출/매입/수익 3줄
   const getProfitCalendarEvents = () => {
@@ -6895,7 +6913,44 @@ function StatsTab({ orders, purchases }) {
         <h2 className="text-base md:text-xl font-bold text-slate-900 flex items-center gap-2">
           <span>📈</span> 수익 통계
         </h2>
-        <div className="flex items-center gap-3 mt-2 text-[11px] text-slate-500">
+
+        <div className="flex gap-1.5 mb-4 mt-3 flex-wrap">
+          {[
+            { id: 'today', label: '오늘' },
+            { id: 'week', label: '이번주' },
+            { id: 'month', label: '이번달' },
+            { id: 'year', label: '이번해' },
+          ].map(p => (
+            <button
+              key={p.id}
+              onClick={() => setPeriod(p.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-2 ${
+                period === p.id ? 'bg-emerald-100 border-emerald-400 shadow-sm' : 'bg-white border-transparent hover:bg-slate-100'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex gap-2 flex-wrap">
+          <div className="p-4 rounded-xl inline-block" style={{ backgroundColor: '#fbe7e8', border: '1px solid #f4b8bd' }}>
+            <div className="text-[11px] font-bold" style={{ color: '#be123c' }}>총매출</div>
+            <div className="text-lg md:text-2xl font-extrabold mt-1" style={{ color: '#be123c' }}>{periodSales.toLocaleString()}원</div>
+          </div>
+          <div className="p-4 rounded-xl inline-block" style={{ backgroundColor: '#e0f2fe', border: '1px solid #93c5fd' }}>
+            <div className="text-[11px] font-bold" style={{ color: '#0369a1' }}>총매입</div>
+            <div className="text-lg md:text-2xl font-extrabold mt-1" style={{ color: '#0369a1' }}>{periodPurch.toLocaleString()}원</div>
+          </div>
+          <div className="p-4 rounded-xl inline-block" style={{ backgroundColor: periodProfit >= 0 ? '#dcfce7' : '#fee2e2', border: periodProfit >= 0 ? '1px solid #86efac' : '1px solid #fca5a5' }}>
+            <div className="text-[11px] font-bold" style={{ color: periodProfit >= 0 ? '#15803d' : '#b91c1c' }}>총수익</div>
+            <div className="text-lg md:text-2xl font-extrabold mt-1" style={{ color: periodProfit >= 0 ? '#15803d' : '#b91c1c' }}>
+              {periodProfit >= 0 ? '+' : ''}{periodProfit.toLocaleString()}원
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 mt-4 text-[11px] text-slate-500">
           <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ backgroundColor: '#fbe7e8' }}></span> 매출</span>
           <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ backgroundColor: '#e0f2fe' }}></span> 매입</span>
           <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ backgroundColor: '#dcfce7' }}></span> 수익(+)</span>
@@ -6918,7 +6973,22 @@ function StatsTab({ orders, purchases }) {
             events={getProfitCalendarEvents()}
             eventOrder="extendedProps.order"
             eventContent={(arg) => (
-              <span style={{ fontSize: '8px', fontWeight: 700, lineHeight: '1.3' }}>{arg.event.title}</span>
+              <div style={{
+                backgroundColor: arg.event.backgroundColor,
+                color: arg.event.textColor,
+                fontSize: '8px',
+                fontWeight: 700,
+                lineHeight: '1.4',
+                padding: '0px 3px',
+                borderRadius: '3px',
+                width: '100%',
+                boxSizing: 'border-box',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}>
+                {arg.event.title}
+              </div>
             )}
             dayCellDidMount={(arg) => {
               const cellDateStr = `${arg.date.getFullYear()}-${String(arg.date.getMonth() + 1).padStart(2, '0')}-${String(arg.date.getDate()).padStart(2, '0')}`;
