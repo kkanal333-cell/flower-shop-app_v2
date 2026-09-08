@@ -6178,6 +6178,7 @@ function PurchaseTab({ purchases, fetchPurchases }) {
   const [trendGranularity, setTrendGranularity] = useState('daily'); // daily | weekly | monthly | yearly
   const [trendOffset, setTrendOffset] = useState(0); // 0=현재 구간, 1=한 구간 전, ... (‹ › 화살표로 이동)
   const [saving, setSaving] = useState(false);
+  const [editingPurchase, setEditingPurchase] = useState(null); // 매입 수정 팝업 - { id, date, payment_method, vendor, item_name, quantity, unit_price } | null
 
   // 매입이력 (업체/거래방식/품목 클릭 시 고정 화면에 표시)
   const [historyFilter, setHistoryFilter] = useState(null); // { type: 'vendor'|'payment'|'item', value } | null
@@ -6242,6 +6243,45 @@ function PurchaseTab({ purchases, fetchPurchases }) {
       alert('삭제 실패: ' + error.message);
       return;
     }
+    fetchPurchases();
+  };
+
+  const startEditPurchase = (p) => {
+    setEditingPurchase({
+      id: p.id,
+      date: p.date,
+      payment_method: p.payment_method,
+      vendor: p.vendor,
+      item_name: p.item_name,
+      quantity: String(p.quantity),
+      unit_price: String(p.unit_price)
+    });
+  };
+
+  const handleUpdatePurchase = async () => {
+    if (!editingPurchase.vendor.trim()) return alert('업체명을 입력해주세요.');
+    if (!editingPurchase.item_name.trim()) return alert('품목을 입력해주세요.');
+    const qty = Number(editingPurchase.quantity);
+    const price = Number(editingPurchase.unit_price);
+    if (!qty || qty <= 0) return alert('수량을 입력해주세요.');
+    if (!price || price <= 0) return alert('단가를 입력해주세요.');
+
+    const { error } = await supabase.from('purchases').update({
+      date: editingPurchase.date,
+      payment_method: editingPurchase.payment_method,
+      vendor: editingPurchase.vendor.trim(),
+      item_name: editingPurchase.item_name.trim(),
+      quantity: qty,
+      unit_price: price,
+      amount: qty * price
+    }).eq('id', editingPurchase.id);
+
+    if (error) {
+      alert('매입 수정 실패: ' + error.message);
+      return;
+    }
+
+    setEditingPurchase(null);
     fetchPurchases();
   };
 
@@ -6395,6 +6435,116 @@ function PurchaseTab({ purchases, fetchPurchases }) {
 
   return (
     <div className="space-y-4">
+      {editingPurchase && (
+        <div
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 md:p-4"
+          style={{ zIndex: 9999 }}
+          onClick={() => setEditingPurchase(null)}
+        >
+          <div
+            className="bg-white rounded-2xl p-4 md:p-6 max-w-md w-full shadow-2xl border border-slate-200 space-y-3"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-start">
+              <h3 className="text-base md:text-lg font-bold text-slate-900">✏️ 매입 정보 수정</h3>
+              <button onClick={() => setEditingPurchase(null)} className="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer">✕</button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700">일자</label>
+                <input
+                  type="date"
+                  value={editingPurchase.date}
+                  onChange={e => setEditingPurchase({ ...editingPurchase, date: e.target.value })}
+                  className="w-full p-2.5 border border-slate-300 rounded-xl mt-1 text-sm bg-white text-slate-900"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-700">거래방식</label>
+                <select
+                  value={editingPurchase.payment_method}
+                  onChange={e => setEditingPurchase({ ...editingPurchase, payment_method: e.target.value })}
+                  className="w-full p-2.5 border border-slate-300 rounded-xl mt-1 text-sm bg-white text-slate-900"
+                >
+                  {PURCHASE_PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-700">업체</label>
+              <input
+                type="text"
+                list="edit-purchase-vendor-list"
+                value={editingPurchase.vendor}
+                onChange={e => setEditingPurchase({ ...editingPurchase, vendor: e.target.value })}
+                className="w-full p-2.5 border border-slate-300 rounded-xl mt-1 text-sm bg-white text-slate-900"
+              />
+              <datalist id="edit-purchase-vendor-list">
+                {vendorList.map(v => <option key={v} value={v} />)}
+              </datalist>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-700">품목</label>
+              <input
+                type="text"
+                list="edit-purchase-item-list"
+                value={editingPurchase.item_name}
+                onChange={e => setEditingPurchase({ ...editingPurchase, item_name: e.target.value })}
+                className="w-full p-2.5 border border-slate-300 rounded-xl mt-1 text-sm bg-white text-slate-900"
+              />
+              <datalist id="edit-purchase-item-list">
+                {itemNameList.map(v => <option key={v} value={v} />)}
+              </datalist>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700">수량</label>
+                <input
+                  type="number"
+                  value={editingPurchase.quantity}
+                  onChange={e => setEditingPurchase({ ...editingPurchase, quantity: e.target.value })}
+                  className="w-full p-2.5 border border-slate-300 rounded-xl mt-1 text-sm bg-white text-slate-900"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-700">단가</label>
+                <input
+                  type="number"
+                  value={editingPurchase.unit_price}
+                  onChange={e => setEditingPurchase({ ...editingPurchase, unit_price: e.target.value })}
+                  className="w-full p-2.5 border border-slate-300 rounded-xl mt-1 text-sm bg-white text-slate-900"
+                />
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-500 text-right">
+              금액: <span className="font-bold text-slate-900">
+                {((Number(editingPurchase.quantity) || 0) * (Number(editingPurchase.unit_price) || 0)).toLocaleString()}원
+              </span>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setEditingPurchase(null)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-300 cursor-pointer"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleUpdatePurchase}
+                className="flex-1 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
+              >
+                저장
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 매입 관리 타이틀 + 기간 필터 + 총매입 */}
       <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
@@ -6598,7 +6748,14 @@ function PurchaseTab({ purchases, fetchPurchases }) {
                     <td className="py-2 px-2 text-right text-slate-600">{Number(p.quantity).toLocaleString()}</td>
                     <td className="py-2 px-2 text-right text-slate-600">{Number(p.unit_price).toLocaleString()}원</td>
                     <td className="py-2 px-2 text-right font-bold text-slate-900">{Number(p.amount).toLocaleString()}원</td>
-                    <td className="py-2 px-2 text-center">
+                    <td className="py-2 px-2 text-center whitespace-nowrap">
+                      <button
+                        onClick={() => startEditPurchase(p)}
+                        className="text-slate-400 hover:text-sky-600 font-bold cursor-pointer mr-2"
+                        title="수정"
+                      >
+                        ✏️
+                      </button>
                       <button
                         onClick={() => handleDeletePurchase(p.id)}
                         className="text-slate-400 hover:text-rose-600 font-bold cursor-pointer"
