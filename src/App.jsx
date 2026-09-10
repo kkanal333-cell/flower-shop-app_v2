@@ -6180,6 +6180,12 @@ function PurchaseTab({ purchases, fetchPurchases }) {
   const [saving, setSaving] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState(null); // 매입 수정 팝업 - { id, date, payment_method, vendor, item_name, quantity, unit_price } | null
 
+  // 영수증 사진 인식
+  const [receiptLoading, setReceiptLoading] = useState(false);
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
+  const [receiptRawText, setReceiptRawText] = useState('');
+  const [receiptForm, setReceiptForm] = useState({ date: todayStr, payment_method: '현금', vendor: '', item_name: '', quantity: '1', unit_price: '' });
+
   // 매입이력 (업체/거래방식/품목 클릭 시 고정 화면에 표시)
   const [historyFilter, setHistoryFilter] = useState(null); // { type: 'vendor'|'payment'|'item', value } | null
   const [historyPeriod, setHistoryPeriod] = useState('month'); // week | month | year | custom
@@ -6201,7 +6207,22 @@ function PurchaseTab({ purchases, fetchPurchases }) {
   const itemNameList = [...new Set((purchases || []).map(p => p.item_name).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'));
 
   const handleAddPurchase = async () => {
-    if (!form.vendor.trim()) return alert('업체명을 입력해주세요.');
+    let vendorToUse = form.vendor.trim();
+    let paymentToUse = form.payment_method;
+
+    // 업체명이 비어있으면, 같은 날짜에 먼저 입력해둔 항목의 업체/거래방식을 그대로 사용합니다.
+    // (엑셀에서 병합된 셀처럼 "위 칸과 동일"로 취급)
+    if (!vendorToUse) {
+      const sameDayEntries = (purchases || [])
+        .filter(p => p.date === form.date)
+        .sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
+      if (sameDayEntries.length > 0) {
+        vendorToUse = sameDayEntries[0].vendor;
+        paymentToUse = sameDayEntries[0].payment_method;
+      }
+    }
+
+    if (!vendorToUse) return alert('업체명을 입력해주세요. (해당 날짜의 첫 입력은 업체명이 필요합니다)');
     if (!form.item_name.trim()) return alert('품목을 입력해주세요.');
     const qty = Number(form.quantity);
     const price = Number(form.unit_price);
@@ -6211,8 +6232,8 @@ function PurchaseTab({ purchases, fetchPurchases }) {
     setSaving(true);
     const { error } = await supabase.from('purchases').insert([{
       date: form.date,
-      payment_method: form.payment_method,
-      vendor: form.vendor.trim(),
+      payment_method: paymentToUse,
+      vendor: vendorToUse,
       item_name: form.item_name.trim(),
       quantity: qty,
       unit_price: price,
@@ -6226,9 +6247,9 @@ function PurchaseTab({ purchases, fetchPurchases }) {
     }
 
     setForm(prev => ({
-      date: prev.date, // 날짜/거래방식은 연속 입력 편의를 위해 유지
-      payment_method: prev.payment_method,
-      vendor: '',
+      date: prev.date, // 날짜/거래방식/업체는 연속 입력 편의를 위해 유지
+      payment_method: paymentToUse,
+      vendor: vendorToUse,
       item_name: '',
       quantity: '',
       unit_price: ''
@@ -6282,6 +6303,95 @@ function PurchaseTab({ purchases, fetchPurchases }) {
     }
 
     setEditingPurchase(null);
+    fetchPurchases();
+  };
+
+  // 영수증 사진 선택 → 구글 Vision OCR로 텍스트 인식 → 대략적인 값 채워서 확인 화면 열기
+  // (사진 자체는 저장하지 않고 인식에만 사용합니다)
+  const handleReceiptFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setReceiptLoading(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64 = reader.result;
+        const { data, error } = await supabase.functions.invoke('receipt-ocr', { body: { image: base64 } });
+        if (error) throw error;
+        const text = data?.text || '';
+        if (!text) {
+          alert('영수증에서 글자를 인식하지 못했습니다. 다시 찍어보거나 직접 입력해주세요.');
+          return;
+        }
+
+        setReceiptRawText(text);
+
+        // 아주 단순한 휴리스틱으로 대략적인 값만 채워둡니다. (정확도는 낮을 수 있어 확인 후 수정 필요)
+        const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+        // 금액 추정: 쉼표 포함 숫자 중 가장 큰 값
+        const numberMatches = text.match(/[0-9]{1,3}(,[0-9]{3})+|[0-9]{4,}/g) || [];
+        const numbers = numberMatches.map(n => Number(n.replace(/,/g, ''))).filter(n => n > 0 && n < 100000000);
+        const guessedAmount = numbers.length > 0 ? Math.max(...numbers) : '';
+
+        // 날짜 추정
+        const dateMatch = text.match(/(20\d{2})[.\-\/]\s?(\d{1,2})[.\-\/]\s?(\d{1,2})/);
+        let guessedDate = todayStr;
+        if (dateMatch) {
+          const y = dateMatch[1], m = String(dateMatch[2]).padStart(2, '0'), d = String(dateMatch[3]).padStart(2, '0');
+          const candidate = `${y}-${m}-${d}`;
+          if (!isNaN(new Date(candidate).getTime())) guessedDate = candidate;
+        }
+
+        // 업체명 추정: 숫자/기호 위주가 아닌 첫 줄
+        const guessedVendor = lines.find(l => !/^[0-9,.\-:()\s원]+$/.test(l)) || '';
+
+        setReceiptForm({
+          date: guessedDate,
+          payment_method: '현금',
+          vendor: guessedVendor,
+          item_name: '',
+          quantity: '1',
+          unit_price: guessedAmount ? String(guessedAmount) : ''
+        });
+        setReceiptModalOpen(true);
+      } catch (err) {
+        console.error(err);
+        alert('영수증 인식 중 오류가 발생했습니다: ' + (err.message || err));
+      } finally {
+        setReceiptLoading(false);
+        e.target.value = '';
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveReceiptPurchase = async () => {
+    if (!receiptForm.vendor.trim()) return alert('업체명을 입력해주세요.');
+    if (!receiptForm.item_name.trim()) return alert('품목을 입력해주세요.');
+    const qty = Number(receiptForm.quantity);
+    const price = Number(receiptForm.unit_price);
+    if (!qty || qty <= 0) return alert('수량을 입력해주세요.');
+    if (!price || price <= 0) return alert('단가를 입력해주세요.');
+
+    const { error } = await supabase.from('purchases').insert([{
+      date: receiptForm.date,
+      payment_method: receiptForm.payment_method,
+      vendor: receiptForm.vendor.trim(),
+      item_name: receiptForm.item_name.trim(),
+      quantity: qty,
+      unit_price: price,
+      amount: qty * price
+    }]);
+
+    if (error) {
+      alert('저장 실패: ' + error.message);
+      return;
+    }
+
+    setReceiptModalOpen(false);
+    setReceiptRawText('');
     fetchPurchases();
   };
 
@@ -6435,6 +6545,125 @@ function PurchaseTab({ purchases, fetchPurchases }) {
 
   return (
     <div className="space-y-4">
+      {receiptModalOpen && (
+        <div
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 md:p-4"
+          style={{ zIndex: 9999 }}
+          onClick={() => setReceiptModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-2xl p-4 md:p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 space-y-3"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-start">
+              <h3 className="text-base md:text-lg font-bold text-slate-900">📷 영수증 인식 결과 확인</h3>
+              <button onClick={() => setReceiptModalOpen(false)} className="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer">✕</button>
+            </div>
+            <p className="text-[11px] text-slate-500">
+              손글씨 영수증은 인식이 완벽하지 않을 수 있어요. 아래 원문을 참고해서 항목을 확인·수정한 뒤 저장해주세요.
+            </p>
+
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl max-h-36 overflow-y-auto">
+              <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">{receiptRawText}</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700">일자</label>
+                <input
+                  type="date"
+                  value={receiptForm.date}
+                  onChange={e => setReceiptForm({ ...receiptForm, date: e.target.value })}
+                  className="w-full p-2.5 border border-slate-300 rounded-xl mt-1 text-sm bg-white text-slate-900"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-700">거래방식</label>
+                <select
+                  value={receiptForm.payment_method}
+                  onChange={e => setReceiptForm({ ...receiptForm, payment_method: e.target.value })}
+                  className="w-full p-2.5 border border-slate-300 rounded-xl mt-1 text-sm bg-white text-slate-900"
+                >
+                  {PURCHASE_PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-700">업체 (인식된 값 - 확인 필요)</label>
+              <input
+                type="text"
+                list="receipt-vendor-list"
+                value={receiptForm.vendor}
+                onChange={e => setReceiptForm({ ...receiptForm, vendor: e.target.value })}
+                placeholder="업체명"
+                className="w-full p-2.5 border border-slate-300 rounded-xl mt-1 text-sm bg-white text-slate-900"
+              />
+              <datalist id="receipt-vendor-list">
+                {vendorList.map(v => <option key={v} value={v} />)}
+              </datalist>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-700">품목 (직접 입력해주세요)</label>
+              <input
+                type="text"
+                list="receipt-item-list"
+                value={receiptForm.item_name}
+                onChange={e => setReceiptForm({ ...receiptForm, item_name: e.target.value })}
+                placeholder="품목명"
+                className="w-full p-2.5 border border-slate-300 rounded-xl mt-1 text-sm bg-white text-slate-900"
+              />
+              <datalist id="receipt-item-list">
+                {itemNameList.map(v => <option key={v} value={v} />)}
+              </datalist>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700">수량</label>
+                <input
+                  type="number"
+                  value={receiptForm.quantity}
+                  onChange={e => setReceiptForm({ ...receiptForm, quantity: e.target.value })}
+                  className="w-full p-2.5 border border-slate-300 rounded-xl mt-1 text-sm bg-white text-slate-900"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-700">단가 (인식된 값 - 확인 필요)</label>
+                <input
+                  type="number"
+                  value={receiptForm.unit_price}
+                  onChange={e => setReceiptForm({ ...receiptForm, unit_price: e.target.value })}
+                  className="w-full p-2.5 border border-slate-300 rounded-xl mt-1 text-sm bg-white text-slate-900"
+                />
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-500 text-right">
+              금액: <span className="font-bold text-slate-900">
+                {((Number(receiptForm.quantity) || 0) * (Number(receiptForm.unit_price) || 0)).toLocaleString()}원
+              </span>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setReceiptModalOpen(false)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-300 cursor-pointer"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleSaveReceiptPurchase}
+                className="flex-1 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
+              >
+                매입에 추가
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {editingPurchase && (
         <div
           className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 md:p-4"
@@ -6583,8 +6812,10 @@ function PurchaseTab({ purchases, fetchPurchases }) {
         <h3 className="text-sm md:text-base font-bold text-slate-900 mb-3">🗓️ 매입 달력</h3>
         <div className="calendar-compact">
           <FullCalendar
+            key={selectedDate}
             plugins={[dayGridPlugin, interactionPlugin]}
             initialView="dayGridMonth"
+            initialDate={selectedDate}
             locale="ko"
             aspectRatio={1.8}
             fixedWeekCount={false}
@@ -6610,12 +6841,31 @@ function PurchaseTab({ purchases, fetchPurchases }) {
       <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
           <h3 className="text-sm md:text-base font-bold text-slate-900">📆 날짜별 매입 리스트</h3>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={e => setSelectedDate(e.target.value)}
-            className="p-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-900"
-          />
+          <div className="flex items-center gap-2">
+            <label
+              className={`text-xs font-bold border px-3 py-1.5 rounded-lg inline-flex items-center gap-1 ${
+                receiptLoading
+                  ? 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
+                  : 'bg-white hover:bg-slate-100 border-slate-800 text-slate-900 cursor-pointer'
+              }`}
+            >
+              {receiptLoading ? '인식 중...' : '📷 영수증으로 추가'}
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleReceiptFileSelect}
+                disabled={receiptLoading}
+                className="hidden"
+              />
+            </label>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={e => setSelectedDate(e.target.value)}
+              className="p-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-900"
+            />
+          </div>
         </div>
 
         <div className="overflow-x-auto border border-slate-200 rounded-xl">
@@ -6660,7 +6910,8 @@ function PurchaseTab({ purchases, fetchPurchases }) {
                     list="purchase-vendor-list"
                     value={form.vendor}
                     onChange={e => setForm({ ...form, vendor: e.target.value })}
-                    placeholder="업체명"
+                    placeholder="비우면 당일 첫값"
+                    title="비워두면 같은 날짜에 먼저 입력한 업체명을 자동으로 사용합니다"
                     className={inputCls}
                     style={{ width: '110px' }}
                   />
@@ -6771,6 +7022,7 @@ function PurchaseTab({ purchases, fetchPurchases }) {
           </table>
         </div>
         <p className="text-[11px] text-slate-400 mt-2">💡 업체·거래방식·품목을 클릭하면 아래에 해당 이력이 표시됩니다.</p>
+        <p className="text-[11px] text-slate-400 mt-1">💡 업체를 비워두고 추가하면, 같은 날짜에 먼저 입력한 업체(거래방식 포함)를 자동으로 사용합니다.</p>
       </div>
 
       {/* 매입이력 (고정 화면 - 업체/거래방식/품목 클릭 시 표시) */}
@@ -7175,8 +7427,10 @@ function StatsTab({ orders, purchases }) {
         <h3 className="text-sm md:text-base font-bold text-slate-900 mb-3">🗓️ 수익 달력</h3>
         <div className="calendar-compact">
           <FullCalendar
+            key={selectedDate}
             plugins={[dayGridPlugin, interactionPlugin]}
             initialView="dayGridMonth"
+            initialDate={selectedDate}
             locale="ko"
             aspectRatio={1.5}
             fixedWeekCount={false}
@@ -7185,22 +7439,7 @@ function StatsTab({ orders, purchases }) {
             events={getProfitCalendarEvents()}
             eventOrder="extendedProps.order"
             eventContent={(arg) => (
-              <div style={{
-                backgroundColor: arg.event.backgroundColor,
-                color: arg.event.textColor,
-                fontSize: '9px',
-                fontWeight: 700,
-                lineHeight: '1.4',
-                padding: '0px 2px',
-                borderRadius: '3px',
-                width: '100%',
-                boxSizing: 'border-box',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
-              }}>
-                {arg.event.title}
-              </div>
+              <span style={{ fontSize: '9px', fontWeight: 700, color: arg.event.textColor }}>{arg.event.title}</span>
             )}
             dayCellDidMount={(arg) => {
               const cellDateStr = `${arg.date.getFullYear()}-${String(arg.date.getMonth() + 1).padStart(2, '0')}-${String(arg.date.getDate()).padStart(2, '0')}`;
