@@ -1688,13 +1688,50 @@ export default function App() {
   };
 
   // 단건 인쇄 함수
-  const handlePrintSingleOrder = (o) => {
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
-    if (!printWindow) {
-      alert('팝업 차단이 설정되어 있습니다. 팝업을 허용해주세요.');
-      return;
+  // 홈 화면에 추가(PWA/독립실행 모드)로 열었는지 확인합니다. 이 모드에서는 window.open()으로 새 창을 여는 게
+  // 조용히 막히는 경우가 많아(특히 삼성인터넷), 그럴 땐 숨겨진 iframe으로 바로 인쇄 대화상자를 띄웁니다.
+  const isStandalonePWA = () => {
+    try {
+      return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    } catch (e) {
+      return false;
     }
+  };
 
+  // 새 창 없이, 숨겨진 iframe에 영수증 내용을 넣고 바로 인쇄 대화상자를 띄웁니다. (PWA/독립실행 모드용)
+  const printViaIframe = (htmlContent) => {
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const cleanup = () => {
+      if (iframe.parentNode) document.body.removeChild(iframe);
+    };
+
+    iframe.onload = () => {
+      setTimeout(() => {
+        try {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+        } catch (e) {
+          alert('인쇄 중 오류가 발생했습니다: ' + e.message);
+        }
+        setTimeout(cleanup, 1500);
+      }, 300);
+    };
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(htmlContent);
+    doc.close();
+  };
+
+  const handlePrintSingleOrder = (o) => {
     const htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -1744,6 +1781,16 @@ export default function App() {
       </html>
     `;
 
+    if (isStandalonePWA()) {
+      printViaIframe(htmlContent);
+      return;
+    }
+
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (!printWindow) {
+      alert('팝업 차단이 설정되어 있습니다. 팝업을 허용해주세요.');
+      return;
+    }
     printWindow.document.write(htmlContent);
     printWindow.document.close();
   };
@@ -1754,12 +1801,6 @@ export default function App() {
 
     const targetOrders = sortedAndFilteredOrders.filter(o => selectedOrderIds.includes(o.id));
     if (targetOrders.length === 0) return;
-
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
-    if (!printWindow) {
-      alert('팝업 차단이 설정되어 있습니다. 팝업을 허용해주세요.');
-      return;
-    }
 
     const ticketsHtml = targetOrders.map((o, index) => `
       <div class="ticket-page">
@@ -1831,6 +1872,16 @@ export default function App() {
       </html>
     `;
 
+    if (isStandalonePWA()) {
+      printViaIframe(htmlContent);
+      return;
+    }
+
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (!printWindow) {
+      alert('팝업 차단이 설정되어 있습니다. 팝업을 허용해주세요.');
+      return;
+    }
     printWindow.document.write(htmlContent);
     printWindow.document.close();
   };
