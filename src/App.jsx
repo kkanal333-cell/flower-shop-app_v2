@@ -1688,11 +1688,14 @@ export default function App() {
   };
 
   // 단건 인쇄 함수
-  // 홈 화면에 추가(PWA/독립실행 모드)로 열었는지 확인합니다. 이 모드에서는 window.open()으로 새 창을 여는 게
-  // 조용히 막히는 경우가 많아(특히 삼성인터넷), 그럴 땐 숨겨진 iframe으로 바로 인쇄 대화상자를 띄웁니다.
+  // 모바일 기기에서 홈 화면에 추가(PWA/독립실행 모드)로 열었는지 확인합니다. 이 조합에서만 window.open()으로
+  // 새 창을 여는 게 조용히 막히는 경우가 많아(특히 삼성인터넷), 그럴 때만 숨겨진 iframe으로 인쇄 대화상자를 띄웁니다.
+  // (PC에서 "앱으로 설치"한 경우까지 걸러지지 않도록, 모바일 기기인지도 함께 확인합니다)
   const isStandalonePWA = () => {
     try {
-      return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      return standalone && isMobileDevice;
     } catch (e) {
       return false;
     }
