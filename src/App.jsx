@@ -1689,7 +1689,7 @@ export default function App() {
 
   // 단건 인쇄 함수
   const handlePrintSingleOrder = (o) => {
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    const printWindow = window.open('', '_blank');
     if (!printWindow) {
       alert('팝업 차단이 설정되어 있습니다. 팝업을 허용해주세요.');
       return;
@@ -1738,7 +1738,7 @@ export default function App() {
         </div>
         <div class="footer">감사합니다. 정성을 다하겠습니다.</div>
         <div class="center" style="margin-top: 20px;">
-          <button onclick="window.onafterprint=function(){window.close();}; window.print();" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">인쇄하기</button>
+          <button onclick="window.print()" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">인쇄하기</button>
         </div>
       </body>
       </html>
@@ -1755,7 +1755,7 @@ export default function App() {
     const targetOrders = sortedAndFilteredOrders.filter(o => selectedOrderIds.includes(o.id));
     if (targetOrders.length === 0) return;
 
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    const printWindow = window.open('', '_blank');
     if (!printWindow) {
       alert('팝업 차단이 설정되어 있습니다. 팝업을 허용해주세요.');
       return;
@@ -1824,7 +1824,7 @@ export default function App() {
       </head>
       <body>
         <div class="no-print center" style="margin-bottom: 20px; padding: 10px; background: #eee;">
-          <button onclick="window.onafterprint=function(){window.close();}; window.print();" style="padding: 10px 20px; font-size: 16px; cursor: pointer; font-weight: bold;">선택 항목 한꺼번에 인쇄하기</button>
+          <button onclick="window.print()" style="padding: 10px 20px; font-size: 16px; cursor: pointer; font-weight: bold;">선택 항목 한꺼번에 인쇄하기</button>
         </div>
         ${ticketsHtml}
       </body>
