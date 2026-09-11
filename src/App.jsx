@@ -4779,17 +4779,30 @@ export default function App() {
                       const isDeliveryRow = isOnsite && o.is_delivery;
                       const timeOnly = (o.created_at || '').replace(' ', 'T').split('T')[1]?.slice(0, 5) || '--:--';
                       return (
-                        <div
+                        <button
                           key={o.id}
+                          type="button"
+                          onClick={() => handlePrintSingleOrder(o)}
                           style={{
                             display: 'grid',
                             gridTemplateColumns: '24px 46px 76px 1fr 82px',
                             gap: '6px',
                             alignItems: 'center',
                             padding: '6px 2px',
+                            borderTop: 'none',
+                            borderLeft: 'none',
+                            borderRight: 'none',
                             borderBottom: '1px solid #f1f5f9',
-                            fontSize: '12px'
+                            fontSize: '12px',
+                            width: '100%',
+                            textAlign: 'left',
+                            background: 'transparent',
+                            cursor: 'pointer',
+                            fontFamily: 'inherit',
+                            appearance: 'none',
+                            margin: 0
                           }}
+                          className="hover:bg-slate-50"
                         >
                           <span
                             className={isDeliveryRow ? 'badge-blink' : ''}
@@ -4813,7 +4826,7 @@ export default function App() {
                           <span style={{ color: '#000', fontWeight: 'normal', whiteSpace: 'nowrap', textAlign: 'right' }}>
                             {Number(o.amount || 0).toLocaleString()}원
                           </span>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -5324,8 +5337,10 @@ export default function App() {
                     return (
                       <div key={log.id} className="text-xs">
                         {/* 가로모드·PC(640px 이상): 한 줄 표시 */}
-                        <div
-                          className="hidden sm:flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-slate-50"
+                        <button
+                          type="button"
+                          className="hidden sm:flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-slate-50 w-full text-left border-0 bg-transparent"
+                          style={{ appearance: 'none', margin: 0, fontFamily: 'inherit' }}
                           onClick={() => relatedOrder ? handlePrintSingleOrder(relatedOrder) : alert('연결된 주문 정보를 찾을 수 없습니다. (삭제되었거나 오래된 기록일 수 있습니다)')}
                         >
                           <span
@@ -5356,11 +5371,13 @@ export default function App() {
                           <span className="text-slate-400 whitespace-nowrap ml-auto shrink-0">
                             {formatUtcToKstShort(log.created_at)}
                           </span>
-                        </div>
+                        </button>
 
                         {/* 모바일 세로모드(640px 미만): 여러 줄로 나눠서 표시 */}
-                        <div
-                          className="sm:hidden px-4 py-2.5 cursor-pointer hover:bg-slate-50"
+                        <button
+                          type="button"
+                          className="sm:hidden px-4 py-2.5 cursor-pointer hover:bg-slate-50 w-full text-left border-0 bg-transparent block"
+                          style={{ appearance: 'none', margin: 0, fontFamily: 'inherit' }}
                           onClick={() => relatedOrder ? handlePrintSingleOrder(relatedOrder) : alert('연결된 주문 정보를 찾을 수 없습니다. (삭제되었거나 오래된 기록일 수 있습니다)')}
                         >
                           <div className="flex items-center gap-1.5 mb-1 flex-wrap">
@@ -5395,7 +5412,7 @@ export default function App() {
                               </>
                             )}
                           </div>
-                        </div>
+                        </button>
                       </div>
                     );
                   })}
