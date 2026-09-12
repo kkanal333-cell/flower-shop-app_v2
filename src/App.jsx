@@ -5225,13 +5225,14 @@ export default function App() {
                   <div className="text-xs font-bold text-rose-600 mb-2">
                     합계: {dashboardDateOrders.reduce((s, o) => s + (Number(o.amount) || 0), 0).toLocaleString()}원 ({dashboardDateOrders.length}건)
                     {' '}· 대조 확인 {dashboardDateOrders.filter(o => payhereCheckedIds.includes(o.id)).length}건
+                    ({dashboardDateOrders.filter(o => payhereCheckedIds.includes(o.id)).reduce((s, o) => s + (Number(o.amount) || 0), 0).toLocaleString()}원)
                   </div>
                   <div>
                     {/* 헤더 행 */}
                     <div
                       style={{
                         display: 'grid',
-                        gridTemplateColumns: '20px 24px 46px 76px 1fr 82px',
+                        gridTemplateColumns: '24px 46px 76px 1fr 82px 20px',
                         gap: '6px',
                         alignItems: 'center',
                         padding: '4px 2px',
@@ -5241,12 +5242,12 @@ export default function App() {
                         color: '#94a3b8'
                       }}
                     >
-                      <div title="페이히어 매출 대조 확인">✓</div>
                       <div></div>
                       <div>시간</div>
                       <div>고객명</div>
                       <div>상품명</div>
                       <div style={{ textAlign: 'right' }}>금액</div>
+                      <div title="페이히어 매출 대조 확인" style={{ textAlign: 'center' }}>✓</div>
                     </div>
                     {dashboardDateOrders.map(o => {
                       const isOnsite = o.order_type === '현장판매';
@@ -5258,7 +5259,7 @@ export default function App() {
                           onClick={() => setOrderInfoModal(o)}
                           style={{
                             display: 'grid',
-                            gridTemplateColumns: '20px 24px 46px 76px 1fr 82px',
+                            gridTemplateColumns: '24px 46px 76px 1fr 82px 20px',
                             gap: '6px',
                             alignItems: 'center',
                             padding: '6px 2px',
@@ -5273,18 +5274,6 @@ export default function App() {
                           }}
                           className="hover:bg-slate-50"
                         >
-                          <span
-                            onClick={e => e.stopPropagation()}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={payhereCheckedIds.includes(o.id)}
-                              onChange={() => handleTogglePayhereChecked(o.id)}
-                              className="accent-emerald-500 cursor-pointer w-3.5 h-3.5"
-                              title="페이히어 매출과 대조 확인됨"
-                            />
-                          </span>
                           <span
                             className={isDeliveryRow ? 'badge-blink' : ''}
                             style={{
@@ -5306,6 +5295,18 @@ export default function App() {
                           </span>
                           <span style={{ color: '#000', fontWeight: 'normal', whiteSpace: 'nowrap', textAlign: 'right' }}>
                             {Number(o.amount || 0).toLocaleString()}원
+                          </span>
+                          <span
+                            onClick={e => e.stopPropagation()}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={payhereCheckedIds.includes(o.id)}
+                              onChange={() => handleTogglePayhereChecked(o.id)}
+                              className="accent-emerald-500 cursor-pointer w-3.5 h-3.5"
+                              title="페이히어 매출과 대조 확인됨"
+                            />
                           </span>
                         </div>
                       );
