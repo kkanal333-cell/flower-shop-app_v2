@@ -1455,6 +1455,13 @@ export default function App() {
   const [dashboardPeriod, setDashboardPeriod] = useState('today'); // today | week | month | all
   const [dashboardSelectedDate, setDashboardSelectedDate] = useState(() => getKoreaNowFormatted().date);
 
+  // ===== 매출비교(vs 페이히어) =====
+  const [showSalesCompareModal, setShowSalesCompareModal] = useState(false);
+  const [compareDate, setCompareDate] = useState(() => getKoreaNowFormatted().date); // 비교 기준일(결제일 기준)
+  const [comparePayhereRows, setComparePayhereRows] = useState([]); // 업로드한 페이히어 엑셀 파싱 결과
+  const [compareLoading, setCompareLoading] = useState(false);
+  const [compareFileName, setCompareFileName] = useState('');
+
   // 매출 대시보드용 집계 (접수일시=created_at 기준. orders는 이미 로드된 상태를 재사용하므로 추가 트래픽 없음)
   const dashboardStats = useMemo(() => {
     const now = getKoreaNowFormatted();
@@ -1505,6 +1512,61 @@ export default function App() {
       maxPayment, maxProduct
     };
   }, [orders, dashboardPeriod]);
+
+  // 매출비교(vs 페이히어): 주문시간·항목명은 서로 다를 수 있어 "금액"만으로 짝을 맞춥니다.
+  // 같은 날짜(결제일 기준 = pickup_datetime, 없으면 created_at) 안에서 웹앱 주문과 페이히어 거래를
+  // 금액이 같은 것끼리 1:1로 매칭하고(같은 금액이 여러 건이면 순서대로 하나씩 짝지음),
+  // 짝을 못 찾은 페이히어 거래 = "페이히어에만 있는 항목"(웹앱 추가 대상),
+  // 짝을 못 찾은 웹앱 주문 = "웹앱에만 있는 항목"(다른 결제수단 등으로 확인 필요)으로 분류합니다.
+  const compareResult = useMemo(() => {
+    if (!comparePayhereRows || comparePayhereRows.length === 0) return null;
+
+    const validOrders = (orders || []).filter(o => !o.deleted_at);
+    const webRows = validOrders
+      .filter(o => {
+        const raw = (o.pickup_datetime || o.created_at || '').replace(' ', 'T');
+        return raw.split('T')[0] === compareDate;
+      })
+      .map(o => {
+        const raw = (o.pickup_datetime || o.created_at || '').replace(' ', 'T');
+        return {
+          id: o.id,
+          amount: Number(o.amount) || 0,
+          label: o.product_name || o.product || '(품목명 없음)',
+          time: raw.split('T')[1]?.slice(0, 5) || '',
+          order_type: o.order_type || '예약',
+          payment_method: o.payment_method || '미지정'
+        };
+      });
+
+    const payhereRows = comparePayhereRows.filter(r => r.date === compareDate);
+
+    const webPool = webRows.map(r => ({ ...r, matched: false }));
+    const matchedPairs = [];
+    const payhereOnly = [];
+
+    payhereRows.forEach(pr => {
+      const idx = webPool.findIndex(w => !w.matched && w.amount === pr.amount);
+      if (idx !== -1) {
+        webPool[idx].matched = true;
+        matchedPairs.push({ payhere: pr, web: webPool[idx] });
+      } else {
+        payhereOnly.push(pr);
+      }
+    });
+
+    const webOnly = webPool.filter(w => !w.matched);
+    const webTotal = webRows.reduce((s, r) => s + r.amount, 0);
+    const payhereTotal = payhereRows.reduce((s, r) => s + r.amount, 0);
+
+    return {
+      webTotal, payhereTotal, diff: webTotal - payhereTotal,
+      webCount: webRows.length, payhereCount: payhereRows.length,
+      matchedCount: matchedPairs.length,
+      matchedAmount: matchedPairs.reduce((s, m) => s + m.payhere.amount, 0),
+      payhereOnly, webOnly
+    };
+  }, [orders, comparePayhereRows, compareDate]);
 
   const [trendGranularity, setTrendGranularity] = useState('daily'); // daily | weekly | monthly | yearly
   const [trendOffset, setTrendOffset] = useState(0); // 0=현재 구간, 1=한 구간 전, ... (‹ › 화살표로 이동)
@@ -2398,6 +2460,122 @@ export default function App() {
     alert(`${toImport.length}건이 현장판매로 등록되었습니다.`);
     setPayhereImportRows([]);
     fetchData();
+  };
+
+  // 매출비교(vs 페이히어)용 엑셀 업로드 - 가져오기(payhereImportRows)와 달리 선택/중복제외 없이
+  // 환불건만 제외하고 해당 일자의 거래를 전부 파싱해서 금액 비교에 사용합니다.
+  const handleCompareFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCompareLoading(true);
+    setComparePayhereRows([]);
+    setCompareFileName(file.name);
+
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const sheetName = wb.SheetNames.find(n => n.includes('매출 내역')) || wb.SheetNames[0];
+      const sheet = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
+
+      const headerIdx = rows.findIndex(r => String(r[0]).trim() === '결제일');
+      if (headerIdx === -1) {
+        alert('페이히어 "매출 내역" 형식을 인식할 수 없습니다. 정확한 파일인지 확인해주세요.');
+        setCompareLoading(false);
+        return;
+      }
+
+      const dataRows = rows.slice(headerIdx + 1).filter(r => /^\d{4}-\d{2}-\d{2}/.test(String(r[0]).trim()));
+
+      const parsed = dataRows.map((r, idx) => {
+        const date = String(r[0]).trim();
+        const time = String(r[1]).trim() || '00:00:00';
+        const desc = String(r[2] || '').trim() || '기타';
+        const amount = Number(r[3]) || 0;
+        const cardAmt = Number(r[6]) || 0;
+        const cashAmt = Number(r[7]) || 0;
+        const easyAmt = Number(r[8]) || 0;
+        const etcAmt = Number(r[9]) || 0;
+        const onlineAmt = Number(r[10]) || 0;
+        const refundAt = String(r[14] || '').trim();
+        const isRefund = refundAt !== '' && refundAt !== '0' && refundAt !== '0.0';
+
+        let paymentMethod = '기타';
+        if (onlineAmt > 0) paymentMethod = '네이버';
+        else if (cardAmt > 0) paymentMethod = '신용카드';
+        else if (cashAmt > 0) paymentMethod = '현금';
+        else if (easyAmt > 0) paymentMethod = '계좌이체';
+        else if (etcAmt > 0) paymentMethod = '기타';
+
+        return { key: `${date}_${time}_${idx}`, date, time, desc, amount, paymentMethod, isRefund };
+      }).filter(t => !t.isRefund && t.amount > 0);
+
+      if (parsed.length === 0) {
+        alert('비교할 수 있는 거래 내역이 없습니다. (환불/0원 건 제외)');
+      } else {
+        // 파일에 섞여있는 날짜 중 가장 많이 등장하는 날짜로 비교 기준일을 자동으로 맞춰줍니다.
+        const dateCounts = {};
+        parsed.forEach(p => { dateCounts[p.date] = (dateCounts[p.date] || 0) + 1; });
+        const mostCommonDate = Object.entries(dateCounts).sort((a, b) => b[1] - a[1])[0][0];
+        setCompareDate(mostCommonDate);
+      }
+      setComparePayhereRows(parsed);
+    } catch (err) {
+      alert('엑셀 파일을 읽는 중 오류가 발생했습니다: ' + err.message);
+    } finally {
+      setCompareLoading(false);
+      e.target.value = '';
+    }
+  };
+
+  // "페이히어에만 있는 항목" 하나를 현장판매로 웹앱에 추가합니다.
+  const handleAddCompareMissingRow = async (row) => {
+    if (!window.confirm(`'${row.desc}' ${row.amount.toLocaleString()}원 항목을 웹앱에 현장판매로 추가하시겠습니까?`)) return;
+    const payload = {
+      customer_id: null,
+      product_name: row.desc,
+      product: row.desc,
+      amount: row.amount,
+      pickup_datetime: `${row.date}T${row.time}`,
+      created_at: `${row.date}T${row.time}`,
+      payment_method: row.paymentMethod,
+      status: row.paymentMethod,
+      is_delivery: false,
+      order_type: '현장판매',
+      memo: '페이히어 가져오기'
+    };
+    const { error } = await supabase.from('orders').insert([payload]);
+    if (error) {
+      alert('추가 실패: ' + error.message);
+      return;
+    }
+    await fetchData();
+  };
+
+  // "페이히어에만 있는 항목" 전체를 한 번에 현장판매로 웹앱에 추가합니다.
+  const handleAddAllCompareMissingRows = async () => {
+    if (!compareResult || compareResult.payhereOnly.length === 0) return;
+    if (!window.confirm(`페이히어에만 있는 ${compareResult.payhereOnly.length}건을 모두 웹앱에 현장판매로 추가하시겠습니까?`)) return;
+    const payload = compareResult.payhereOnly.map(row => ({
+      customer_id: null,
+      product_name: row.desc,
+      product: row.desc,
+      amount: row.amount,
+      pickup_datetime: `${row.date}T${row.time}`,
+      created_at: `${row.date}T${row.time}`,
+      payment_method: row.paymentMethod,
+      status: row.paymentMethod,
+      is_delivery: false,
+      order_type: '현장판매',
+      memo: '페이히어 가져오기'
+    }));
+    const { error } = await supabase.from('orders').insert(payload);
+    if (error) {
+      alert('추가 실패: ' + error.message);
+      return;
+    }
+    alert(`${payload.length}건이 웹앱에 추가되었습니다.`);
+    await fetchData();
   };
 
   // startDate/endDate(YYYY-MM-DD)가 있으면 주문(orders)만 그 기간으로 제한합니다. 고객(customers)은 항상 전체를 내보냅니다.
@@ -4805,6 +4983,12 @@ export default function App() {
                 <h2 className="text-base md:text-xl font-bold text-slate-900 flex items-center gap-2">
                   <span>📊</span> 매출 대시보드
                 </h2>
+                <button
+                  onClick={() => setShowSalesCompareModal(true)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border-2 border-emerald-400 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 flex items-center gap-1"
+                >
+                  🔍 매출비교 (vs 페이히어)
+                </button>
               </div>
 
               <div className="flex gap-1.5 mb-4">
@@ -4856,6 +5040,130 @@ export default function App() {
                 </div>
               </div>
             </div>
+
+            {showSalesCompareModal && (
+              <div
+                className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 md:p-4"
+                style={{ zIndex: 9999 }}
+                onClick={() => setShowSalesCompareModal(false)}
+              >
+                <div
+                  className="bg-white rounded-2xl p-4 md:p-6 max-w-2xl w-full shadow-2xl border border-slate-200 space-y-3 max-h-[90vh] overflow-y-auto"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <div className="flex justify-between items-start">
+                    <h3 className="text-base md:text-lg font-bold text-slate-900 flex items-center gap-1.5">
+                      🔍 매출비교 (vs 페이히어)
+                    </h3>
+                    <button onClick={() => setShowSalesCompareModal(false)} className="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer">✕</button>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    웹앱 주문 금액과 페이히어 "매출 내역" 엑셀의 결제 금액을 같은 날짜 안에서 1:1로 짝지어 비교합니다.
+                    주문시간·품목명이 서로 달라도 <b>금액이 같은 건끼리</b> 매칭하니, 페이히어 단말기에서 해당일 매출 내역 엑셀을 받아서 올려주세요.
+                  </p>
+
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700">비교 기준일</label>
+                      <input
+                        type="date"
+                        value={compareDate}
+                        onChange={e => setCompareDate(e.target.value)}
+                        className="block mt-1 p-2 border border-slate-300 rounded-xl text-sm bg-white text-slate-900"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-[180px]">
+                      <label className="text-[11px] font-bold text-slate-700">페이히어 매출 내역 엑셀</label>
+                      <label className={`mt-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border-2 border-dashed text-xs font-bold cursor-pointer ${compareLoading ? 'border-slate-200 text-slate-400' : 'border-emerald-300 text-emerald-700 hover:bg-emerald-50'}`}>
+                        {compareLoading ? '읽는 중...' : (compareFileName || '엑셀 파일 선택')}
+                        <input type="file" accept=".xlsx,.xls" className="hidden" onChange={handleCompareFileSelect} disabled={compareLoading} />
+                      </label>
+                    </div>
+                  </div>
+
+                  {compareResult && (
+                    <div className="space-y-3 pt-1">
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-200">
+                          <div className="text-[10px] font-bold text-indigo-700">웹앱 매출 ({compareResult.webCount}건)</div>
+                          <div className="text-sm md:text-base font-extrabold text-indigo-700 mt-0.5">{compareResult.webTotal.toLocaleString()}원</div>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200">
+                          <div className="text-[10px] font-bold text-amber-700">페이히어 매출 ({compareResult.payhereCount}건)</div>
+                          <div className="text-sm md:text-base font-extrabold text-amber-700 mt-0.5">{compareResult.payhereTotal.toLocaleString()}원</div>
+                        </div>
+                        <div className={`p-2.5 rounded-xl border ${compareResult.diff === 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+                          <div className={`text-[10px] font-bold ${compareResult.diff === 0 ? 'text-emerald-700' : 'text-rose-700'}`}>차액 (웹앱-페이히어)</div>
+                          <div className={`text-sm md:text-base font-extrabold mt-0.5 ${compareResult.diff === 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                            {compareResult.diff === 0 ? '일치 ✓' : `${compareResult.diff > 0 ? '+' : ''}${compareResult.diff.toLocaleString()}원`}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-[11px] text-slate-500">
+                        금액이 일치해서 자동으로 짝지어진 건: <b className="text-slate-700">{compareResult.matchedCount}건 ({compareResult.matchedAmount.toLocaleString()}원)</b>
+                      </div>
+
+                      {compareResult.payhereOnly.length > 0 && (
+                        <div className="border border-amber-200 bg-amber-50/50 rounded-xl p-3 space-y-2">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div className="text-xs font-bold text-amber-800">
+                              ⚠️ 페이히어에만 있는 항목 ({compareResult.payhereOnly.length}건) - 웹앱 등록 누락 의심
+                            </div>
+                            <button
+                              onClick={handleAddAllCompareMissingRows}
+                              className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold cursor-pointer whitespace-nowrap"
+                            >
+                              전체 웹앱에 추가
+                            </button>
+                          </div>
+                          <div className="space-y-1.5 max-h-52 overflow-y-auto">
+                            {compareResult.payhereOnly.map(row => (
+                              <div key={row.key} className="flex items-center justify-between gap-2 bg-white rounded-lg p-2 border border-amber-100">
+                                <div className="text-xs text-slate-700 min-w-0">
+                                  <div className="font-bold truncate">{row.desc} <span className="font-normal text-slate-400">· {row.time.slice(0, 5)} · {row.paymentMethod}</span></div>
+                                  <div className="font-extrabold text-amber-700">{row.amount.toLocaleString()}원</div>
+                                </div>
+                                <button
+                                  onClick={() => handleAddCompareMissingRow(row)}
+                                  className="shrink-0 px-2.5 py-1.5 rounded-lg bg-slate-900 text-white text-[11px] font-bold cursor-pointer whitespace-nowrap"
+                                >
+                                  + 웹앱에 추가
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {compareResult.webOnly.length > 0 && (
+                        <div className="border border-slate-200 bg-slate-50 rounded-xl p-3 space-y-2">
+                          <div className="text-xs font-bold text-slate-700">
+                            ℹ️ 웹앱에만 있는 항목 ({compareResult.webOnly.length}건) - 페이히어 결제 내역에서 못 찾음 (계좌이체 등 다른 방식으로 결제했을 수 있음)
+                          </div>
+                          <div className="space-y-1.5 max-h-52 overflow-y-auto">
+                            {compareResult.webOnly.map(row => (
+                              <div key={row.id} className="flex items-center justify-between gap-2 bg-white rounded-lg p-2 border border-slate-200">
+                                <div className="text-xs text-slate-700 min-w-0">
+                                  <div className="font-bold truncate">{row.label} <span className="font-normal text-slate-400">· {row.time} · {row.order_type} · {row.payment_method}</span></div>
+                                  <div className="font-extrabold text-slate-700">{row.amount.toLocaleString()}원</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {compareResult.payhereOnly.length === 0 && compareResult.webOnly.length === 0 && (
+                        <div className="text-center text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                          ✅ {compareDate} 매출이 웹앱과 페이히어에서 모두 일치합니다.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* 매출 달력 (픽업 달력과 동일한 형태·스타일. 금액은 작은 숫자로 표시) */}
             <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
