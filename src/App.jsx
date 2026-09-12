@@ -334,6 +334,7 @@ export default function App() {
   const [ribbonFontFamily, setRibbonFontFamily] = useState(RIBBON_FONT_OPTIONS[0].value);
   const [ribbonFontSize, setRibbonFontSize] = useState(26); // px, 글자 크기
   const [ribbonLetterSpacing, setRibbonLetterSpacing] = useState(4); // px, 자간(글자 사이 세로 간격)
+  const [ribbonWordSpacingEm, setRibbonWordSpacingEm] = useState(-0.5); // em(글자 크기 비례), 스페이스(공백) 문구의 폭 보정값 - 기본 음수로 과하게 넓은 공백 글자 폭을 줄여줍니다.
   const [ribbonLineGap, setRibbonLineGap] = useState(7); // mm, 행간(줄과 줄 사이 간격) - 좌우 여백과 단위를 통일해 mm로 관리합니다.
   const [ribbonPaperWidth, setRibbonPaperWidth] = useState(80); // mm, 프린터 용지 폭
   const [ribbonMarginLeft, setRibbonMarginLeft] = useState(25); // mm, 좌측 여백
@@ -632,8 +633,9 @@ export default function App() {
     const c = template.config;
     if (c.ribbonText !== undefined) setRibbonText(c.ribbonText);
     if (c.ribbonFontFamily !== undefined) setRibbonFontFamily(c.ribbonFontFamily);
-    if (c.ribbonFontSize !== undefined) setRibbonFontSize(Math.min(120, Math.max(12, Number(c.ribbonFontSize))));
+    if (c.ribbonFontSize !== undefined) setRibbonFontSize(Math.min(240, Math.max(12, Number(c.ribbonFontSize))));
     if (c.ribbonLetterSpacing !== undefined) setRibbonLetterSpacing(Number(c.ribbonLetterSpacing));
+    if (c.ribbonWordSpacingEm !== undefined) setRibbonWordSpacingEm(Number(c.ribbonWordSpacingEm));
     if (c.ribbonLineGap !== undefined) setRibbonLineGap(Number(c.ribbonLineGap));
     if (c.ribbonPaperWidth !== undefined) setRibbonPaperWidth(Number(c.ribbonPaperWidth) === 58 ? 58 : 80);
     if (c.ribbonMarginLeft !== undefined) setRibbonMarginLeft(Number(c.ribbonMarginLeft));
@@ -656,7 +658,7 @@ export default function App() {
     if (!name || !name.trim()) return;
 
     const config = {
-      ribbonText, ribbonFontFamily, ribbonFontSize, ribbonLetterSpacing, ribbonLineGap,
+      ribbonText, ribbonFontFamily, ribbonFontSize, ribbonLetterSpacing, ribbonWordSpacingEm, ribbonLineGap,
       ribbonPaperWidth, ribbonMarginLeft, ribbonMarginRight, ribbonMarginTop, ribbonMarginBottom, ribbonMarginSync,
       ribbonBold, ribbonShowGuide, ribbonCopies
     };
@@ -1992,20 +1994,45 @@ export default function App() {
             font-size: ${ribbonFontSize}px;
             font-weight: ${ribbonBold ? 800 : 400};
             letter-spacing: ${ribbonLetterSpacing}px;
+            word-spacing: ${ribbonWordSpacingEm}em;
           }
           .no-print { text-align: center; padding: 10px; background: #eee; }
           @media print {
-            @page { size: ${ribbonPaperWidth}mm auto; margin: 0; }
             .no-print { display: none; }
           }
+        </style>
+        <style id="page-size-style">
+          @page { size: ${ribbonPaperWidth}mm auto; margin: 0; }
         </style>
       </head>
       <body>
         <div class="no-print">
-          <button onclick="window.print()" style="padding: 10px 20px; font-size: 16px; cursor: pointer; font-weight: bold;">리본 인쇄하기</button>
+          <button onclick="doPrint()" style="padding: 10px 20px; font-size: 16px; cursor: pointer; font-weight: bold;">리본 인쇄하기</button>
           <p style="font-size:11px;color:#555;">폰트 로딩 후 인쇄 버튼을 눌러주세요. (점선은 실제로 인쇄되며, 그 선을 따라 세로로 잘라 리본으로 사용하세요)</p>
         </div>
         ${ribbonsHtml}
+        <script>
+          // "auto" 페이지 높이는 브라우저/프린터가 실제 잉크(글자)가 있는 부분까지만 인쇄 길이로 잡고
+          // 끝부분의 빈 여백(스페이서, 끝쪽 공백 문자)은 잘라내는 경우가 있어, 인쇄 직전에 실제 렌더링된
+          // 리본 하나의 높이를 직접 측정해서 페이지 크기를 정확한 mm 값으로 고정합니다.
+          function doPrint() {
+            try {
+              var guide = document.querySelector('.ribbon-guide');
+              var styleTag = document.getElementById('page-size-style');
+              if (guide && styleTag) {
+                var pxHeight = guide.getBoundingClientRect().height;
+                var mmHeight = (pxHeight / 96 * 25.4) + 1; // px→mm 환산 + 1mm 여유
+                mmHeight = Math.ceil(mmHeight * 10) / 10;
+                if (mmHeight > 0) {
+                  styleTag.textContent = '@page { size: ${ribbonPaperWidth}mm ' + mmHeight + 'mm; margin: 0; }';
+                }
+              }
+            } catch (e) {
+              // 측정에 실패해도 인쇄 자체는 진행합니다 (이 경우 기존의 auto 높이로 인쇄됩니다).
+            }
+            window.print();
+          }
+        </script>
       </body>
       </html>
     `;
@@ -6168,12 +6195,20 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] md:text-xs font-bold text-slate-700">글자 크기 ({ribbonFontSize}px, 최대 120px)</label>
-                    <input
-                      type="range" min="12" max="120" value={ribbonFontSize}
-                      onChange={e => setRibbonFontSize(Math.min(120, Number(e.target.value)))}
-                      className="w-full mt-2 cursor-pointer accent-rose-500"
-                    />
+                    <label className="text-[11px] md:text-xs font-bold text-slate-700">글자 크기 ({ribbonFontSize}px, 최대 240px)</label>
+                    <div className="flex items-center gap-2 mt-2">
+                      <input
+                        type="range" min="12" max="240" value={Math.min(ribbonFontSize, 240)}
+                        onChange={e => setRibbonFontSize(Math.min(240, Number(e.target.value)))}
+                        className="w-full cursor-pointer accent-rose-500"
+                      />
+                      <input
+                        type="number" min="12" max="240"
+                        value={ribbonFontSize}
+                        onChange={e => setRibbonFontSize(Math.min(240, Math.max(12, Number(e.target.value))))}
+                        className="w-16 p-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-900 font-medium shrink-0"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="text-[11px] md:text-xs font-bold text-slate-700">자간 ({ribbonLetterSpacing}px)</label>
@@ -6183,6 +6218,18 @@ export default function App() {
                       className="w-full mt-2 cursor-pointer accent-rose-500"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] md:text-xs font-bold text-slate-700">
+                    공백(스페이스) 폭 조정 ({ribbonWordSpacingEm >= 0 ? '+' : ''}{ribbonWordSpacingEm}em)
+                  </label>
+                  <input
+                    type="range" min="-1" max="1" step="0.05" value={ribbonWordSpacingEm}
+                    onChange={e => setRibbonWordSpacingEm(Number(e.target.value))}
+                    className="w-full mt-2 cursor-pointer accent-rose-500"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">스페이스 글자가 자간에 비해 너무 넓어 보이면 음수(-) 쪽으로 줄여보세요. (글자 크기에 비례해 함께 커지고 작아집니다)</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -6414,6 +6461,7 @@ export default function App() {
                                 fontSize: `${ribbonFontSize}px`,
                                 fontWeight: ribbonBold ? 800 : 400,
                                 letterSpacing: `${ribbonLetterSpacing}px`,
+                                wordSpacing: `${ribbonWordSpacingEm}em`,
                                 color: '#000',
                               }}
                             >
