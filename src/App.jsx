@@ -340,7 +340,6 @@ export default function App() {
   const [ribbonMarginLeft, setRibbonMarginLeft] = useState(25); // mm, 좌측 여백
   const [ribbonMarginRight, setRibbonMarginRight] = useState(25); // mm, 우측 여백
   const [ribbonMarginTop, setRibbonMarginTop] = useState(6); // mm, 상단 여백(리본 시작 부분 공백)
-  const [ribbonMarginBottom, setRibbonMarginBottom] = useState(6); // mm, 하단 여백(리본 끝 부분 공백)
   const [ribbonMarginSync, setRibbonMarginSync] = useState(true); // true면 좌측 여백을 바꿀 때 우측 여백도 항상 같은 값으로 맞춰서, 정중앙을 기준으로 반으로 잘라도 양쪽 여백이 동일하게 유지됩니다.
   const [ribbonBold, setRibbonBold] = useState(true);
   const [ribbonShowGuide, setRibbonShowGuide] = useState(true); // 재단 가이드선(점선) 표시 여부
@@ -641,7 +640,6 @@ export default function App() {
     if (c.ribbonMarginLeft !== undefined) setRibbonMarginLeft(Number(c.ribbonMarginLeft));
     if (c.ribbonMarginRight !== undefined) setRibbonMarginRight(Number(c.ribbonMarginRight));
     if (c.ribbonMarginTop !== undefined) setRibbonMarginTop(Number(c.ribbonMarginTop));
-    if (c.ribbonMarginBottom !== undefined) setRibbonMarginBottom(Number(c.ribbonMarginBottom));
     if (c.ribbonMarginSync !== undefined) setRibbonMarginSync(Boolean(c.ribbonMarginSync));
     if (c.ribbonBold !== undefined) setRibbonBold(Boolean(c.ribbonBold));
     if (c.ribbonShowGuide !== undefined) setRibbonShowGuide(Boolean(c.ribbonShowGuide));
@@ -659,7 +657,7 @@ export default function App() {
 
     const config = {
       ribbonText, ribbonFontFamily, ribbonFontSize, ribbonLetterSpacing, ribbonWordSpacingEm, ribbonLineGap,
-      ribbonPaperWidth, ribbonMarginLeft, ribbonMarginRight, ribbonMarginTop, ribbonMarginBottom, ribbonMarginSync,
+      ribbonPaperWidth, ribbonMarginLeft, ribbonMarginRight, ribbonMarginTop, ribbonMarginSync,
       ribbonBold, ribbonShowGuide, ribbonCopies
     };
     setRibbonTemplateLoading(true);
@@ -1933,15 +1931,14 @@ export default function App() {
       .map(line => `<div class="rline">${escapeHtml(line) || '&nbsp;'}</div>`)
       .join('');
 
-    // 상/하단 여백은 padding이 아니라 실제 높이를 가진 빈 칸(스페이서)으로 만듭니다.
-    // (감열지 프린터는 인쇄 길이를 "auto"로 계산하는데, 아무 내용도 없는 padding만으로는
-    //  일부 프린터/브라우저 조합에서 맨 끝 여백이 잘려나가는 경우가 있어 실제 요소로 확보합니다.)
+    // 상단 여백은 padding이 아니라 실제 높이를 가진 빈 칸(스페이서)으로 만듭니다.
+    // (하단 여백은 프린터 드라이버 쪽에서 잘려나가 의미가 없어 제거했습니다 - 필요하면 빅솔론 드라이버의
+    //  "문서 설정 > 용지 공급 > 인쇄 후에 용지 공급" 값으로 조절하세요.)
     const oneRibbonHtml = `
       <div class="ribbon-outer">
         <div class="ribbon-guide">
           <div class="ribbon-spacer" style="height:${ribbonMarginTop}mm;">&nbsp;</div>
           <div class="ribbon-flex">${linesHtml}</div>
-          <div class="ribbon-spacer" style="height:${ribbonMarginBottom}mm;">&nbsp;</div>
         </div>
       </div>
     `;
@@ -6291,38 +6288,20 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] md:text-xs font-bold text-slate-700">상단 여백 (mm, 최대 300)</label>
-                    <div className="flex items-center gap-2 mt-1">
-                      <input
-                        type="range" min="0" max="300" value={Math.min(ribbonMarginTop, 300)}
-                        onChange={e => setRibbonMarginTop(Number(e.target.value))}
-                        className="w-full cursor-pointer accent-rose-500"
-                      />
-                      <input
-                        type="number" min="0" max="300"
-                        value={ribbonMarginTop}
-                        onChange={e => setRibbonMarginTop(Math.min(300, Math.max(0, Number(e.target.value))))}
-                        className="w-16 p-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-900 font-medium shrink-0"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[11px] md:text-xs font-bold text-slate-700">하단 여백 (mm, 최대 300)</label>
-                    <div className="flex items-center gap-2 mt-1">
-                      <input
-                        type="range" min="0" max="300" value={Math.min(ribbonMarginBottom, 300)}
-                        onChange={e => setRibbonMarginBottom(Number(e.target.value))}
-                        className="w-full cursor-pointer accent-rose-500"
-                      />
-                      <input
-                        type="number" min="0" max="300"
-                        value={ribbonMarginBottom}
-                        onChange={e => setRibbonMarginBottom(Math.min(300, Math.max(0, Number(e.target.value))))}
-                        className="w-16 p-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-900 font-medium shrink-0"
-                      />
-                    </div>
+                <div>
+                  <label className="text-[11px] md:text-xs font-bold text-slate-700">상단 여백 (mm, 최대 300)</label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <input
+                      type="range" min="0" max="300" value={Math.min(ribbonMarginTop, 300)}
+                      onChange={e => setRibbonMarginTop(Number(e.target.value))}
+                      className="w-full cursor-pointer accent-rose-500"
+                    />
+                    <input
+                      type="number" min="0" max="300"
+                      value={ribbonMarginTop}
+                      onChange={e => setRibbonMarginTop(Math.min(300, Math.max(0, Number(e.target.value))))}
+                      className="w-16 p-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-900 font-medium shrink-0"
+                    />
                   </div>
                 </div>
 
@@ -6446,7 +6425,6 @@ export default function App() {
                           ))}
                         </div>
                       )}
-                      <div style={{ height: `${ribbonMarginBottom}mm` }} />
                     </div>
                   </div>
                 </div>
