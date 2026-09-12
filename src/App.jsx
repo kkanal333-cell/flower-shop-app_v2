@@ -665,11 +665,13 @@ export default function App() {
       const selectedTemplate = selectedRibbonTemplateId
         ? ribbonTemplates.find(t => String(t.id) === String(selectedRibbonTemplateId))
         : null;
+      const isOverwritingSameTemplate = !!(selectedTemplate && selectedTemplate.name === name.trim());
       const row = {
-        ...(selectedTemplate && selectedTemplate.name === name.trim() ? { id: selectedRibbonTemplateId } : {}),
+        ...(isOverwritingSameTemplate ? { id: selectedRibbonTemplateId } : {}),
         name: name.trim(),
-          config,
-          is_default: false,
+        config,
+        // 기존 양식을 덮어쓰는 경우엔 기본 양식 지정 여부를 그대로 유지하고, 새 양식은 기본값 false로 저장합니다.
+        is_default: isOverwritingSameTemplate ? !!selectedTemplate.is_default : false,
         updated_at: new Date().toISOString()
       };
       const { data, error } = await supabase
@@ -693,6 +695,34 @@ export default function App() {
     if (!selectedRibbonTemplateId) return alert('불러올 양식을 선택해주세요.');
     const template = ribbonTemplates.find(t => String(t.id) === String(selectedRibbonTemplateId));
     if (template) applyRibbonTemplate(template, true);
+  };
+
+  // 선택한 양식을 "기본 양식"으로 지정합니다. 기본 양식은 새로고침하거나 리본편집기를 처음 열 때 자동으로 불러와집니다.
+  const handleSetDefaultRibbonTemplate = async () => {
+    if (!selectedRibbonTemplateId) return alert('기본으로 지정할 양식을 먼저 선택해주세요.');
+    const template = ribbonTemplates.find(t => String(t.id) === String(selectedRibbonTemplateId));
+    if (!template) return;
+    if (template.is_default) {
+      alert(`'${template.name}' 양식은 이미 기본 양식입니다.`);
+      return;
+    }
+    try {
+      const { error: clearError } = await supabase
+        .from('ribbon_templates')
+        .update({ is_default: false })
+        .neq('id', selectedRibbonTemplateId);
+      if (clearError) throw clearError;
+      const { error: setError } = await supabase
+        .from('ribbon_templates')
+        .update({ is_default: true })
+        .eq('id', selectedRibbonTemplateId);
+      if (setError) throw setError;
+      await fetchRibbonTemplates();
+      alert(`'${template.name}' 양식을 기본 양식으로 지정했습니다. 새로고침하거나 리본편집기를 열면 이 양식이 자동으로 불러와집니다.`);
+    } catch (err) {
+      console.error(err);
+      alert('기본 양식 지정 실패: ' + err.message);
+    }
   };
 
   const handleDeleteRibbonTemplate = async () => {
@@ -6344,30 +6374,36 @@ export default function App() {
                       <option key={t.id} value={t.id}>{t.name}{t.is_default ? ' ★기본' : ''}</option>
                     ))}
                   </select>
-                  <p className="text-[10px] text-slate-500">글꼴·크기·자간·행간·용지폭·여백·굵기·가이드선·인쇄매수를 한꺼번에 저장합니다.</p>
-                  <div className="flex flex-nowrap gap-2 pt-1">
+                  <p className="text-[10px] text-slate-500">글꼴·크기·자간·행간·용지폭·여백·굵기·가이드선·인쇄매수를 한꺼번에 저장합니다. ★기본 양식은 새로고침하거나 리본편집기를 열 때 자동으로 불러와집니다.</p>
+                  <div className="flex flex-wrap gap-2 pt-1">
                     <button
                       onClick={handleSaveRibbonTemplate}
                       disabled={ribbonTemplateLoading}
-                      className="flex-1 px-3 py-2 rounded-xl bg-slate-900 border border-slate-900 text-white text-xs font-bold cursor-pointer whitespace-nowrap"
+                      className="flex-1 min-w-[70px] px-3 py-2 rounded-xl bg-slate-900 border border-slate-900 text-white text-xs font-bold cursor-pointer whitespace-nowrap"
                     >
                       {ribbonTemplateLoading ? '저장 중…' : '현재 양식 저장'}
                     </button>
                     <button
                       onClick={handleLoadRibbonTemplate}
-                      className="flex-1 px-3 py-2 rounded-xl bg-white border border-slate-400 text-slate-800 text-xs font-bold cursor-pointer whitespace-nowrap"
+                      className="flex-1 min-w-[70px] px-3 py-2 rounded-xl bg-white border border-slate-400 text-slate-800 text-xs font-bold cursor-pointer whitespace-nowrap"
                     >
                       불러오기
                     </button>
                     <button
+                      onClick={handleSetDefaultRibbonTemplate}
+                      className="flex-1 min-w-[70px] px-3 py-2 rounded-xl bg-amber-50 border border-amber-400 text-amber-700 text-xs font-bold cursor-pointer whitespace-nowrap"
+                    >
+                      ⭐ 기본 지정
+                    </button>
+                    <button
                       onClick={handleDeleteRibbonTemplate}
-                      className="flex-1 px-3 py-2 rounded-xl bg-white border border-rose-400 text-rose-700 text-xs font-bold cursor-pointer whitespace-nowrap"
+                      className="flex-1 min-w-[70px] px-3 py-2 rounded-xl bg-white border border-rose-400 text-rose-700 text-xs font-bold cursor-pointer whitespace-nowrap"
                     >
                       삭제
                     </button>
                     <button
                       onClick={handlePrintRibbon}
-                      className="flex-1 px-3 py-2 rounded-xl bg-rose-600 border border-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer whitespace-nowrap"
+                      className="flex-1 min-w-[120px] px-3 py-2 rounded-xl bg-rose-600 border border-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer whitespace-nowrap"
                     >
                       🖨️ 리본 인쇄하기
                     </button>
