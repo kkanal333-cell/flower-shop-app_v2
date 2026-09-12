@@ -1646,7 +1646,7 @@ export default function App() {
     return (orders || [])
       .filter(o => !o.deleted_at)
       .filter(o => (o.created_at || '').replace(' ', 'T').split('T')[0] === dashboardSelectedDate)
-      .sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
+      .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
   }, [orders, dashboardSelectedDate]);
 
   // 날짜(YYYY-MM-DD)별 매출 합계 맵 (매출 달력에서 재사용)
