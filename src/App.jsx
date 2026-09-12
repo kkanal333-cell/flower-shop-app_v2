@@ -3713,6 +3713,51 @@ export default function App() {
                   </label>
                 </div>
 
+                <div className="gap-2" style={{ display: 'flex', alignItems: 'flex-end' }}>
+                  <label className="flex items-center gap-1.5 px-2.5 py-2 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={!!newOrder.is_delivery}
+                      onChange={e => {
+                        if (e.target.checked) {
+                          const nextQ = getNextQuarterHourDateTime();
+                          setNewOrder({
+                            ...newOrder,
+                            is_delivery: true,
+                            delivery_date: newOrder.delivery_date || getKoreaNowFormatted().date,
+                            delivery_time: newOrder.delivery_time || nextQ.time
+                          });
+                        } else {
+                          setNewOrder({ ...newOrder, is_delivery: false, delivery_date: '', delivery_time: '' });
+                        }
+                      }}
+                      className="w-4 h-4 accent-sky-500 cursor-pointer"
+                    />
+                    <span className="text-[11px] font-bold text-slate-700">🚚 배송</span>
+                  </label>
+                </div>
+
+                {newOrder.is_delivery && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700">배송 날짜</label>
+                      <input
+                        type="date"
+                        value={newOrder.delivery_date || ''}
+                        onChange={e => setNewOrder({ ...newOrder, delivery_date: e.target.value })}
+                        className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700">배송 시간</label>
+                      <TimePickerCustom
+                        value={newOrder.delivery_time || ''}
+                        onChange={val => setNewOrder({ ...newOrder, delivery_time: val })}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="text-[11px] font-bold text-slate-700">요청사항 / 메모</label>
                   <textarea
@@ -3934,6 +3979,51 @@ export default function App() {
                   <span className="text-xs md:text-sm font-bold text-black">💬 알림톡</span>
                 </label>
               </div>
+
+              <div className="gap-2 md:gap-4" style={{ display: 'flex', alignItems: 'flex-end' }}>
+                <label className="flex items-center gap-1.5 px-3 py-2 md:py-3 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={!!newOrder.is_delivery}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        const nextQ = getNextQuarterHourDateTime();
+                        setNewOrder({
+                          ...newOrder,
+                          is_delivery: true,
+                          delivery_date: newOrder.delivery_date || getKoreaNowFormatted().date,
+                          delivery_time: newOrder.delivery_time || nextQ.time
+                        });
+                      } else {
+                        setNewOrder({ ...newOrder, is_delivery: false, delivery_date: '', delivery_time: '' });
+                      }
+                    }}
+                    className="w-4 h-4 accent-sky-500 cursor-pointer"
+                  />
+                  <span className="text-xs md:text-sm font-bold text-black">🚚 배송</span>
+                </label>
+              </div>
+
+              {newOrder.is_delivery && (
+                <div className="grid grid-cols-2 gap-2 md:gap-4">
+                  <div>
+                    <label className="text-[11px] md:text-xs font-bold text-black">배송 날짜</label>
+                    <input
+                      type="date"
+                      value={newOrder.delivery_date || ''}
+                      onChange={e => setNewOrder({ ...newOrder, delivery_date: e.target.value })}
+                      className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] md:text-xs font-bold text-black">배송 시간</label>
+                    <TimePickerCustom
+                      value={newOrder.delivery_time || ''}
+                      onChange={val => setNewOrder({ ...newOrder, delivery_time: val })}
+                    />
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="text-[11px] md:text-xs font-bold text-black">고객 요구사항 / 메모</label>
