@@ -1514,8 +1514,11 @@ export default function App() {
   }, [orders, dashboardPeriod]);
 
   // 매출비교(vs 페이히어): 주문시간·항목명은 서로 다를 수 있어 "금액"만으로 짝을 맞춥니다.
-  // 같은 날짜(결제일 기준 = pickup_datetime, 없으면 created_at) 안에서 웹앱 주문과 페이히어 거래를
-  // 금액이 같은 것끼리 1:1로 매칭하고(같은 금액이 여러 건이면 순서대로 하나씩 짝지음),
+  // 웹앱 쪽 날짜 기준은 매출 대시보드의 "오늘 매출" 집계(dashboardStats)와 반드시 동일하게 created_at을 씁니다.
+  // (여기서 pickup_datetime을 기준으로 삼으면 대시보드에는 "오늘 매출"로 잡히는데 비교에는 안 잡히거나
+  //  그 반대인 경우가 생겨서 두 화면의 "오늘 매출" 숫자가 서로 달라지는 혼란이 생깁니다.)
+  // 같은 날짜 안에서 웹앱 주문과 페이히어 거래를 금액이 같은 것끼리 1:1로 매칭하고
+  // (같은 금액이 여러 건이면 순서대로 하나씩 짝지음),
   // 짝을 못 찾은 페이히어 거래 = "페이히어에만 있는 항목"(웹앱 추가 대상),
   // 짝을 못 찾은 웹앱 주문 = "웹앱에만 있는 항목"(다른 결제수단 등으로 확인 필요)으로 분류합니다.
   const compareResult = useMemo(() => {
@@ -1524,11 +1527,11 @@ export default function App() {
     const validOrders = (orders || []).filter(o => !o.deleted_at);
     const webRows = validOrders
       .filter(o => {
-        const raw = (o.pickup_datetime || o.created_at || '').replace(' ', 'T');
+        const raw = (o.created_at || '').replace(' ', 'T');
         return raw.split('T')[0] === compareDate;
       })
       .map(o => {
-        const raw = (o.pickup_datetime || o.created_at || '').replace(' ', 'T');
+        const raw = (o.created_at || '').replace(' ', 'T');
         return {
           id: o.id,
           amount: Number(o.amount) || 0,
