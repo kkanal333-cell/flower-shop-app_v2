@@ -2134,6 +2134,15 @@ export default function App() {
     }
   };
 
+  // 페이히어 단말기 매출과 수기로 대조해서 확인했는지 체크(하루 마감용, 그 순간 확인용이라 저장은 하지 않고
+  // 화면에 떠 있는 동안만 기억합니다 - 새로고침하면 초기화됩니다).
+  const [payhereCheckedIds, setPayhereCheckedIds] = useState([]);
+  const handleTogglePayhereChecked = (orderId) => {
+    setPayhereCheckedIds(prev =>
+      prev.includes(orderId) ? prev.filter(id => id !== orderId) : [...prev, orderId]
+    );
+  };
+
   // 선택된 주문들을 휴지통으로 이동 (삭제 시간 기록 포함)
   const handleDeleteSelectedOrders = async () => {
     if (selectedOrderIds.length === 0) return;
@@ -5215,13 +5224,14 @@ export default function App() {
                 <>
                   <div className="text-xs font-bold text-rose-600 mb-2">
                     합계: {dashboardDateOrders.reduce((s, o) => s + (Number(o.amount) || 0), 0).toLocaleString()}원 ({dashboardDateOrders.length}건)
+                    {' '}· 대조 확인 {dashboardDateOrders.filter(o => payhereCheckedIds.includes(o.id)).length}건
                   </div>
                   <div>
                     {/* 헤더 행 */}
                     <div
                       style={{
                         display: 'grid',
-                        gridTemplateColumns: '24px 46px 76px 1fr 82px',
+                        gridTemplateColumns: '20px 24px 46px 76px 1fr 82px',
                         gap: '6px',
                         alignItems: 'center',
                         padding: '4px 2px',
@@ -5231,6 +5241,7 @@ export default function App() {
                         color: '#94a3b8'
                       }}
                     >
+                      <div title="페이히어 매출 대조 확인">✓</div>
                       <div></div>
                       <div>시간</div>
                       <div>고객명</div>
@@ -5242,31 +5253,38 @@ export default function App() {
                       const isDeliveryRow = isOnsite && o.is_delivery;
                       const timeOnly = (o.created_at || '').replace(' ', 'T').split('T')[1]?.slice(0, 5) || '--:--';
                       return (
-                        <button
+                        <div
                           key={o.id}
-                          type="button"
                           onClick={() => setOrderInfoModal(o)}
                           style={{
                             display: 'grid',
-                            gridTemplateColumns: '24px 46px 76px 1fr 82px',
+                            gridTemplateColumns: '20px 24px 46px 76px 1fr 82px',
                             gap: '6px',
                             alignItems: 'center',
                             padding: '6px 2px',
-                            borderTop: 'none',
-                            borderLeft: 'none',
-                            borderRight: 'none',
                             borderBottom: '1px solid #f1f5f9',
                             fontSize: '12px',
                             width: '100%',
                             textAlign: 'left',
-                            background: 'transparent',
+                            backgroundColor: payhereCheckedIds.includes(o.id) ? '#ecfdf5' : 'transparent',
                             cursor: 'pointer',
                             fontFamily: 'inherit',
-                            appearance: 'none',
                             margin: 0
                           }}
                           className="hover:bg-slate-50"
                         >
+                          <span
+                            onClick={e => e.stopPropagation()}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={payhereCheckedIds.includes(o.id)}
+                              onChange={() => handleTogglePayhereChecked(o.id)}
+                              className="accent-emerald-500 cursor-pointer w-3.5 h-3.5"
+                              title="페이히어 매출과 대조 확인됨"
+                            />
+                          </span>
                           <span
                             className={isDeliveryRow ? 'badge-blink' : ''}
                             style={{
@@ -5289,7 +5307,7 @@ export default function App() {
                           <span style={{ color: '#000', fontWeight: 'normal', whiteSpace: 'nowrap', textAlign: 'right' }}>
                             {Number(o.amount || 0).toLocaleString()}원
                           </span>
-                        </button>
+                        </div>
                       );
                     })}
                   </div>
