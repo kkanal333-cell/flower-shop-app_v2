@@ -4616,8 +4616,8 @@ export default function App() {
                 ) : (
                   <div className="flex flex-col gap-2">
                     {selectedDayOrders.map(o => {
-                      const isOnsiteDelivery = o.order_type === '현장판매';
-                      const timeOnly = isOnsiteDelivery
+                      const isDelivery = !!o.is_delivery;
+                      const timeOnly = isDelivery
                         ? (o.delivery_time || '--:--')
                         : (o.pickup_datetime ? o.pickup_datetime.replace(' ', 'T').split('T')[1]?.slice(0, 5) : '--:--');
                       return (
@@ -4626,13 +4626,13 @@ export default function App() {
                           className="p-2.5 md:p-3 rounded-xl border border-slate-200 bg-white flex flex-col gap-1.5 shadow-2xs"
                         >
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] shrink-0 ${isOnsiteDelivery ? 'badge-blink' : 'bg-indigo-300'}`} title={isOnsiteDelivery ? '배송' : '예약주문'}>
-                              {isOnsiteDelivery ? '🚚' : '📅'}
+                            <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] shrink-0 ${isDelivery ? 'badge-blink' : 'bg-indigo-300'}`} title={isDelivery ? '배송' : '예약주문'}>
+                              {isDelivery ? '🚚' : '📅'}
                             </span>
                             <span className={`px-2 py-0.5 font-extrabold text-xs rounded-md whitespace-nowrap border shrink-0 ${
-                              isOnsiteDelivery ? 'bg-sky-100 text-sky-900 border-sky-300' : 'bg-sky-100 text-sky-900 border-sky-300'
+                              isDelivery ? 'bg-sky-100 text-sky-900 border-sky-300' : 'bg-sky-100 text-sky-900 border-sky-300'
                             }`}>
-                              {isOnsiteDelivery ? '🚚' : '⏰'} {timeOnly}
+                              {isDelivery ? '🚚' : '⏰'} {timeOnly}
                             </span>
                             <span className="font-bold text-slate-900 text-sm md:text-base">
                               {o.customers?.name || '익명'}
@@ -4640,11 +4640,6 @@ export default function App() {
                             <span className="text-xs text-slate-600 font-medium">
                               {o.customers?.phone || ''}
                             </span>
-                            {o.is_delivery && !isOnsiteDelivery && (
-                              <span className="px-1.5 py-0.5 bg-sky-500 text-white font-bold text-[10px] rounded-md whitespace-nowrap shrink-0">
-                                🚚 배송{o.delivery_time ? ` ${o.delivery_time}` : ''}
-                              </span>
-                            )}
                             {(photoMap[String(o.id)]?.length || 0) > 0 && (
                               <button
                                 onClick={() => { setPhotoViewer(o.id); setPhotoViewerIndex(0); }}
