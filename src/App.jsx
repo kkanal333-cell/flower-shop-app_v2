@@ -1688,19 +1688,204 @@ export default function App() {
     fetchData();
   };
 
-  // 단건 인쇄 함수
-  // 주문서를 새 창/팝업으로 열지 않고, 이 페이지 안의 모달로 보여줍니다.
-  // PC·모바일 브라우저·홈 화면 설치(PWA) 어디서든 똑같이 동작하고, 일반 페이지 콘텐츠라 확대/축소(핀치줌, 더블탭)도 그대로 됩니다.
-  // "인쇄하기"를 누르면 현재 창 자체를 인쇄하되, CSS로 이 영수증 부분만 인쇄되도록 나머지를 숨깁니다.
+  // 모바일 기기에서 홈 화면에 추가(PWA/독립실행 모드)로 열었는지 확인합니다. 이 조합에서만 window.open()으로
+  // 새 창을 여는 게 조용히 막히는 경우가 많아(특히 삼성인터넷), 그럴 때만 숨겨진 iframe으로 인쇄 대화상자를 띄웁니다.
+  // (PC에서 "앱으로 설치"한 경우까지 걸러지지 않도록, 모바일 기기인지도 함께 확인합니다)
+  const isStandalonePWA = () => {
+    try {
+      const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      return standalone && isMobileDevice;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  // 새 창 없이, 숨겨진 iframe에 영수증 내용을 넣고 바로 인쇄 대화상자를 띄웁니다. (PWA/독립실행 모드용)
+  const printViaIframe = (htmlContent) => {
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const cleanup = () => {
+      if (iframe.parentNode) document.body.removeChild(iframe);
+    };
+
+    iframe.onload = () => {
+      setTimeout(() => {
+        try {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+        } catch (e) {
+          alert('인쇄 중 오류가 발생했습니다: ' + e.message);
+        }
+        setTimeout(cleanup, 1500);
+      }, 300);
+    };
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(htmlContent);
+    doc.close();
+  };
+
   const handlePrintSingleOrder = (o) => {
-    setPrintPreview({ orders: [o] });
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>영수증</title>
+        <style>
+          @page { size: 80mm auto; margin: 0; }
+          html, body { background: #e5e5e5; }
+          body { font-family: 'Arial', sans-serif; margin: 0; padding: 2mm; width: 74mm; box-sizing: border-box; font-size: 13px; line-height: 1.4; color: #000; background: #fff; }
+          .center { text-align: center; }
+          .title { font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
+          .row { margin-bottom: 5px; } .row .label { display: inline-block; width: 52px; vertical-align: top; }
+          .label { font-weight: bold; white-space: nowrap; }
+          .value { font-weight: bold; }
+          .big-text { font-size: 26px !important; font-weight: bold; }
+          .memo { margin-top: 10px; padding-top: 5px; border-top: 1px dashed #000; }
+          .footer { margin-top: 20px; text-align: center; font-size: 12px; }
+          @media print {
+            html, body { background: #fff; }
+            body { margin: 0; padding: 2mm; width: 74mm; }
+            button { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="center title" style="display:flex; align-items:center; justify-content:center; gap:4px;">
+          <img src="${SHOP_LOGO_SRC}" alt="화사한 하루" style="height:24px; width:auto; vertical-align:middle; filter: brightness(0);" />
+          <span>주문서</span>
+        </div>
+        <div class="row"><span class="label">번호:</span><span>#${o.id}</span></div>
+        <div class="row"><span class="label">성명:</span><span class="big-text">${o.customers?.name || '-'}</span></div>
+        <div class="row"><span class="label">연락처:</span><span class="big-text">${o.customers?.phone || '-'}</span></div>
+        <div class="row"><span class="label">품목:</span><span>${o.product_name || '-'}</span></div>
+        <div class="row"><span class="label">금액:</span><span>${o.amount?.toLocaleString()}원</span></div>
+        <div class="row"><span class="label">결제:</span><span>${o.payment_method || '-'}</span></div>
+        <div class="row"><span class="label">픽업:</span><span>${formatPickupWithDay(o.pickup_datetime)}</span></div>
+        <div class="memo">
+          <strong>요청사항:</strong><br/>
+          ${o.memo || '없음'}
+        </div>
+        <div class="footer">감사합니다. 정성을 다하겠습니다.</div>
+        <div class="center" style="margin-top: 20px;">
+          <button onclick="window.onafterprint=function(){window.close();}; window.print();" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">인쇄하기</button>
+        </div>
+      </body>
+      </html>
+    `;
+
+    if (isStandalonePWA()) {
+      printViaIframe(htmlContent);
+      return;
+    }
+
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (!printWindow) {
+      alert('팝업 차단이 설정되어 있습니다. 팝업을 허용해주세요.');
+      return;
+    }
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   const handlePrintSelectedOrders = () => {
     if (selectedOrderIds.length === 0) return;
+
     const targetOrders = sortedAndFilteredOrders.filter(o => selectedOrderIds.includes(o.id));
     if (targetOrders.length === 0) return;
-    setPrintPreview({ orders: targetOrders });
+
+    const ticketsHtml = targetOrders.map((o, index) => `
+      <div class="ticket-page">
+        <div class="center title" style="display:flex; align-items:center; justify-content:center; gap:4px;">
+          <img src="${SHOP_LOGO_SRC}" alt="화사한 하루" style="height:24px; width:auto; vertical-align:middle; filter: brightness(0);" />
+          <span>주문서 (${index + 1}/${targetOrders.length})</span>
+        </div>
+        <div class="row"><span class="label">번호:</span><span>#${o.id}</span></div>
+        <div class="row"><span class="label">성명:</span><span class="big-text">${o.customers?.name || '-'}</span></div>
+        <div class="row"><span class="label">연락처:</span><span class="big-text">${o.customers?.phone || '-'}</span></div>
+        <div class="row"><span class="label">품목:</span><span>${o.product_name || '-'}</span></div>
+        <div class="row"><span class="label">금액:</span><span>${o.amount?.toLocaleString()}원</span></div>
+        <div class="row"><span class="label">결제:</span><span>${o.payment_method || '-'}</span></div>
+        <div class="row"><span class="label">픽업:</span><span>${formatPickupWithDay(o.pickup_datetime)}</span></div>
+        <div class="memo">
+          <strong>요청사항:</strong><br/>
+          ${o.memo || '없음'}
+        </div>
+        <div class="footer">감사합니다. 정성을 다하겠습니다.</div>
+      </div>
+    `).join('');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>선택 주문서 일괄 출력</title>
+        <style>
+          html, body { background: #e5e5e5; }
+          body { font-family: 'Arial', sans-serif; margin: 0; padding: 2mm; width: 74mm; box-sizing: border-box; font-size: 13px; line-height: 1.4; color: #000; background: #fff; }
+          .center { text-align: center; }
+          .title { font-size: 20px; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
+          .row { margin-bottom: 5px; } .row .label { display: inline-block; width: 52px; vertical-align: top; }
+          .label { font-weight: bold; white-space: nowrap; }
+          .big-text { font-size: 26px !important; font-weight: bold; }
+          .memo { margin-top: 10px; padding-top: 5px; border-top: 1px dashed #000; margin-bottom: 10px; }
+          .footer { margin-top: 15px; text-align: center; font-size: 12px; }
+          
+          .ticket-page {
+            page-break-after: always;
+            break-after: page;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+          }
+          .ticket-page:last-child {
+            page-break-after: avoid;
+            break-after: avoid;
+            margin-bottom: 0;
+          }
+
+          @media print {
+            @page {
+              size: 80mm auto;
+              margin: 0;
+            }
+            html, body { background: #fff; }
+            body { margin: 0; padding: 2mm; width: 74mm; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="no-print center" style="margin-bottom: 20px; padding: 10px; background: #eee;">
+          <button onclick="window.onafterprint=function(){window.close();}; window.print();" style="padding: 10px 20px; font-size: 16px; cursor: pointer; font-weight: bold;">선택 항목 한꺼번에 인쇄하기</button>
+        </div>
+        ${ticketsHtml}
+      </body>
+      </html>
+    `;
+
+    if (isStandalonePWA()) {
+      printViaIframe(htmlContent);
+      return;
+    }
+
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (!printWindow) {
+      alert('팝업 차단이 설정되어 있습니다. 팝업을 허용해주세요.');
+      return;
+    }
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   // 리본 인쇄 함수 - 빅솔론 SRP-330III(80mm 감열지)에 세로 리본 문구를 인쇄
