@@ -1198,7 +1198,9 @@ export default function App() {
 
     const actualAmount = (Number(newOrder.amount_thousands) || 0) * 1000;
 
-    const pickupDatetime = `${newOrder.pickup_date}T${newOrder.pickup_time}:00`;
+    const pickupDatetime = newOrder.is_delivery
+      ? `${newOrder.delivery_date}T${newOrder.delivery_time}:00`
+      : `${newOrder.pickup_date}T${newOrder.pickup_time}:00`;
     const receiptDatetime = `${newOrder.receipt_date}T${newOrder.receipt_time}:00`;
 
     const { data: insertedNewOrder, error: orderErr } = await supabase.from('orders').insert([{
@@ -3590,7 +3592,7 @@ export default function App() {
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 z-50">
             <div className="bg-white rounded-2xl p-4 md:p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-xl border border-slate-200">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-base md:text-lg font-bold text-slate-900">➕ 신규 주문 입력 ({newOrder.pickup_date})</h3>
+                <h3 className="text-base md:text-lg font-bold text-slate-900">➕ 신규 주문 입력 ({newOrder.is_delivery ? newOrder.delivery_date : newOrder.pickup_date})</h3>
                 <button onClick={() => setIsCalendarOrderModalOpen(false)} className="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer">✕</button>
               </div>
 
@@ -3674,25 +3676,29 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700">픽업 날짜 *</label>
+                    <label className="text-[11px] font-bold text-slate-700">{newOrder.is_delivery ? '배송 날짜 *' : '픽업 날짜 *'}</label>
                     <input
                       type="date"
-                      value={newOrder.pickup_date}
-                      onChange={e => setNewOrder({...newOrder, pickup_date: e.target.value})}
+                      value={newOrder.is_delivery ? (newOrder.delivery_date || '') : newOrder.pickup_date}
+                      onChange={e => newOrder.is_delivery
+                        ? setNewOrder({ ...newOrder, delivery_date: e.target.value })
+                        : setNewOrder({ ...newOrder, pickup_date: e.target.value })}
                       className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium"
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-bold text-slate-700">픽업 시간 *</label>
+                    <label className="text-[11px] font-bold text-slate-700">{newOrder.is_delivery ? '배송 시간 *' : '픽업 시간 *'}</label>
                     <TimePickerCustom
-                      value={newOrder.pickup_time}
-                      onChange={val => setNewOrder({...newOrder, pickup_time: val})}
+                      value={newOrder.is_delivery ? (newOrder.delivery_time || '') : newOrder.pickup_time}
+                      onChange={val => newOrder.is_delivery
+                        ? setNewOrder({ ...newOrder, delivery_time: val })
+                        : setNewOrder({ ...newOrder, pickup_time: val })}
                     />
                   </div>
                 </div>
 
-                <div className="gap-2" style={{ display: 'flex', alignItems: 'flex-end' }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="gap-1.5" style={{ display: 'flex', alignItems: 'flex-end' }}>
+                  <div style={{ flex: '1 1 56px', minWidth: 0 }}>
                     <label className="text-[11px] font-bold text-slate-700">결제 방식 *</label>
                     <select
                       value={newOrder.payment_method}
@@ -3702,30 +3708,26 @@ export default function App() {
                       {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
                     </select>
                   </div>
-                  <label className="flex items-center gap-1.5 px-2.5 py-2 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap" style={{ flexShrink: 0 }}>
+                  <label className="flex items-center gap-1 px-1.5 py-2 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap" style={{ flexShrink: 0 }}>
                     <input
                       type="checkbox"
                       checked={newOrder.notify_kakao}
                       onChange={e => setNewOrder({ ...newOrder, notify_kakao: e.target.checked })}
                       className="w-4 h-4 accent-yellow-500 cursor-pointer"
                     />
-                    <span className="text-[11px] font-bold text-slate-700">💬 알림톡</span>
+                    <span className="text-[10px] font-bold text-slate-700">💬알림톡</span>
                   </label>
-                </div>
-
-                <div className="gap-2" style={{ display: 'flex', alignItems: 'flex-end' }}>
-                  <label className="flex items-center gap-1.5 px-2.5 py-2 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap">
+                  <label className="flex items-center gap-1 px-1.5 py-2 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap" style={{ flexShrink: 0 }}>
                     <input
                       type="checkbox"
                       checked={!!newOrder.is_delivery}
                       onChange={e => {
                         if (e.target.checked) {
-                          const nextQ = getNextQuarterHourDateTime();
                           setNewOrder({
                             ...newOrder,
                             is_delivery: true,
-                            delivery_date: newOrder.delivery_date || getKoreaNowFormatted().date,
-                            delivery_time: newOrder.delivery_time || nextQ.time
+                            delivery_date: newOrder.delivery_date || newOrder.pickup_date,
+                            delivery_time: newOrder.delivery_time || newOrder.pickup_time
                           });
                         } else {
                           setNewOrder({ ...newOrder, is_delivery: false, delivery_date: '', delivery_time: '' });
@@ -3733,30 +3735,9 @@ export default function App() {
                       }}
                       className="w-4 h-4 accent-sky-500 cursor-pointer"
                     />
-                    <span className="text-[11px] font-bold text-slate-700">🚚 배송</span>
+                    <span className="text-[10px] font-bold text-slate-700">🚚배송</span>
                   </label>
                 </div>
-
-                {newOrder.is_delivery && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-700">배송 날짜</label>
-                      <input
-                        type="date"
-                        value={newOrder.delivery_date || ''}
-                        onChange={e => setNewOrder({ ...newOrder, delivery_date: e.target.value })}
-                        className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-700">배송 시간</label>
-                      <TimePickerCustom
-                        value={newOrder.delivery_time || ''}
-                        onChange={val => setNewOrder({ ...newOrder, delivery_time: val })}
-                      />
-                    </div>
-                  </div>
-                )}
 
                 <div>
                   <label className="text-[11px] font-bold text-slate-700">요청사항 / 메모</label>
@@ -3915,20 +3896,24 @@ export default function App() {
 
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-black">픽업 날짜 *</label>
+                  <label className="text-[11px] md:text-xs font-bold text-black">{newOrder.is_delivery ? '배송 날짜 *' : '픽업 날짜 *'}</label>
                   <input
                     type="date"
-                    value={newOrder.pickup_date}
-                    onChange={e => setNewOrder({...newOrder, pickup_date: e.target.value})}
+                    value={newOrder.is_delivery ? (newOrder.delivery_date || '') : newOrder.pickup_date}
+                    onChange={e => newOrder.is_delivery
+                      ? setNewOrder({ ...newOrder, delivery_date: e.target.value })
+                      : setNewOrder({ ...newOrder, pickup_date: e.target.value })}
                     className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
                     style={{ backgroundColor: '#ffffff' }}
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-black">픽업 시간 *</label>
+                  <label className="text-[11px] md:text-xs font-bold text-black">{newOrder.is_delivery ? '배송 시간 *' : '픽업 시간 *'}</label>
                   <TimePickerCustom
-                    value={newOrder.pickup_time}
-                    onChange={val => setNewOrder({...newOrder, pickup_time: val})}
+                    value={newOrder.is_delivery ? (newOrder.delivery_time || '') : newOrder.pickup_time}
+                    onChange={val => newOrder.is_delivery
+                      ? setNewOrder({ ...newOrder, delivery_time: val })
+                      : setNewOrder({ ...newOrder, pickup_time: val })}
                     bgClass="bg-white"
                   />
                 </div>
@@ -3957,8 +3942,8 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="gap-2 md:gap-4" style={{ display: 'flex', alignItems: 'flex-end' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="gap-1.5 md:gap-2" style={{ display: 'flex', alignItems: 'flex-end' }}>
+                <div style={{ flex: '1 1 60px', minWidth: 0 }}>
                   <label className="text-[11px] md:text-xs font-bold text-black">결제 방식 *</label>
                   <select
                     value={newOrder.payment_method}
@@ -3969,30 +3954,26 @@ export default function App() {
                     {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
                   </select>
                 </div>
-                <label className="flex items-center gap-1.5 px-3 py-2 md:py-3 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap" style={{ flexShrink: 0 }}>
+                <label className="flex items-center gap-1 px-1.5 md:px-2 py-2 md:py-3 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap" style={{ flexShrink: 0 }}>
                   <input
                     type="checkbox"
                     checked={newOrder.notify_kakao}
                     onChange={e => setNewOrder({ ...newOrder, notify_kakao: e.target.checked })}
                     className="w-4 h-4 accent-yellow-500 cursor-pointer"
                   />
-                  <span className="text-xs md:text-sm font-bold text-black">💬 알림톡</span>
+                  <span className="text-[10px] md:text-sm font-bold text-black">💬알림톡</span>
                 </label>
-              </div>
-
-              <div className="gap-2 md:gap-4" style={{ display: 'flex', alignItems: 'flex-end' }}>
-                <label className="flex items-center gap-1.5 px-3 py-2 md:py-3 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap">
+                <label className="flex items-center gap-1 px-1.5 md:px-2 py-2 md:py-3 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap" style={{ flexShrink: 0 }}>
                   <input
                     type="checkbox"
                     checked={!!newOrder.is_delivery}
                     onChange={e => {
                       if (e.target.checked) {
-                        const nextQ = getNextQuarterHourDateTime();
                         setNewOrder({
                           ...newOrder,
                           is_delivery: true,
-                          delivery_date: newOrder.delivery_date || getKoreaNowFormatted().date,
-                          delivery_time: newOrder.delivery_time || nextQ.time
+                          delivery_date: newOrder.delivery_date || newOrder.pickup_date,
+                          delivery_time: newOrder.delivery_time || newOrder.pickup_time
                         });
                       } else {
                         setNewOrder({ ...newOrder, is_delivery: false, delivery_date: '', delivery_time: '' });
@@ -4000,30 +3981,9 @@ export default function App() {
                     }}
                     className="w-4 h-4 accent-sky-500 cursor-pointer"
                   />
-                  <span className="text-xs md:text-sm font-bold text-black">🚚 배송</span>
+                  <span className="text-[10px] md:text-sm font-bold text-black">🚚배송</span>
                 </label>
               </div>
-
-              {newOrder.is_delivery && (
-                <div className="grid grid-cols-2 gap-2 md:gap-4">
-                  <div>
-                    <label className="text-[11px] md:text-xs font-bold text-black">배송 날짜</label>
-                    <input
-                      type="date"
-                      value={newOrder.delivery_date || ''}
-                      onChange={e => setNewOrder({ ...newOrder, delivery_date: e.target.value })}
-                      className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] md:text-xs font-bold text-black">배송 시간</label>
-                    <TimePickerCustom
-                      value={newOrder.delivery_time || ''}
-                      onChange={val => setNewOrder({ ...newOrder, delivery_time: val })}
-                    />
-                  </div>
-                </div>
-              )}
 
               <div>
                 <label className="text-[11px] md:text-xs font-bold text-black">고객 요구사항 / 메모</label>
@@ -4434,9 +4394,9 @@ export default function App() {
                                   <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-xs ${
                                     isPast ? 'opacity-40' : ''
                                   } ${
-                                    (isOnsite && o.is_delivery) ? 'badge-blink' : (isOnsite ? '' : 'bg-indigo-300')
-                                  }`} title={(isOnsite && o.is_delivery) ? '배송' : (isOnsite ? '현장판매' : '예약주문')}>
-                                    {(isOnsite && o.is_delivery) ? '🚚' : (isOnsite ? '🏪' : '📅')}
+                                    o.is_delivery ? 'badge-blink' : (isOnsite ? '' : 'bg-indigo-300')
+                                  }`} title={o.is_delivery ? '배송' : (isOnsite ? '현장판매' : '예약주문')}>
+                                    {o.is_delivery ? '🚚' : (isOnsite ? '🏪' : '📅')}
                                   </span>
                                 </td>
                                 <td className="px-2 text-center whitespace-nowrap" style={cellPad}>
