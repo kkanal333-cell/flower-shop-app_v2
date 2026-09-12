@@ -31,6 +31,7 @@ const RIBBON_FONT_OPTIONS = [
   { label: "Noto Sans KR (고딕)", value: "'Noto Sans KR', sans-serif" },
   { label: "나눔손글씨 붓 (캘리그라피)", value: "'Nanum Brush Script', cursive" },
   { label: "나눔손글씨 펜 (손글씨체)", value: "'Nanum Pen Script', cursive" },
+  { label: "케리스 배움체 B (Windows 설치 글꼴)", value: "'케리스 배움체 B', 'Kerith Baeum B', sans-serif" },
   { label: "Noto Sans KR Black", value: "'Noto Sans KR', sans-serif" },
   { label: "Noto Serif KR Black", value: "'Noto Serif KR', serif" },
   { label: "나눔스퀘어", value: "'Nanum Gothic', sans-serif" },
@@ -330,10 +331,13 @@ export default function App() {
   const [ribbonFontFamily, setRibbonFontFamily] = useState(RIBBON_FONT_OPTIONS[0].value);
   const [ribbonFontSize, setRibbonFontSize] = useState(26); // px, 글자 크기
   const [ribbonLetterSpacing, setRibbonLetterSpacing] = useState(4); // px, 자간(글자 사이 세로 간격)
-  const [ribbonLineGap, setRibbonLineGap] = useState(28); // px, 행간(줄과 줄 사이 가로 간격)
+  const [ribbonLineGap, setRibbonLineGap] = useState(7); // mm, 행간(줄과 줄 사이 간격) - 좌우 여백과 단위를 통일해 mm로 관리합니다.
   const [ribbonPaperWidth, setRibbonPaperWidth] = useState(80); // mm, 프린터 용지 폭
   const [ribbonMarginLeft, setRibbonMarginLeft] = useState(25); // mm, 좌측 여백
   const [ribbonMarginRight, setRibbonMarginRight] = useState(25); // mm, 우측 여백
+  const [ribbonMarginTop, setRibbonMarginTop] = useState(6); // mm, 상단 여백(리본 시작 부분 공백)
+  const [ribbonMarginBottom, setRibbonMarginBottom] = useState(6); // mm, 하단 여백(리본 끝 부분 공백)
+  const [ribbonMarginSync, setRibbonMarginSync] = useState(true); // true면 좌측 여백을 바꿀 때 우측 여백도 항상 같은 값으로 맞춰서, 정중앙을 기준으로 반으로 잘라도 양쪽 여백이 동일하게 유지됩니다.
   const [ribbonBold, setRibbonBold] = useState(true);
   const [ribbonShowGuide, setRibbonShowGuide] = useState(true); // 재단 가이드선(점선) 표시 여부
   const [ribbonCopies, setRibbonCopies] = useState(1);
@@ -387,6 +391,8 @@ export default function App() {
 
   const ribbonMarginMax = Math.min(38, Math.max(0, Math.floor((Number(ribbonPaperWidth) - 2) / 2)));
   const ribbonContentWidthMm = Math.max(0, Number(ribbonPaperWidth) - (Number(ribbonMarginLeft) || 0) - (Number(ribbonMarginRight) || 0));
+  // 정중앙을 기준으로 반으로 잘랐을 때 한쪽 리본의 폭 (좌우 여백을 동일하게 맞춰두면 양쪽이 똑같이 나뉩니다)
+  const ribbonHalfWidthMm = Number(ribbonPaperWidth) / 2;
   const ribbonLines = ribbonText.split('\n').filter(line => line.trim() !== '');
 
   // 용지 폭을 바꾸면 기존의 30mm 리본 폭을 최대한 유지하도록 좌우 여백을 자동 조정합니다.
@@ -628,6 +634,9 @@ export default function App() {
     if (c.ribbonPaperWidth !== undefined) setRibbonPaperWidth(Number(c.ribbonPaperWidth) === 58 ? 58 : 80);
     if (c.ribbonMarginLeft !== undefined) setRibbonMarginLeft(Number(c.ribbonMarginLeft));
     if (c.ribbonMarginRight !== undefined) setRibbonMarginRight(Number(c.ribbonMarginRight));
+    if (c.ribbonMarginTop !== undefined) setRibbonMarginTop(Number(c.ribbonMarginTop));
+    if (c.ribbonMarginBottom !== undefined) setRibbonMarginBottom(Number(c.ribbonMarginBottom));
+    if (c.ribbonMarginSync !== undefined) setRibbonMarginSync(Boolean(c.ribbonMarginSync));
     if (c.ribbonBold !== undefined) setRibbonBold(Boolean(c.ribbonBold));
     if (c.ribbonShowGuide !== undefined) setRibbonShowGuide(Boolean(c.ribbonShowGuide));
     if (c.ribbonCopies !== undefined) setRibbonCopies(Number(c.ribbonCopies) || 1);
@@ -644,7 +653,8 @@ export default function App() {
 
     const config = {
       ribbonText, ribbonFontFamily, ribbonFontSize, ribbonLetterSpacing, ribbonLineGap,
-      ribbonPaperWidth, ribbonMarginLeft, ribbonMarginRight, ribbonBold, ribbonShowGuide, ribbonCopies
+      ribbonPaperWidth, ribbonMarginLeft, ribbonMarginRight, ribbonMarginTop, ribbonMarginBottom, ribbonMarginSync,
+      ribbonBold, ribbonShowGuide, ribbonCopies
     };
     setRibbonTemplateLoading(true);
     try {
@@ -1950,15 +1960,15 @@ export default function App() {
           .ribbon-guide {
             margin-left: ${ribbonMarginLeft}mm;
             margin-right: ${ribbonMarginRight}mm;
-            padding: 6mm 3mm;
+            padding: ${ribbonMarginTop}mm 0 ${ribbonMarginBottom}mm;
             ${ribbonShowGuide ? 'border-left: 1px dashed #000; border-right: 1px dashed #000;' : ''}
           }
           .ribbon-flex {
             display: flex;
-            flex-direction: row-reverse;
+            flex-direction: row;
             align-items: flex-start;
             justify-content: center;
-            gap: ${ribbonLineGap}px;
+            gap: ${ribbonLineGap}mm;
           }
           .rline {
             writing-mode: vertical-rl;
@@ -6163,9 +6173,9 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] md:text-xs font-bold text-slate-700">행간 · 줄 사이 간격 ({ribbonLineGap}px)</label>
+                    <label className="text-[11px] md:text-xs font-bold text-slate-700">행간 · 줄 사이 간격 ({ribbonLineGap}mm)</label>
                     <input
-                      type="range" min="0" max="100" value={ribbonLineGap}
+                      type="range" min="0" max="30" value={ribbonLineGap}
                       onChange={e => setRibbonLineGap(Number(e.target.value))}
                       className="w-full mt-2 cursor-pointer accent-rose-500"
                     />
@@ -6195,20 +6205,69 @@ export default function App() {
                   <p className="text-[10px] text-slate-500 mt-1">용지 변경 시 30mm 리본 기준으로 좌우 여백을 자동 조정합니다.</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox" checked={ribbonMarginSync}
+                      onChange={e => {
+                        const sync = e.target.checked;
+                        setRibbonMarginSync(sync);
+                        if (sync) setRibbonMarginRight(ribbonMarginLeft);
+                      }}
+                      className="accent-rose-500 cursor-pointer w-3.5 h-3.5"
+                    />
+                    좌우 여백 동일하게 유지 (정중앙 기준으로 반으로 잘라도 양쪽이 똑같이 나뉩니다)
+                  </label>
+                </div>
+
+                {ribbonMarginSync ? (
                   <div>
-                    <label className="text-[11px] md:text-xs font-bold text-slate-700">좌측 여백 ({ribbonMarginLeft}mm)</label>
+                    <label className="text-[11px] md:text-xs font-bold text-slate-700">좌우 여백 ({ribbonMarginLeft}mm)</label>
                     <input
                       type="range" min="0" max={ribbonMarginMax} value={Math.min(ribbonMarginLeft, ribbonMarginMax)}
-                      onChange={e => setRibbonMarginLeft(Number(e.target.value))}
+                      onChange={e => {
+                        const v = Number(e.target.value);
+                        setRibbonMarginLeft(v);
+                        setRibbonMarginRight(v);
+                      }}
+                      className="w-full mt-2 cursor-pointer accent-rose-500"
+                    />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] md:text-xs font-bold text-slate-700">좌측 여백 ({ribbonMarginLeft}mm)</label>
+                      <input
+                        type="range" min="0" max={ribbonMarginMax} value={Math.min(ribbonMarginLeft, ribbonMarginMax)}
+                        onChange={e => setRibbonMarginLeft(Number(e.target.value))}
+                        className="w-full mt-2 cursor-pointer accent-rose-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] md:text-xs font-bold text-slate-700">우측 여백 ({ribbonMarginRight}mm)</label>
+                      <input
+                        type="range" min="0" max={ribbonMarginMax} value={Math.min(ribbonMarginRight, ribbonMarginMax)}
+                        onChange={e => setRibbonMarginRight(Number(e.target.value))}
+                        className="w-full mt-2 cursor-pointer accent-rose-500"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] md:text-xs font-bold text-slate-700">상단 여백 ({ribbonMarginTop}mm)</label>
+                    <input
+                      type="range" min="0" max="30" value={ribbonMarginTop}
+                      onChange={e => setRibbonMarginTop(Number(e.target.value))}
                       className="w-full mt-2 cursor-pointer accent-rose-500"
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] md:text-xs font-bold text-slate-700">우측 여백 ({ribbonMarginRight}mm)</label>
+                    <label className="text-[11px] md:text-xs font-bold text-slate-700">하단 여백 ({ribbonMarginBottom}mm)</label>
                     <input
-                      type="range" min="0" max={ribbonMarginMax} value={Math.min(ribbonMarginRight, ribbonMarginMax)}
-                      onChange={e => setRibbonMarginRight(Number(e.target.value))}
+                      type="range" min="0" max="30" value={ribbonMarginBottom}
+                      onChange={e => setRibbonMarginBottom(Number(e.target.value))}
                       className="w-full mt-2 cursor-pointer accent-rose-500"
                     />
                   </div>
@@ -6217,6 +6276,9 @@ export default function App() {
                 <div className={`text-xs font-bold rounded-lg px-3 py-2 ${ribbonContentWidthMm > 0 ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-red-50 text-red-700 border border-red-300'}`}>
                   현재 인쇄 폭(용지 {ribbonPaperWidth}mm 기준): 약 {ribbonContentWidthMm.toFixed(0)}mm
                   {ribbonContentWidthMm <= 0 && ' — 여백 합이 너무 커서 인쇄 영역이 없습니다.'}
+                  {ribbonContentWidthMm > 0 && ribbonMarginSync && (
+                    <span className="font-normal"> · 정중앙에서 반으로 자르면 한쪽 폭 약 {ribbonHalfWidthMm.toFixed(0)}mm</span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-4 pt-1">
@@ -6293,7 +6355,7 @@ export default function App() {
                       style={{
                         marginLeft: `${ribbonMarginLeft}mm`,
                         marginRight: `${ribbonMarginRight}mm`,
-                        padding: '6mm 3mm',
+                        padding: `${ribbonMarginTop}mm 0 ${ribbonMarginBottom}mm`,
                         borderLeft: ribbonShowGuide ? '1px dashed #94a3b8' : 'none',
                         borderRight: ribbonShowGuide ? '1px dashed #94a3b8' : 'none',
                         minHeight: '48mm',
@@ -6305,10 +6367,10 @@ export default function App() {
                         <div
                           style={{
                             display: 'flex',
-                            flexDirection: 'row-reverse',
+                            flexDirection: 'row',
                             alignItems: 'flex-start',
                             justifyContent: 'center',
-                            gap: `${ribbonLineGap}px`,
+                            gap: `${ribbonLineGap}mm`,
                           }}
                         >
                           {ribbonLines.map((line, idx) => (
@@ -6334,7 +6396,7 @@ export default function App() {
                   </div>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
-                  문구는 줄바꿈으로 구분되며, 각 줄이 리본 위에서 오른쪽부터 세로로 나란히 배치됩니다. 인쇄 버튼을 누르면 새 창에서 실제 인쇄 미리보기가 열립니다.
+                  문구는 줄바꿈으로 구분되며, 첫 줄이 왼쪽에 오고 그 다음 줄이 오른쪽으로 이어서 세로로 나란히 배치됩니다. 인쇄 버튼을 누르면 새 창에서 실제 인쇄 미리보기가 열립니다.
                 </p>
               </div>
             </div>
