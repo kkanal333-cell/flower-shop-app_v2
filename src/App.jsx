@@ -31,7 +31,10 @@ const RIBBON_FONT_OPTIONS = [
   { label: "Noto Sans KR (고딕)", value: "'Noto Sans KR', sans-serif" },
   { label: "나눔손글씨 붓 (캘리그라피)", value: "'Nanum Brush Script', cursive" },
   { label: "나눔손글씨 펜 (손글씨체)", value: "'Nanum Pen Script', cursive" },
-  { label: "케리스 배움체 B (Windows 설치 글꼴)", value: "'케리스 배움체 B', 'Kerith Baeum B', sans-serif" },
+  // 케리스 배움체 B: 구글 폰트가 아니라 이 PC에 설치된 로컬(윈도우) 글꼴이라, 브라우저가 이름으로 찾아서 씁니다.
+  // 실제 등록된 이름이 아래 후보와 다르면 적용되지 않을 수 있어, 흔히 쓰이는 표기를 여러 개 순서대로 넣어뒀습니다.
+  // (제어판 > 글꼴에서 해당 글꼴 파일을 더블클릭했을 때 위쪽에 뜨는 이름이 가장 정확합니다.)
+  { label: "케리스 배움체 B (Windows 설치 글꼴)", value: "'케리스 배움체 B', '케리스배움체B', '케리스 배움체B', 'KerisBaeumB', 'Keris Baeum B', sans-serif" },
   { label: "Noto Sans KR Black", value: "'Noto Sans KR', sans-serif" },
   { label: "Noto Serif KR Black", value: "'Noto Serif KR', serif" },
   { label: "나눔스퀘어", value: "'Nanum Gothic', sans-serif" },
@@ -393,7 +396,8 @@ export default function App() {
   const ribbonContentWidthMm = Math.max(0, Number(ribbonPaperWidth) - (Number(ribbonMarginLeft) || 0) - (Number(ribbonMarginRight) || 0));
   // 정중앙을 기준으로 반으로 잘랐을 때 한쪽 리본의 폭 (좌우 여백을 동일하게 맞춰두면 양쪽이 똑같이 나뉩니다)
   const ribbonHalfWidthMm = Number(ribbonPaperWidth) / 2;
-  const ribbonLines = ribbonText.split('\n').filter(line => line.trim() !== '');
+  // 공백(스페이스)만 있는 줄도 여백 용도로 그대로 유지합니다. 완전히 빈 줄(엔터만 두 번 누른 경우)만 걸러냅니다.
+  const ribbonLines = ribbonText.split('\n').filter(line => line.length > 0);
 
   // 용지 폭을 바꾸면 기존의 30mm 리본 폭을 최대한 유지하도록 좌우 여백을 자동 조정합니다.
   useEffect(() => {
@@ -1924,13 +1928,18 @@ export default function App() {
       .replace(/>/g, '&gt;');
 
     const linesHtml = ribbonLines
-      .map(line => `<div class="rline">${escapeHtml(line)}</div>`)
+      .map(line => `<div class="rline">${escapeHtml(line) || '&nbsp;'}</div>`)
       .join('');
 
+    // 상/하단 여백은 padding이 아니라 실제 높이를 가진 빈 칸(스페이서)으로 만듭니다.
+    // (감열지 프린터는 인쇄 길이를 "auto"로 계산하는데, 아무 내용도 없는 padding만으로는
+    //  일부 프린터/브라우저 조합에서 맨 끝 여백이 잘려나가는 경우가 있어 실제 요소로 확보합니다.)
     const oneRibbonHtml = `
       <div class="ribbon-outer">
         <div class="ribbon-guide">
+          <div class="ribbon-spacer" style="height:${ribbonMarginTop}mm;">&nbsp;</div>
           <div class="ribbon-flex">${linesHtml}</div>
+          <div class="ribbon-spacer" style="height:${ribbonMarginBottom}mm;">&nbsp;</div>
         </div>
       </div>
     `;
@@ -1960,8 +1969,13 @@ export default function App() {
           .ribbon-guide {
             margin-left: ${ribbonMarginLeft}mm;
             margin-right: ${ribbonMarginRight}mm;
-            padding: ${ribbonMarginTop}mm 0 ${ribbonMarginBottom}mm;
             ${ribbonShowGuide ? 'border-left: 1px dashed #000; border-right: 1px dashed #000;' : ''}
+          }
+          .ribbon-spacer {
+            width: 100%;
+            font-size: 1px;
+            line-height: 1;
+            overflow: hidden;
           }
           .ribbon-flex {
             display: flex;
@@ -1973,7 +1987,7 @@ export default function App() {
           .rline {
             writing-mode: vertical-rl;
             text-orientation: upright;
-            white-space: nowrap;
+            white-space: pre;
             font-family: ${ribbonFontFamily};
             font-size: ${ribbonFontSize}px;
             font-weight: ${ribbonBold ? 800 : 400};
@@ -6256,20 +6270,36 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] md:text-xs font-bold text-slate-700">상단 여백 ({ribbonMarginTop}mm)</label>
-                    <input
-                      type="range" min="0" max="30" value={ribbonMarginTop}
-                      onChange={e => setRibbonMarginTop(Number(e.target.value))}
-                      className="w-full mt-2 cursor-pointer accent-rose-500"
-                    />
+                    <label className="text-[11px] md:text-xs font-bold text-slate-700">상단 여백 (mm, 최대 300)</label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <input
+                        type="range" min="0" max="300" value={Math.min(ribbonMarginTop, 300)}
+                        onChange={e => setRibbonMarginTop(Number(e.target.value))}
+                        className="w-full cursor-pointer accent-rose-500"
+                      />
+                      <input
+                        type="number" min="0" max="300"
+                        value={ribbonMarginTop}
+                        onChange={e => setRibbonMarginTop(Math.min(300, Math.max(0, Number(e.target.value))))}
+                        className="w-16 p-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-900 font-medium shrink-0"
+                      />
+                    </div>
                   </div>
                   <div>
-                    <label className="text-[11px] md:text-xs font-bold text-slate-700">하단 여백 ({ribbonMarginBottom}mm)</label>
-                    <input
-                      type="range" min="0" max="30" value={ribbonMarginBottom}
-                      onChange={e => setRibbonMarginBottom(Number(e.target.value))}
-                      className="w-full mt-2 cursor-pointer accent-rose-500"
-                    />
+                    <label className="text-[11px] md:text-xs font-bold text-slate-700">하단 여백 (mm, 최대 300)</label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <input
+                        type="range" min="0" max="300" value={Math.min(ribbonMarginBottom, 300)}
+                        onChange={e => setRibbonMarginBottom(Number(e.target.value))}
+                        className="w-full cursor-pointer accent-rose-500"
+                      />
+                      <input
+                        type="number" min="0" max="300"
+                        value={ribbonMarginBottom}
+                        onChange={e => setRibbonMarginBottom(Math.min(300, Math.max(0, Number(e.target.value))))}
+                        className="w-16 p-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-900 font-medium shrink-0"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -6355,12 +6385,12 @@ export default function App() {
                       style={{
                         marginLeft: `${ribbonMarginLeft}mm`,
                         marginRight: `${ribbonMarginRight}mm`,
-                        padding: `${ribbonMarginTop}mm 0 ${ribbonMarginBottom}mm`,
                         borderLeft: ribbonShowGuide ? '1px dashed #94a3b8' : 'none',
                         borderRight: ribbonShowGuide ? '1px dashed #94a3b8' : 'none',
                         minHeight: '48mm',
                       }}
                     >
+                      <div style={{ height: `${ribbonMarginTop}mm` }} />
                       {ribbonLines.length === 0 ? (
                         <div className="text-slate-300 text-xs text-center pt-10">문구를 입력하면 여기에 미리보기가 표시됩니다.</div>
                       ) : (
@@ -6379,7 +6409,7 @@ export default function App() {
                               style={{
                                 writingMode: 'vertical-rl',
                                 textOrientation: 'upright',
-                                whiteSpace: 'nowrap',
+                                whiteSpace: 'pre',
                                 fontFamily: ribbonFontFamily,
                                 fontSize: `${ribbonFontSize}px`,
                                 fontWeight: ribbonBold ? 800 : 400,
@@ -6392,6 +6422,7 @@ export default function App() {
                           ))}
                         </div>
                       )}
+                      <div style={{ height: `${ribbonMarginBottom}mm` }} />
                     </div>
                   </div>
                 </div>
