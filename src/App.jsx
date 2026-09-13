@@ -3499,6 +3499,26 @@ export default function App() {
                     <span className="text-xs font-bold text-slate-700">🚚 배송</span>
                   </label>
                 </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700">접수 날짜</label>
+                    <input
+                      type="date"
+                      value={editingOrder.receipt_date || ''}
+                      onChange={e => setEditingOrder({ ...editingOrder, receipt_date: e.target.value })}
+                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700">접수 시간</label>
+                    <input
+                      type="time"
+                      value={editingOrder.receipt_time || ''}
+                      onChange={e => setEditingOrder({ ...editingOrder, receipt_time: e.target.value })}
+                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                    />
+                  </div>
+                </div>
                 {editingOrder.is_delivery && (
                   <div className="grid grid-cols-2 gap-2">
                     <div>
