@@ -34,8 +34,6 @@ function RibbonEditor({
 
   const ribbonMarginMax = Math.min(38, Math.max(0, Math.floor((Number(ribbonPaperWidth) - 2) / 2)));
   const ribbonContentWidthMm = Math.max(0, Number(ribbonPaperWidth) - (Number(ribbonMarginLeft) || 0) - (Number(ribbonMarginRight) || 0));
-  // 정중앙을 기준으로 반으로 잘랐을 때 한쪽 리본의 폭 (좌우 여백을 동일하게 맞춰두면 양쪽이 똑같이 나뉩니다)
-  const ribbonHalfWidthMm = Number(ribbonPaperWidth) / 2;
   // 공백(스페이스)만 있는 줄도 여백 용도로 그대로 유지합니다. 완전히 빈 줄(엔터만 두 번 누른 경우)만 걸러냅니다.
   const ribbonLines = ribbonText.split('\n').filter(line => line.length > 0);
 
@@ -162,8 +160,15 @@ function RibbonEditor({
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
 
+    // 두 번째 줄부터는 앞에 "간격 칸"을 먼저 넣고, 그 칸 한가운데에 절단 안내 점선을 그립니다.
+    // (여러 줄의 문구를 한 장에 같이 인쇄한 뒤, 그 사이 점선을 기준으로 세로로 잘라 각각 하나의 리본으로 씁니다)
     const linesHtml = ribbonLines
-      .map(line => `<div class="rline">${escapeHtml(line) || '&nbsp;'}</div>`)
+      .map((line, idx) => {
+        const lineHtml = `<div class="rline">${escapeHtml(line) || '&nbsp;'}</div>`;
+        if (idx === 0) return lineHtml;
+        const gapHtml = `<div class="rgap" style="width:${ribbonLineGap}mm;">${ribbonShowGuide ? '<div class="rguide"></div>' : ''}</div>`;
+        return gapHtml + lineHtml;
+      })
       .join('');
 
     // 상단 여백은 padding이 아니라 실제 높이를 가진 빈 칸(스페이서)으로 만듭니다.
@@ -203,7 +208,6 @@ function RibbonEditor({
           .ribbon-guide {
             margin-left: ${ribbonMarginLeft}mm;
             margin-right: ${ribbonMarginRight}mm;
-            ${ribbonShowGuide ? 'border-left: 1px dashed #000; border-right: 1px dashed #000;' : ''}
           }
           .ribbon-spacer {
             width: 100%;
@@ -216,7 +220,23 @@ function RibbonEditor({
             flex-direction: row;
             align-items: flex-start;
             justify-content: center;
-            gap: ${ribbonLineGap}mm;
+          }
+          .rgap {
+            align-self: stretch;
+            display: flex;
+            justify-content: center;
+          }
+          .rguide {
+            width: 1px;
+            align-self: stretch;
+            /* 정확히 안 잘려도 티 안 나도록 최대한 흐리고(28% 불투명) 성기게(1.2mm 선 + 6mm 간격) 그립니다 */
+            background-image: repeating-linear-gradient(
+              to bottom,
+              rgba(0,0,0,0.28) 0mm,
+              rgba(0,0,0,0.28) 1.2mm,
+              transparent 1.2mm,
+              transparent 6mm
+            );
           }
           .rline {
             writing-mode: vertical-rl;
@@ -256,7 +276,7 @@ function RibbonEditor({
                 <span>🎀</span> 리본편집기
               </h2>
               <p className="text-xs text-slate-500 leading-relaxed">
-                빅솔론 SRP-330III(감열지, 용지폭 80mm)로 세로형 리본 문구를 인쇄합니다. 좌우 여백을 조절해 실제 사용할 리본 폭(예: 30mm)에 맞춰 인쇄한 뒤, 점선 재단선을 따라 세로로 길게 잘라 사용하세요.
+                빅솔론 SRP-330III(감열지, 용지폭 80/58mm)로 세로형 리본 문구를 인쇄합니다. 문구를 줄바꿈으로 여러 줄 넣으면 한 장에 나란히 인쇄되고, 그 사이사이의 흐린 점선을 기준으로 세로로 길게 잘라 각각 하나의 리본으로 사용하세요.
               </p>
             </div>
 
@@ -431,8 +451,8 @@ function RibbonEditor({
                 <div className={`text-xs font-bold rounded-lg px-3 py-2 ${ribbonContentWidthMm > 0 ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-red-50 text-red-700 border border-red-300'}`}>
                   현재 인쇄 폭(용지 {ribbonPaperWidth}mm 기준): 약 {ribbonContentWidthMm.toFixed(0)}mm
                   {ribbonContentWidthMm <= 0 && ' — 여백 합이 너무 커서 인쇄 영역이 없습니다.'}
-                  {ribbonContentWidthMm > 0 && ribbonMarginSync && (
-                    <span className="font-normal"> · 정중앙에서 반으로 자르면 한쪽 폭 약 {ribbonHalfWidthMm.toFixed(0)}mm</span>
+                  {ribbonContentWidthMm > 0 && ribbonLines.length >= 2 && (
+                    <span className="font-normal"> · 줄 사이 점선을 기준으로 자르면 두 리본으로 나뉩니다 (미리보기에서 폭 확인)</span>
                   )}
                 </div>
 
@@ -451,9 +471,12 @@ function RibbonEditor({
                       onChange={e => setRibbonShowGuide(e.target.checked)}
                       className="accent-rose-500 cursor-pointer w-3.5 h-3.5"
                     />
-                    재단 가이드선(점선) 표시
+                    줄 사이 절단선(점선) 표시
                   </label>
                 </div>
+                {ribbonLines.length < 2 && (
+                  <p className="text-[10px] text-slate-400 -mt-1">문구가 한 줄뿐이면 잘라낼 경계가 없어 절단선이 표시되지 않습니다.</p>
+                )}
 
                 <div className="border-t border-slate-200 pt-3 mt-2 space-y-2">
                   <div className="text-[11px] md:text-xs font-bold text-slate-700">☁️ Supabase 양식 저장 / 불러오기</div>
@@ -516,8 +539,6 @@ function RibbonEditor({
                       style={{
                         marginLeft: `${ribbonMarginLeft}mm`,
                         marginRight: `${ribbonMarginRight}mm`,
-                        borderLeft: ribbonShowGuide ? '1px dashed #94a3b8' : 'none',
-                        borderRight: ribbonShowGuide ? '1px dashed #94a3b8' : 'none',
                         minHeight: '48mm',
                       }}
                     >
@@ -531,26 +552,46 @@ function RibbonEditor({
                             flexDirection: 'row',
                             alignItems: 'flex-start',
                             justifyContent: 'center',
-                            gap: `${ribbonLineGap}mm`,
                           }}
                         >
                           {ribbonLines.map((line, idx) => (
-                            <div
-                              key={idx}
-                              style={{
-                                writingMode: 'vertical-rl',
-                                textOrientation: 'upright',
-                                whiteSpace: 'pre',
-                                fontFamily: ribbonFontFamily,
-                                fontSize: `${ribbonFontSize}px`,
-                                fontWeight: ribbonBold ? 800 : 400,
-                                letterSpacing: `${ribbonLetterSpacing}px`,
-                                wordSpacing: `${ribbonWordSpacingEm}em`,
-                                color: '#000',
-                              }}
-                            >
-                              {line}
-                            </div>
+                            <React.Fragment key={idx}>
+                              {idx > 0 && (
+                                <div
+                                  style={{
+                                    width: `${ribbonLineGap}mm`,
+                                    alignSelf: 'stretch',
+                                    display: 'flex',
+                                    justifyContent: 'center',
+                                  }}
+                                >
+                                  {ribbonShowGuide && (
+                                    <div
+                                      style={{
+                                        width: '1px',
+                                        alignSelf: 'stretch',
+                                        backgroundImage: 'repeating-linear-gradient(to bottom, rgba(0,0,0,0.28) 0mm, rgba(0,0,0,0.28) 1.2mm, transparent 1.2mm, transparent 6mm)',
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                              )}
+                              <div
+                                style={{
+                                  writingMode: 'vertical-rl',
+                                  textOrientation: 'upright',
+                                  whiteSpace: 'pre',
+                                  fontFamily: ribbonFontFamily,
+                                  fontSize: `${ribbonFontSize}px`,
+                                  fontWeight: ribbonBold ? 800 : 400,
+                                  letterSpacing: `${ribbonLetterSpacing}px`,
+                                  wordSpacing: `${ribbonWordSpacingEm}em`,
+                                  color: '#000',
+                                }}
+                              >
+                                {line}
+                              </div>
+                            </React.Fragment>
                           ))}
                         </div>
                       )}
@@ -558,7 +599,7 @@ function RibbonEditor({
                   </div>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
-                  문구는 줄바꿈으로 구분되며, 첫 줄이 왼쪽에 오고 그 다음 줄이 오른쪽으로 이어서 세로로 나란히 배치됩니다. 인쇄 버튼을 누르면 새 창에서 실제 인쇄 미리보기가 열립니다.
+                  문구는 줄바꿈으로 구분되며, 여러 줄을 넣으면 한 장에 나란히 세로로 배치되고 그 사이사이에 절단 안내 점선이 표시됩니다. 인쇄 버튼을 누르면 새 창에서 실제 인쇄 미리보기가 열립니다.
                 </p>
               </div>
             </div>
