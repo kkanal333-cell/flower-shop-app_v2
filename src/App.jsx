@@ -266,6 +266,8 @@ export default function App() {
   const [onsiteMatchedCustomerList, setOnsiteMatchedCustomerList] = useState([]); // 현장판매 탭 성명 매칭 후보
 
   const [showBackupAlertModal, setShowBackupAlertModal] = useState(false);
+  const [showBackupMissedModal, setShowBackupMissedModal] = useState(false); // 정오를 넘긴 뒤 앱을 연 경우: 자동 백업은 건너뛰고 안내만 표시
+  const [dataReady, setDataReady] = useState(false); // 최초 데이터 로딩(fetchData)이 끝났는지 여부 - 자동 백업이 빈 데이터로 실행되는 것을 막기 위함
   const [autoBackupDates, setAutoBackupDates] = useState(() => {
     try { return JSON.parse(localStorage.getItem('auto_backup_dates') || '[]'); } catch { return []; }
   });
@@ -480,9 +482,20 @@ export default function App() {
       if (nowInfo.dayOfWeek === 1 && nowInfo.currentHour >= 12) {
         const lastNotified = localStorage.getItem('last_backup_notice_date');
         if (lastNotified !== nowInfo.date) {
+          // 오늘은 한 번만 처리(자동 백업이든, 아래의 "놓침" 안내든) 하도록 먼저 표시해 둡니다.
+          localStorage.setItem('last_backup_notice_date', nowInfo.date);
+
+          if (!dataReady) {
+            // 정오를 이미 넘긴 뒤에 앱을 연 경우: orders/customers 등이 아직 빈 상태라
+            // 여기서 백업을 실행하면 내용 없는(헤더만 있는) 엑셀이 만들어집니다.
+            // 그래서 자동 백업은 아예 건너뛰고, 안내 팝업만 띄웁니다.
+            setShowBackupMissedModal(true);
+            return;
+          }
+
+          // 정오 이전부터 앱이 켜져 있어서 데이터가 이미 로드된 정상 케이스:
           // 주간 백업 시간이 되면 전체 백업 엑셀 파일을 자동으로 다운로드 폴더에 저장합니다.
           handleExportAllExcel(null, null);
-          localStorage.setItem('last_backup_notice_date', nowInfo.date);
 
           setAutoBackupDates(prev => {
             const updated = [...prev, nowInfo.date].slice(-20); // 최근 20건까지만 보관
@@ -498,7 +511,7 @@ export default function App() {
     checkBackupSchedule();
     const interval = setInterval(checkBackupSchedule, 60000);
     return () => clearInterval(interval);
-  }, [orders, customers, purchases, photoMap]);
+  }, [orders, customers, purchases, photoMap, dataReady]);
 
   const handleCloseBackupModal = () => {
     setShowBackupAlertModal(false);
@@ -837,6 +850,7 @@ export default function App() {
 
     await loadOrderPhotos();
     await fetchRibbonTemplates();
+    setDataReady(true); // 여기까지 와야 orders/customers/purchases/photoMap이 실제 데이터로 채워진 상태입니다.
   };
 
   useEffect(() => {
@@ -3051,6 +3065,28 @@ export default function App() {
                 className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-300 cursor-pointer"
               >
                 취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBackupMissedModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border-2 border-amber-400 text-center space-y-4">
+            <div className="text-4xl">📌</div>
+            <h3 className="text-lg font-bold text-slate-900">오늘은 월요일 정기 백업일입니다</h3>
+            <p className="text-xs md:text-sm text-slate-600 leading-relaxed">
+              정오 이후에 앱을 여신 것 같아 자동 백업은 건너뛰었어요.<br />
+              다른 PC에서 정오 무렵 자동 백업이 됐는지 다운로드 폴더를 확인해보시고,<br />
+              없다면 백업 메뉴에서 전체 백업을 눌러 수동으로 받아주세요.
+            </p>
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setShowBackupMissedModal(false)}
+                className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
+              >
+                확인
               </button>
             </div>
           </div>
