@@ -166,7 +166,8 @@ function RibbonEditor({
       .map((line, idx) => {
         const lineHtml = `<div class="rline">${escapeHtml(line) || '&nbsp;'}</div>`;
         if (idx === 0) return lineHtml;
-        const gapHtml = `<div class="rgap" style="width:${ribbonLineGap}mm;">${ribbonShowGuide ? '<div class="rguide"></div>' : ''}</div>`;
+        const gapClass = ribbonShowGuide ? 'rgap rgap-guide' : 'rgap';
+        const gapHtml = `<div class="${gapClass}" style="width:${ribbonLineGap}mm;"></div>`;
         return gapHtml + lineHtml;
       })
       .join('');
@@ -223,20 +224,20 @@ function RibbonEditor({
           }
           .rgap {
             align-self: stretch;
-            display: flex;
-            justify-content: center;
           }
-          .rguide {
-            width: 1px;
-            align-self: stretch;
-            /* 정확히 안 잘려도 티 안 나도록 최대한 흐리고(28% 불투명) 성기게(1.2mm 선 + 6mm 간격) 그립니다 */
+          .rgap-guide {
+            /* 배경 이미지를 1px 폭짜리 타일로 만들어 칸 한가운데에만 표시합니다.
+               정확히 안 잘려도 티 안 나도록 최대한 흐리고(35% 불투명) 성기게(1.5mm 선 + 5mm 간격) 그립니다. */
             background-image: repeating-linear-gradient(
               to bottom,
-              rgba(0,0,0,0.28) 0mm,
-              rgba(0,0,0,0.28) 1.2mm,
-              transparent 1.2mm,
-              transparent 6mm
+              rgba(0,0,0,0.35) 0mm,
+              rgba(0,0,0,0.35) 1.5mm,
+              transparent 1.5mm,
+              transparent 6.5mm
             );
+            background-repeat: repeat-y;
+            background-position: center top;
+            background-size: 1px 6.5mm;
           }
           .rline {
             writing-mode: vertical-rl;
@@ -561,20 +562,14 @@ function RibbonEditor({
                                   style={{
                                     width: `${ribbonLineGap}mm`,
                                     alignSelf: 'stretch',
-                                    display: 'flex',
-                                    justifyContent: 'center',
+                                    backgroundImage: ribbonShowGuide
+                                      ? 'repeating-linear-gradient(to bottom, rgba(0,0,0,0.35) 0mm, rgba(0,0,0,0.35) 1.5mm, transparent 1.5mm, transparent 6.5mm)'
+                                      : 'none',
+                                    backgroundRepeat: 'repeat-y',
+                                    backgroundPosition: 'center top',
+                                    backgroundSize: '1px 6.5mm',
                                   }}
-                                >
-                                  {ribbonShowGuide && (
-                                    <div
-                                      style={{
-                                        width: '1px',
-                                        alignSelf: 'stretch',
-                                        backgroundImage: 'repeating-linear-gradient(to bottom, rgba(0,0,0,0.28) 0mm, rgba(0,0,0,0.28) 1.2mm, transparent 1.2mm, transparent 6mm)',
-                                      }}
-                                    />
-                                  )}
-                                </div>
+                                />
                               )}
                               <div
                                 style={{
