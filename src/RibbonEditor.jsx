@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { supabase, RIBBON_FONT_OPTIONS, RIBBON_GOOGLE_FONTS_URL } from './shared.js';
 
 function RibbonEditor({
@@ -36,6 +36,8 @@ function RibbonEditor({
   const ribbonContentWidthMm = Math.max(0, Number(ribbonPaperWidth) - (Number(ribbonMarginLeft) || 0) - (Number(ribbonMarginRight) || 0));
   // 정중앙을 기준으로 반으로 잘랐을 때 한쪽 리본의 폭 (좌우 여백을 동일하게 맞춰두면 양쪽이 똑같이 나뉩니다)
   const ribbonHalfWidthMm = Number(ribbonPaperWidth) / 2;
+  // 줄 사이 절단선의 굵기(mm). 화면/기기별로 저장되는 값이 아니라 이 편집기 화면 안에서만 쓰는 설정입니다.
+  const [ribbonGuideWidthMm, setRibbonGuideWidthMm] = useState(0.4);
   // 공백(스페이스)만 있는 줄도 여백 용도로 그대로 유지합니다. 완전히 빈 줄(엔터만 두 번 누른 경우)만 걸러냅니다.
   const ribbonLines = ribbonText.split('\n').filter(line => line.length > 0);
 
@@ -166,6 +168,12 @@ function RibbonEditor({
       .map(line => `<div class="rline">${escapeHtml(line) || '&nbsp;'}</div>`)
       .join('');
 
+    // 줄이 2개 이상일 때만, 두 줄 사이 한가운데에 절단 안내 점선을 별도 요소로 그립니다.
+    // (좌우 여백이나 줄 간격이 0이어도 항상 컨테이너 정중앙에 표시되도록 절대좌표로 배치합니다)
+    const guideHtml = (ribbonShowGuide && ribbonLines.length >= 2)
+      ? `<div class="rguide" style="width:${ribbonGuideWidthMm}mm;"></div>`
+      : '';
+
     // 상단 여백은 padding이 아니라 실제 높이를 가진 빈 칸(스페이서)으로 만듭니다.
     // (하단 여백은 프린터 드라이버 쪽에서 잘려나가 의미가 없어 제거했습니다 - 필요하면 빅솔론 드라이버의
     //  "문서 설정 > 용지 공급 > 인쇄 후에 용지 공급" 값으로 조절하세요.)
@@ -173,7 +181,7 @@ function RibbonEditor({
       <div class="ribbon-outer">
         <div class="ribbon-guide">
           <div class="ribbon-spacer" style="height:${ribbonMarginTop}mm;">&nbsp;</div>
-          <div class="ribbon-flex">${linesHtml}</div>
+          <div class="ribbon-flex">${linesHtml}${guideHtml}</div>
         </div>
       </div>
     `;
@@ -216,7 +224,7 @@ function RibbonEditor({
             align-items: flex-start;
             justify-content: center;
             gap: ${ribbonLineGap}mm;
-            ${ribbonShowGuide ? `background-image: repeating-linear-gradient(to bottom, rgba(0,0,0,0.35) 0mm, rgba(0,0,0,0.35) 1.5mm, transparent 1.5mm, transparent 6.5mm); background-repeat: no-repeat; background-position: center top; background-size: 1px 100%;` : ''}
+            position: relative;
           }
           .rline {
             writing-mode: vertical-rl;
@@ -227,7 +235,23 @@ function RibbonEditor({
             font-weight: ${ribbonBold ? 800 : 400};
             letter-spacing: ${ribbonLetterSpacing}px;
             word-spacing: ${ribbonWordSpacingEm}em;
-            background-color: #fff;
+          }
+          .rguide {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            transform: translateX(-50%);
+            /* 줄 간격(gap)이 0이어도, 감열지 프린터에서 흐릿한 회색이 통째로 안 찍혀 사라지지 않도록
+               다소 진하게(65% 불투명) 하되, 선은 가늘고 점선 간격은 성기게(1.5mm 선 + 5mm 간격) 유지합니다. */
+            background-image: repeating-linear-gradient(
+              to bottom,
+              rgba(0,0,0,0.65) 0mm,
+              rgba(0,0,0,0.65) 1.5mm,
+              transparent 1.5mm,
+              transparent 6.5mm
+            );
+            pointer-events: none;
           }
           .no-print { text-align: center; padding: 10px; background: #eee; }
           @media print {
@@ -455,6 +479,16 @@ function RibbonEditor({
                     줄 사이 절단선(점선) 표시
                   </label>
                 </div>
+                {ribbonShowGuide && (
+                  <div>
+                    <label className="text-[11px] md:text-xs font-bold text-slate-700">절단선 굵기 ({ribbonGuideWidthMm.toFixed(1)}mm)</label>
+                    <input
+                      type="range" min="0.1" max="1.5" step="0.1" value={ribbonGuideWidthMm}
+                      onChange={e => setRibbonGuideWidthMm(Number(e.target.value))}
+                      className="w-full mt-2 cursor-pointer accent-rose-500"
+                    />
+                  </div>
+                )}
 
                 <div className="border-t border-slate-200 pt-3 mt-2 space-y-2">
                   <div className="text-[11px] md:text-xs font-bold text-slate-700">☁️ Supabase 양식 저장 / 불러오기</div>
@@ -531,12 +565,7 @@ function RibbonEditor({
                             alignItems: 'flex-start',
                             justifyContent: 'center',
                             gap: `${ribbonLineGap}mm`,
-                            backgroundImage: ribbonShowGuide
-                              ? 'repeating-linear-gradient(to bottom, rgba(0,0,0,0.35) 0mm, rgba(0,0,0,0.35) 1.5mm, transparent 1.5mm, transparent 6.5mm)'
-                              : 'none',
-                            backgroundRepeat: 'no-repeat',
-                            backgroundPosition: 'center top',
-                            backgroundSize: '1px 100%',
+                            position: 'relative',
                           }}
                         >
                           {ribbonLines.map((line, idx) => (
@@ -552,12 +581,25 @@ function RibbonEditor({
                                 letterSpacing: `${ribbonLetterSpacing}px`,
                                 wordSpacing: `${ribbonWordSpacingEm}em`,
                                 color: '#000',
-                                backgroundColor: '#fff',
                               }}
                             >
                               {line}
                             </div>
                           ))}
+                          {ribbonShowGuide && ribbonLines.length >= 2 && (
+                            <div
+                              style={{
+                                position: 'absolute',
+                                left: '50%',
+                                top: 0,
+                                bottom: 0,
+                                width: `${ribbonGuideWidthMm}mm`,
+                                transform: 'translateX(-50%)',
+                                backgroundImage: 'repeating-linear-gradient(to bottom, rgba(0,0,0,0.65) 0mm, rgba(0,0,0,0.65) 1.5mm, transparent 1.5mm, transparent 6.5mm)',
+                                pointerEvents: 'none',
+                              }}
+                            />
+                          )}
                         </div>
                       )}
                     </div>
