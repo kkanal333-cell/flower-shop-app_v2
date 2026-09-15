@@ -203,7 +203,6 @@ function RibbonEditor({
           .ribbon-guide {
             margin-left: ${ribbonMarginLeft}mm;
             margin-right: ${ribbonMarginRight}mm;
-            ${ribbonShowGuide ? 'border-left: 1px dashed #000; border-right: 1px dashed #000;' : ''}
           }
           .ribbon-spacer {
             width: 100%;
@@ -217,6 +216,7 @@ function RibbonEditor({
             align-items: flex-start;
             justify-content: center;
             gap: ${ribbonLineGap}mm;
+            ${ribbonShowGuide ? `background-image: repeating-linear-gradient(to bottom, rgba(0,0,0,0.35) 0mm, rgba(0,0,0,0.35) 1.5mm, transparent 1.5mm, transparent 6.5mm); background-repeat: no-repeat; background-position: center top; background-size: 1px 100%;` : ''}
           }
           .rline {
             writing-mode: vertical-rl;
@@ -227,6 +227,7 @@ function RibbonEditor({
             font-weight: ${ribbonBold ? 800 : 400};
             letter-spacing: ${ribbonLetterSpacing}px;
             word-spacing: ${ribbonWordSpacingEm}em;
+            background-color: #fff;
           }
           .no-print { text-align: center; padding: 10px; background: #eee; }
           @media print {
@@ -451,7 +452,7 @@ function RibbonEditor({
                       onChange={e => setRibbonShowGuide(e.target.checked)}
                       className="accent-rose-500 cursor-pointer w-3.5 h-3.5"
                     />
-                    재단 가이드선(점선) 표시
+                    줄 사이 절단선(점선) 표시
                   </label>
                 </div>
 
@@ -516,8 +517,6 @@ function RibbonEditor({
                       style={{
                         marginLeft: `${ribbonMarginLeft}mm`,
                         marginRight: `${ribbonMarginRight}mm`,
-                        borderLeft: ribbonShowGuide ? '1px dashed #94a3b8' : 'none',
-                        borderRight: ribbonShowGuide ? '1px dashed #94a3b8' : 'none',
                         minHeight: '48mm',
                       }}
                     >
@@ -532,6 +531,12 @@ function RibbonEditor({
                             alignItems: 'flex-start',
                             justifyContent: 'center',
                             gap: `${ribbonLineGap}mm`,
+                            backgroundImage: ribbonShowGuide
+                              ? 'repeating-linear-gradient(to bottom, rgba(0,0,0,0.35) 0mm, rgba(0,0,0,0.35) 1.5mm, transparent 1.5mm, transparent 6.5mm)'
+                              : 'none',
+                            backgroundRepeat: 'no-repeat',
+                            backgroundPosition: 'center top',
+                            backgroundSize: '1px 100%',
                           }}
                         >
                           {ribbonLines.map((line, idx) => (
@@ -547,6 +552,7 @@ function RibbonEditor({
                                 letterSpacing: `${ribbonLetterSpacing}px`,
                                 wordSpacing: `${ribbonWordSpacingEm}em`,
                                 color: '#000',
+                                backgroundColor: '#fff',
                               }}
                             >
                               {line}
