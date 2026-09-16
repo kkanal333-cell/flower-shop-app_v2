@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -17,12 +17,25 @@ import { supabase, PURCHASE_PAYMENT_OPTIONS, getKoreaNowFormatted } from './shar
 function PurchaseTab({ purchases, fetchPurchases }) {
   const todayStr = getKoreaNowFormatted().date;
 
-  const [period, setPeriod] = useState('today'); // today | week | month | year
+  // 새로고침 시에도 이전 탭 상태 유지
+  const [period, setPeriod] = useState(() => {
+    return localStorage.getItem('purchase_period') || 'today';
+  }); // today | week | month | year
   const [selectedDate, setSelectedDate] = useState(todayStr);
-  const [trendGranularity, setTrendGranularity] = useState('daily'); // daily | weekly | monthly | yearly
+  const [trendGranularity, setTrendGranularity] = useState(() => {
+    return localStorage.getItem('purchase_trend_granularity') || 'daily';
+  }); // daily | weekly | monthly | yearly
   const [trendOffset, setTrendOffset] = useState(0); // 0=현재 구간, 1=한 구간 전, ... (‹ › 화살표로 이동)
   const [saving, setSaving] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState(null); // 매입 수정 팝업 - { id, date, payment_method, vendor, item_name, quantity, unit_price } | null
+
+  useEffect(() => {
+    localStorage.setItem('purchase_period', period);
+  }, [period]);
+
+  useEffect(() => {
+    localStorage.setItem('purchase_trend_granularity', trendGranularity);
+  }, [trendGranularity]);
 
   // 영수증 사진 인식
   const [receiptLoading, setReceiptLoading] = useState(false);
