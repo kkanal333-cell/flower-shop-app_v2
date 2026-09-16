@@ -227,7 +227,13 @@ export default function App() {
   
   const [orders, setOrders] = useState([]);
   const [purchases, setPurchases] = useState([]);
-  const [salesMenuTab, setSalesMenuTab] = useState('sales'); // 'sales' | 'purchase' | 'stats' - 매출/매입/통계 탭
+  const [salesMenuTab, setSalesMenuTab] = useState(() => {
+    return localStorage.getItem('sales_menu_tab') || 'sales';
+  }); // 'sales' | 'purchase' | 'stats' - 매출/매입/통계 탭
+
+  useEffect(() => {
+    localStorage.setItem('sales_menu_tab', salesMenuTab);
+  }, [salesMenuTab]);
   const [customers, setCustomers] = useState([]);
 
   // 휴지통 상태 관리 (Supabase의 deleted_at 컬럼 기준으로 관리 -> 모바일/PC 등 모든 기기에서 동일하게 동기화됨)
@@ -251,7 +257,13 @@ export default function App() {
   const [selectedTrashCustomerIds, setSelectedTrashCustomerIds] = useState([]);
 
   const [orderSearch, setOrderSearch] = useState('');
-  const [orderTypeFilter, setOrderTypeFilter] = useState('all'); // all | reservation | onsite
+  const [orderTypeFilter, setOrderTypeFilter] = useState(() => {
+    return localStorage.getItem('order_type_filter') || 'all';
+  }); // all | reservation | onsite
+
+  useEffect(() => {
+    localStorage.setItem('order_type_filter', orderTypeFilter);
+  }, [orderTypeFilter]);
   const [receiptSort, setReceiptSort] = useState(null); // null | 'desc' | 'asc' - 접수일시 정렬 (헤더 삼각형 클릭)
   const [orderListPage, setOrderListPage] = useState(1); // 전체 주문 목록 페이지네이션 (40건/페이지)
   const ORDERS_PER_PAGE = 40;
@@ -429,7 +441,13 @@ export default function App() {
     notify_kakao: true
   });
 
-  const [newOrderTab, setNewOrderTab] = useState('reservation'); // 'reservation' | 'onsite'
+  const [newOrderTab, setNewOrderTab] = useState(() => {
+    return localStorage.getItem('new_order_tab') || 'reservation';
+  }); // 'reservation' | 'onsite'
+
+  useEffect(() => {
+    localStorage.setItem('new_order_tab', newOrderTab);
+  }, [newOrderTab]);
 
   const [onsiteOrder, setOnsiteOrder] = useState({
     customer_name: '',
@@ -1300,7 +1318,13 @@ export default function App() {
     fetchData();
   };
 
-  const [dashboardPeriod, setDashboardPeriod] = useState('today'); // today | week | month | all
+  const [dashboardPeriod, setDashboardPeriod] = useState(() => {
+    return localStorage.getItem('dashboard_period') || 'today';
+  }); // today | week | month | all
+
+  useEffect(() => {
+    localStorage.setItem('dashboard_period', dashboardPeriod);
+  }, [dashboardPeriod]);
   const [dashboardSelectedDate, setDashboardSelectedDate] = useState(() => getKoreaNowFormatted().date);
 
   // ===== 매출비교(vs 페이히어) =====
@@ -1419,7 +1443,13 @@ export default function App() {
     };
   }, [orders, comparePayhereRows, compareDate]);
 
-  const [trendGranularity, setTrendGranularity] = useState('daily'); // daily | weekly | monthly | yearly
+  const [trendGranularity, setTrendGranularity] = useState(() => {
+    return localStorage.getItem('trend_granularity') || 'daily';
+  }); // daily | weekly | monthly | yearly
+
+  useEffect(() => {
+    localStorage.setItem('trend_granularity', trendGranularity);
+  }, [trendGranularity]);
   const [trendOffset, setTrendOffset] = useState(0); // 0=현재 구간, 1=한 구간 전, ... (‹ › 화살표로 이동)
 
   // 매출 추이 그래프 데이터 (일/주/월/년 단위 선택, 화살표로 이전/다음 구간 이동 가능)
