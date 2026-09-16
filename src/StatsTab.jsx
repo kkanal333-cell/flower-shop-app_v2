@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -7,9 +7,22 @@ import { getKoreaNowFormatted } from './shared.js';
 function StatsTab({ orders, purchases }) {
   const todayStr = getKoreaNowFormatted().date;
   const [selectedDate, setSelectedDate] = useState(todayStr);
-  const [trendGranularity, setTrendGranularity] = useState('daily'); // daily | weekly | monthly | yearly
+  // 새로고침 시에도 이전 탭 상태 유지
+  const [trendGranularity, setTrendGranularity] = useState(() => {
+    return localStorage.getItem('stats_trend_granularity') || 'daily';
+  }); // daily | weekly | monthly | yearly
   const [trendOffset, setTrendOffset] = useState(0); // 0=현재 구간, 1=한 구간 전, ... (‹ › 화살표로 이동)
-  const [period, setPeriod] = useState('today'); // today | week | month | year
+  const [period, setPeriod] = useState(() => {
+    return localStorage.getItem('stats_period') || 'today';
+  }); // today | week | month | year
+
+  useEffect(() => {
+    localStorage.setItem('stats_trend_granularity', trendGranularity);
+  }, [trendGranularity]);
+
+  useEffect(() => {
+    localStorage.setItem('stats_period', period);
+  }, [period]);
 
   const nowDate = getKoreaNowFormatted().kstDateObj;
   const dayOfWeek = nowDate.getDay();
