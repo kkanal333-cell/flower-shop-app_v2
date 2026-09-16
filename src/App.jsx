@@ -3931,7 +3931,7 @@ export default function App() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[11px] md:text-xs font-bold text-black">결제 금액 (천원 단위)</label>
+                  <label className="text-[11px] md:text-xs font-bold text-black">결제 금액 (천원 단위) *</label>
                   <div className="relative mt-1">
                     <input
                       type="number"
@@ -3973,6 +3973,49 @@ export default function App() {
                 </div>
               </div>
 
+              <div className="gap-1.5 md:gap-2" style={{ display: 'flex', alignItems: 'flex-end' }}>
+                <div style={{ flex: '1 1 60px', minWidth: 0 }}>
+                  <label className="text-[11px] md:text-xs font-bold text-black">결제 방식 *</label>
+                  <select
+                    value={newOrder.payment_method}
+                    onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
+                    style={{ backgroundColor: '#ffffff' }}
+                  >
+                    {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
+                  </select>
+                </div>
+                <label className="flex items-center gap-1 px-1.5 md:px-2 py-2 md:py-3 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap" style={{ flexShrink: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={!!newOrder.is_delivery}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        setNewOrder({
+                          ...newOrder,
+                          is_delivery: true,
+                          delivery_date: newOrder.delivery_date || newOrder.pickup_date,
+                          delivery_time: newOrder.delivery_time || newOrder.pickup_time
+                        });
+                      } else {
+                        setNewOrder({ ...newOrder, is_delivery: false, delivery_date: '', delivery_time: '' });
+                      }
+                    }}
+                    className="w-4 h-4 accent-sky-500 cursor-pointer"
+                  />
+                  <span className="text-[10px] md:text-sm font-bold text-black">🚚배송</span>
+                </label>
+                <label className="flex items-center gap-1 px-1.5 md:px-2 py-2 md:py-3 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap" style={{ flexShrink: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={newOrder.notify_kakao}
+                    onChange={e => setNewOrder({ ...newOrder, notify_kakao: e.target.checked })}
+                    className="w-4 h-4 accent-yellow-500 cursor-pointer"
+                  />
+                  <span className="text-[10px] md:text-sm font-bold text-black">💬알림톡</span>
+                </label>
+              </div>
+
               <div className="grid grid-cols-2 gap-2 md:gap-4">
                 <div>
                   <label className="text-[11px] md:text-xs font-bold text-black">접수 날짜</label>
@@ -3996,49 +4039,6 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="gap-1.5 md:gap-2" style={{ display: 'flex', alignItems: 'flex-end' }}>
-                <div style={{ flex: '1 1 60px', minWidth: 0 }}>
-                  <label className="text-[11px] md:text-xs font-bold text-black">결제 방식 *</label>
-                  <select
-                    value={newOrder.payment_method}
-                    onChange={e => setNewOrder({...newOrder, payment_method: e.target.value})}
-                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
-                    style={{ backgroundColor: '#ffffff' }}
-                  >
-                    {PAYMENT_OPTIONS.map(pm => <option key={pm} value={pm}>{pm}</option>)}
-                  </select>
-                </div>
-                <label className="flex items-center gap-1 px-1.5 md:px-2 py-2 md:py-3 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap" style={{ flexShrink: 0 }}>
-                  <input
-                    type="checkbox"
-                    checked={newOrder.notify_kakao}
-                    onChange={e => setNewOrder({ ...newOrder, notify_kakao: e.target.checked })}
-                    className="w-4 h-4 accent-yellow-500 cursor-pointer"
-                  />
-                  <span className="text-[10px] md:text-sm font-bold text-black">💬알림톡</span>
-                </label>
-                <label className="flex items-center gap-1 px-1.5 md:px-2 py-2 md:py-3 border border-slate-300 rounded-xl bg-white cursor-pointer whitespace-nowrap" style={{ flexShrink: 0 }}>
-                  <input
-                    type="checkbox"
-                    checked={!!newOrder.is_delivery}
-                    onChange={e => {
-                      if (e.target.checked) {
-                        setNewOrder({
-                          ...newOrder,
-                          is_delivery: true,
-                          delivery_date: newOrder.delivery_date || newOrder.pickup_date,
-                          delivery_time: newOrder.delivery_time || newOrder.pickup_time
-                        });
-                      } else {
-                        setNewOrder({ ...newOrder, is_delivery: false, delivery_date: '', delivery_time: '' });
-                      }
-                    }}
-                    className="w-4 h-4 accent-sky-500 cursor-pointer"
-                  />
-                  <span className="text-[10px] md:text-sm font-bold text-black">🚚배송</span>
-                </label>
-              </div>
-
               <div>
                 <label className="text-[11px] md:text-xs font-bold text-black">고객 요구사항 / 메모</label>
                 <textarea
@@ -4052,10 +4052,10 @@ export default function App() {
                     setIsMemoAutofilled(false);
                   }}
                   onFocus={e => e.target.select()}
-                  className={`w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white font-medium transition-colors ${
+                  className={`w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm font-medium transition-colors ${
                     isMemoAutofilled ? 'text-slate-300' : 'text-black'
                   }`}
-                  style={{ backgroundColor: '#ffffff' }}
+                  style={{ backgroundColor: '#f1f5f9' }}
                   rows={3}
                   placeholder="요청사항이나 특이사항을 적어주세요."
                 />
@@ -4094,16 +4094,18 @@ export default function App() {
                 </div>
                 <div>
                   <label className="text-[11px] md:text-xs font-bold text-black">금액 (천원 단위) *</label>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    value={onsiteOrder.amount_thousands}
-                    onChange={e => setOnsiteOrder({ ...onsiteOrder, amount_thousands: e.target.value })}
-                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
-                  />
-                  <p className="text-[10px] text-slate-500 mt-0.5">
-                    = {((Number(onsiteOrder.amount_thousands) || 0) * 1000).toLocaleString()}원
-                  </p>
+                  <div className="relative mt-1">
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={onsiteOrder.amount_thousands}
+                      onChange={e => setOnsiteOrder({ ...onsiteOrder, amount_thousands: e.target.value })}
+                      className="w-full p-2 md:p-3 border border-slate-300 rounded-xl text-xs md:text-sm bg-white text-black font-medium pr-16"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-black pointer-events-none">
+                      = {((Number(onsiteOrder.amount_thousands) || 0) * 1000).toLocaleString()}원
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -4198,7 +4200,8 @@ export default function App() {
                     spellCheck={false}
                     value={onsiteOrder.customer_name}
                     onChange={e => handleOnsiteCustomerNameChange(e.target.value)}
-                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm text-black font-medium"
+                    style={{ backgroundColor: '#f1f5f9' }}
                     placeholder="입력 안 해도 됩니다"
                   />
 
@@ -4229,7 +4232,8 @@ export default function App() {
                     inputMode="numeric"
                     value={onsiteOrder.phone}
                     onChange={e => setOnsiteOrder({ ...onsiteOrder, phone: formatPhone(e.target.value) })}
-                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm text-black font-medium"
+                    style={{ backgroundColor: '#f1f5f9' }}
                     placeholder="010-0000-0000"
                   />
                 </div>
@@ -4244,7 +4248,8 @@ export default function App() {
                   spellCheck={false}
                   value={onsiteOrder.memo}
                   onChange={e => setOnsiteOrder({ ...onsiteOrder, memo: e.target.value })}
-                  className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
+                  className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm text-black font-medium"
+                  style={{ backgroundColor: '#f1f5f9' }}
                   rows={2}
                 />
               </div>
