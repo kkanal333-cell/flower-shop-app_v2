@@ -426,6 +426,7 @@ export default function App() {
 
   const [newOrder, setNewOrder] = useState({
     customer_name: '',
+    customer_notes: '',
     phone: '010-',
     product_name: '꽃다발',
     amount_thousands: '55',
@@ -451,6 +452,7 @@ export default function App() {
 
   const [onsiteOrder, setOnsiteOrder] = useState({
     customer_name: '',
+    customer_notes: '',
     phone: '010-',
     product_name: '꽃다발',
     amount_thousands: '55',
@@ -826,7 +828,7 @@ export default function App() {
     // 활성 주문 (휴지통에 없는 주문)
     const { data: orderData, error: orderError } = await supabase
       .from('orders')
-      .select('*, customers(id, name, phone)')
+      .select('*, customers(id, name, phone, notes)')
       .is('deleted_at', null)
       .order('id', { ascending: false });
 
@@ -984,6 +986,7 @@ export default function App() {
     setOnsiteOrder(prev => ({
       ...prev,
       customer_name: cust.name,
+      customer_notes: cust.notes || '',
       phone: cust.phone || '010-'
     }));
     setOnsiteMatchedCustomerList([]);
@@ -993,10 +996,11 @@ export default function App() {
     let hasAutofilledMemo = false;
 
     setNewOrder(prev => {
-      const updated = { 
-        ...prev, 
+      const updated = {
+        ...prev,
         customer_name: cust.name,
-        phone: cust.phone || '010-' 
+        customer_notes: cust.notes || '',
+        phone: cust.phone || '010-'
       };
 
       const matchingOrders = orders
@@ -1106,6 +1110,13 @@ export default function App() {
       customerId = newCust?.id;
     }
 
+    // 고객정보(아파트 동·호수 등)를 입력했으면 고객 레코드에도 반영합니다. (비워두면 기존 값을 지우지 않습니다)
+    const trimmedCustomerNotes = (newOrder.customer_notes || '').trim();
+    if (customerId && trimmedCustomerNotes) {
+      const { error: notesErr } = await supabase.from('customers').update({ notes: trimmedCustomerNotes }).eq('id', customerId);
+      if (notesErr) console.error('고객정보 저장 실패:', notesErr);
+    }
+
     const actualAmount = (Number(newOrder.amount_thousands) || 0) * 1000;
 
     const pickupDatetime = newOrder.is_delivery
@@ -1177,6 +1188,7 @@ export default function App() {
     const nextQ = getNextQuarterHourDateTime();
     setNewOrder({
       customer_name: '',
+      customer_notes: '',
       phone: '010-',
       product_name: '꽃다발',
       amount_thousands: '55',
@@ -1275,6 +1287,13 @@ export default function App() {
       }
     }
 
+    // 고객정보(아파트 동·호수 등)를 입력했으면 고객 레코드에도 반영합니다. (비워두면 기존 값을 지우지 않습니다)
+    const trimmedOnsiteCustomerNotes = (onsiteOrder.customer_notes || '').trim();
+    if (customerId && trimmedOnsiteCustomerNotes) {
+      const { error: notesErr } = await supabase.from('customers').update({ notes: trimmedOnsiteCustomerNotes }).eq('id', customerId);
+      if (notesErr) console.error('고객정보 저장 실패:', notesErr);
+    }
+
     const receiptDatetime = `${onsiteOrder.receipt_date}T${onsiteOrder.receipt_time}:00`;
 
     const { error } = await supabase.from('orders').insert([{
@@ -1302,6 +1321,7 @@ export default function App() {
     const kstNowReset = getKoreaNowFormatted();
     setOnsiteOrder({
       customer_name: '',
+      customer_notes: '',
       phone: '010-',
       product_name: '꽃다발',
       amount_thousands: '55',
@@ -1567,6 +1587,7 @@ export default function App() {
       id: order.id,
       customer_id: order.customer_id,
       customer_name: order.customers?.name || '',
+      customer_notes: order.customers?.notes || '',
       phone: order.customers?.phone || '',
       product_name: order.product_name || '꽃다발',
       amount_thousands: String(Math.floor((order.amount || 0) / 1000)),
@@ -1631,6 +1652,13 @@ export default function App() {
         }
         customerIdToLink = newCust?.id;
       }
+    }
+
+    // 고객정보(아파트 동·호수 등)를 입력했으면 고객 레코드에도 반영합니다. (비워두면 기존 값을 지우지 않습니다)
+    const trimmedEditCustomerNotes = (editingOrder.customer_notes || '').trim();
+    if (customerIdToLink && trimmedEditCustomerNotes) {
+      const { error: notesErr } = await supabase.from('customers').update({ notes: trimmedEditCustomerNotes }).eq('id', customerIdToLink);
+      if (notesErr) console.error('고객정보 저장 실패:', notesErr);
     }
 
     const actualAmount = (Number(editingOrder.amount_thousands) || 0) * 1000;
@@ -3404,7 +3432,7 @@ export default function App() {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-1.5">
                     <div>
                       <label className="text-[11px] font-bold text-slate-700">고객 성명 (선택)</label>
                       <input
@@ -3415,7 +3443,22 @@ export default function App() {
                         spellCheck={false}
                         value={editingOrder.customer_name}
                         onChange={e => setEditingOrder({ ...editingOrder, customer_name: e.target.value })}
-                        className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                        className="w-full p-2 border border-slate-300 rounded-xl text-[11px] bg-white text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700">고객정보 (선택)</label>
+                      <input
+                        type="text"
+                        lang="ko"
+                        autoCapitalize="off"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        value={editingOrder.customer_notes || ''}
+                        onChange={e => setEditingOrder({ ...editingOrder, customer_notes: e.target.value })}
+                        className="w-full p-2 border border-slate-300 rounded-xl text-[11px] text-slate-900"
+                        style={{ backgroundColor: '#f1f5f9' }}
+                        placeholder="동/호수 등"
                       />
                     </div>
                     <div>
@@ -3425,7 +3468,7 @@ export default function App() {
                         inputMode="numeric"
                         value={editingOrder.phone}
                         onChange={e => setEditingOrder({ ...editingOrder, phone: formatPhone(e.target.value) })}
-                        className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                        className="w-full p-2 border border-slate-300 rounded-xl text-[11px] bg-white text-slate-900"
                       />
                     </div>
                   </div>
@@ -3463,7 +3506,7 @@ export default function App() {
                 </form>
               ) : (
               <form onSubmit={handleUpdateOrder} className="space-y-3">
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-1.5">
                   <div>
                     <label className="text-[11px] font-bold text-slate-700">고객명</label>
                     <input
@@ -3474,8 +3517,23 @@ export default function App() {
                       spellCheck={false}
                       value={editingOrder.customer_name}
                       onChange={e => setEditingOrder({ ...editingOrder, customer_name: e.target.value })}
-                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                      className="w-full p-2 border border-slate-300 rounded-xl text-[11px] bg-white text-slate-900"
                       required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700">고객정보</label>
+                    <input
+                      type="text"
+                      lang="ko"
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      value={editingOrder.customer_notes || ''}
+                      onChange={e => setEditingOrder({ ...editingOrder, customer_notes: e.target.value })}
+                      className="w-full p-2 border border-slate-300 rounded-xl text-[11px] text-slate-900"
+                      style={{ backgroundColor: '#f1f5f9' }}
+                      placeholder="동/호수 등"
                     />
                   </div>
                   <div>
@@ -3485,7 +3543,7 @@ export default function App() {
                       inputMode="numeric"
                       value={editingOrder.phone}
                       onChange={e => setEditingOrder({ ...editingOrder, phone: formatPhone(e.target.value) })}
-                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900"
+                      className="w-full p-2 border border-slate-300 rounded-xl text-[11px] bg-white text-slate-900"
                       required
                     />
                   </div>
@@ -3651,7 +3709,7 @@ export default function App() {
               </div>
 
               <form onSubmit={handleCreateOrder} className="space-y-3">
-                <div className="grid grid-cols-2 gap-2 relative">
+                <div className="grid grid-cols-3 gap-1.5 relative">
                   <div className="relative">
                     <label className="text-[11px] font-bold text-slate-700">고객 성명 *</label>
                     <input
@@ -3662,7 +3720,7 @@ export default function App() {
                       spellCheck={false}
                       value={newOrder.customer_name}
                       onChange={e => handleCustomerNameChange(e.target.value)}
-                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium"
+                      className="w-full p-2 border border-slate-300 rounded-xl text-[11px] bg-white text-slate-900 font-medium"
                       placeholder="홍길동"
                       required
                     />
@@ -3687,13 +3745,29 @@ export default function App() {
                   </div>
 
                   <div>
+                    <label className="text-[11px] font-bold text-slate-700">고객정보</label>
+                    <input
+                      type="text"
+                      lang="ko"
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      value={newOrder.customer_notes}
+                      onChange={e => setNewOrder({ ...newOrder, customer_notes: e.target.value })}
+                      className="w-full p-2 border border-slate-300 rounded-xl text-[11px] text-slate-900 font-medium"
+                      style={{ backgroundColor: '#f1f5f9' }}
+                      placeholder="동/호수 등"
+                    />
+                  </div>
+
+                  <div>
                     <label className="text-[11px] font-bold text-slate-700">휴대폰 번호 *</label>
                     <input
                       type="text"
                       inputMode="numeric"
                       value={newOrder.phone}
                       onChange={e => setNewOrder({...newOrder, phone: formatPhone(e.target.value)})}
-                      className="w-full p-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-900 font-medium"
+                      className="w-full p-2 border border-slate-300 rounded-xl text-[11px] bg-white text-slate-900 font-medium"
                       placeholder="010-0000-0000"
                       required
                     />
@@ -3867,7 +3941,7 @@ export default function App() {
             </h2>
 
             <form onSubmit={handleCreateOrder} className="space-y-3 md:space-y-4">
-              <div className="grid grid-cols-2 gap-2 md:gap-4 relative">
+              <div className="grid grid-cols-3 gap-1.5 md:gap-3 relative">
                 <div className="relative">
                   <label className="text-[11px] md:text-xs font-bold text-black">고객 성명 *</label>
                   <input
@@ -3878,7 +3952,7 @@ export default function App() {
                     spellCheck={false}
                     value={newOrder.customer_name}
                     onChange={e => handleCustomerNameChange(e.target.value)}
-                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-[11px] md:text-sm bg-white text-black font-medium"
                     style={{ backgroundColor: '#ffffff' }}
                     placeholder="홍길동"
                     required
@@ -3904,13 +3978,29 @@ export default function App() {
                 </div>
 
                 <div>
+                  <label className="text-[11px] md:text-xs font-bold text-black">고객정보</label>
+                  <input
+                    type="text"
+                    lang="ko"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    value={newOrder.customer_notes}
+                    onChange={e => setNewOrder({ ...newOrder, customer_notes: e.target.value })}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-[11px] md:text-sm text-black font-medium"
+                    style={{ backgroundColor: '#f1f5f9' }}
+                    placeholder="동/호수 등"
+                  />
+                </div>
+
+                <div>
                   <label className="text-[11px] md:text-xs font-bold text-black">휴대폰 번호 *</label>
                   <input
                     type="text"
                     inputMode="numeric"
                     value={newOrder.phone}
                     onChange={e => setNewOrder({...newOrder, phone: formatPhone(e.target.value)})}
-                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm bg-white text-black font-medium"
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-[11px] md:text-sm bg-white text-black font-medium"
                     style={{ backgroundColor: '#ffffff' }}
                     placeholder="010-0000-0000"
                     required
@@ -4187,7 +4277,7 @@ export default function App() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-2 md:gap-4">
+              <div className="grid grid-cols-3 gap-1.5 md:gap-3">
                 <div className="relative">
                   <label className="text-[11px] md:text-xs font-bold text-black">고객 성명 (선택)</label>
                   <input
@@ -4200,7 +4290,7 @@ export default function App() {
                     spellCheck={false}
                     value={onsiteOrder.customer_name}
                     onChange={e => handleOnsiteCustomerNameChange(e.target.value)}
-                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm text-black font-medium"
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-[11px] md:text-sm text-black font-medium"
                     style={{ backgroundColor: '#f1f5f9' }}
                     placeholder="입력 안 해도 됩니다"
                   />
@@ -4223,6 +4313,23 @@ export default function App() {
                     </div>
                   )}
                 </div>
+
+                <div>
+                  <label className="text-[11px] md:text-xs font-bold text-black">고객정보 (선택)</label>
+                  <input
+                    type="text"
+                    lang="ko"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    value={onsiteOrder.customer_notes}
+                    onChange={e => setOnsiteOrder({ ...onsiteOrder, customer_notes: e.target.value })}
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-[11px] md:text-sm text-black font-medium"
+                    style={{ backgroundColor: '#f1f5f9' }}
+                    placeholder="동/호수 등"
+                  />
+                </div>
+
                 <div>
                   <label className="text-[11px] md:text-xs font-bold text-black">휴대폰 번호 (선택)</label>
                   <input
@@ -4232,7 +4339,7 @@ export default function App() {
                     inputMode="numeric"
                     value={onsiteOrder.phone}
                     onChange={e => setOnsiteOrder({ ...onsiteOrder, phone: formatPhone(e.target.value) })}
-                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-xs md:text-sm text-black font-medium"
+                    className="w-full p-2 md:p-3 border border-slate-300 rounded-xl mt-1 text-[11px] md:text-sm text-black font-medium"
                     style={{ backgroundColor: '#f1f5f9' }}
                     placeholder="010-0000-0000"
                   />
