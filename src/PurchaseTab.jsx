@@ -44,10 +44,22 @@ function PurchaseTab({ purchases, fetchPurchases }) {
   const [receiptForm, setReceiptForm] = useState({ date: todayStr, payment_method: '현금', vendor: '', item_name: '', quantity: '1', unit_price: '' });
 
   // 매입이력 (업체/거래방식/품목 클릭 시 고정 화면에 표시)
-  const [historyFilter, setHistoryFilter] = useState(null); // { type: 'vendor'|'payment'|'item', value } | null
+  const [historyFilter, setHistoryFilter] = useState(null); // { type: 'vendor'|'payment'|'item'|'search', value } | null
   const [historyPeriod, setHistoryPeriod] = useState('month'); // week | month | year | custom
   const [historyCustomStart, setHistoryCustomStart] = useState(todayStr);
   const [historyCustomEnd, setHistoryCustomEnd] = useState(todayStr);
+
+  // 날짜별 매입리스트 제목 옆 검색창 - 업체/품목으로 매입이력 검색
+  const [purchaseSearch, setPurchaseSearch] = useState('');
+  const handlePurchaseSearchChange = (value) => {
+    setPurchaseSearch(value);
+    const trimmed = value.trim();
+    if (trimmed) {
+      setHistoryFilter({ type: 'search', value: trimmed });
+    } else if (historyFilter?.type === 'search') {
+      setHistoryFilter(null);
+    }
+  };
 
   const [form, setForm] = useState({
     date: todayStr,
@@ -373,8 +385,13 @@ function PurchaseTab({ purchases, fetchPurchases }) {
   const historyList = historyFilter
     ? (purchases || [])
         .filter(p => {
+          if (p.date < historyRange.start || p.date > historyRange.end) return false;
+          if (historyFilter.type === 'search') {
+            const q = historyFilter.value.toLowerCase();
+            return (p.vendor || '').toLowerCase().includes(q) || (p.item_name || '').toLowerCase().includes(q);
+          }
           const field = historyFilter.type === 'vendor' ? p.vendor : historyFilter.type === 'item' ? p.item_name : p.payment_method;
-          return field === historyFilter.value && p.date >= historyRange.start && p.date <= historyRange.end;
+          return field === historyFilter.value;
         })
         .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.created_at || '').localeCompare(a.created_at || ''))
     : [];
@@ -396,7 +413,7 @@ function PurchaseTab({ purchases, fetchPurchases }) {
     if (col === 'amount') return Number(p.amount).toLocaleString() + '원';
     return '';
   };
-  const historyTitleIcon = historyFilter?.type === 'vendor' ? '🏭' : historyFilter?.type === 'item' ? '📦' : '💳';
+  const historyTitleIcon = historyFilter?.type === 'vendor' ? '🏭' : historyFilter?.type === 'item' ? '📦' : historyFilter?.type === 'search' ? '🔍' : '💳';
 
   const inputCls = "p-2 border border-slate-300 rounded-lg text-xs bg-white text-slate-900";
 
@@ -698,7 +715,26 @@ function PurchaseTab({ purchases, fetchPurchases }) {
       <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
           <h3 className="text-sm md:text-base font-bold text-slate-900">📆 날짜별 매입 리스트</h3>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative">
+              <input
+                type="text"
+                value={purchaseSearch}
+                onChange={e => handlePurchaseSearchChange(e.target.value)}
+                placeholder="🔍 업체·품목 검색"
+                className="p-1.5 pr-6 border border-slate-300 rounded-lg text-xs bg-white text-slate-900"
+                style={{ width: '140px' }}
+              />
+              {purchaseSearch && (
+                <button
+                  onClick={() => handlePurchaseSearchChange('')}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer"
+                  aria-label="검색어 지우기"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
             <label
               className={`text-xs font-bold border px-3 py-1.5 rounded-lg inline-flex items-center gap-1 ${
                 receiptLoading
@@ -837,19 +873,19 @@ function PurchaseTab({ purchases, fetchPurchases }) {
                     <td className="py-2 px-2 text-slate-600">{p.date}</td>
                     <td
                       className="py-2 px-2 font-bold text-emerald-700 hover:underline cursor-pointer"
-                      onClick={() => setHistoryFilter({ type: 'payment', value: p.payment_method })}
+                      onClick={() => { setHistoryFilter({ type: 'payment', value: p.payment_method }); setPurchaseSearch(''); }}
                     >
                       {p.payment_method}
                     </td>
                     <td
                       className="py-2 px-2 font-bold text-sky-700 hover:underline cursor-pointer"
-                      onClick={() => setHistoryFilter({ type: 'vendor', value: p.vendor })}
+                      onClick={() => { setHistoryFilter({ type: 'vendor', value: p.vendor }); setPurchaseSearch(''); }}
                     >
                       {p.vendor}
                     </td>
                     <td
                       className="py-2 px-2 font-bold text-purple-700 hover:underline cursor-pointer"
-                      onClick={() => setHistoryFilter({ type: 'item', value: p.item_name })}
+                      onClick={() => { setHistoryFilter({ type: 'item', value: p.item_name }); setPurchaseSearch(''); }}
                     >
                       {p.item_name}
                     </td>
@@ -886,9 +922,16 @@ function PurchaseTab({ purchases, fetchPurchases }) {
       {historyFilter && (
         <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-            <h3 className="text-sm md:text-base font-bold text-slate-900">{historyTitleIcon} {historyFilter.value} 매입 이력</h3>
+            <h3 className="text-sm md:text-base font-bold text-slate-900">
+              {historyFilter.type === 'search'
+                ? `${historyTitleIcon} "${historyFilter.value}" 검색 결과`
+                : `${historyTitleIcon} ${historyFilter.value} 매입 이력`}
+            </h3>
             <button
-              onClick={() => setHistoryFilter(null)}
+              onClick={() => {
+                setHistoryFilter(null);
+                if (historyFilter.type === 'search') setPurchaseSearch('');
+              }}
               className="text-xs font-bold text-slate-500 hover:text-slate-700 cursor-pointer"
             >
               ✕ 닫기
