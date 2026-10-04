@@ -4,6 +4,9 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import { getKoreaNowFormatted } from './shared.js';
 
+// 수익율(%) = 수익 / 매출 * 100 (매출이 0이면 계산 불가라 '-' 표시)
+const fmtRate = (profit, sales) => (sales > 0 ? `${((profit / sales) * 100).toFixed(1)}%` : '-');
+
 function StatsTab({ orders, purchases }) {
   const todayStr = getKoreaNowFormatted().date;
   const [selectedDate, setSelectedDate] = useState(todayStr);
@@ -12,6 +15,7 @@ function StatsTab({ orders, purchases }) {
     return localStorage.getItem('stats_trend_granularity') || 'daily';
   }); // daily | weekly | monthly | yearly
   const [trendOffset, setTrendOffset] = useState(0); // 0=현재 구간, 1=한 구간 전, ... (‹ › 화살표로 이동)
+  const [selectedTrendKey, setSelectedTrendKey] = useState(null); // 수익 추이에서 선택한 막대 (null이면 맨 오른쪽=가장 최근 막대)
   const [period, setPeriod] = useState(() => {
     return localStorage.getItem('stats_period') || 'today';
   }); // today | week | month | year
@@ -98,13 +102,22 @@ function StatsTab({ orders, purchases }) {
     return events;
   };
 
-  const selectedSales = salesByDate[selectedDate] || 0;
-  const selectedPurch = purchByDate[selectedDate] || 0;
-  const selectedProfit = selectedSales - selectedPurch;
-
   // 수익 추이 (일/주/월/년, 화살표로 이전/다음 구간 이동 가능)
   const pad = n => String(n).padStart(2, '0');
   const fmtDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  // 조건에 맞는 날짜들의 매출/매입 합계
+  const sumBy = (pred) => {
+    let sales = 0;
+    let purch = 0;
+    allDates.forEach(d => {
+      if (pred(d)) {
+        sales += salesByDate[d] || 0;
+        purch += purchByDate[d] || 0;
+      }
+    });
+    return { sales, purch };
+  };
 
   const trendRefDate = new Date(nowDate);
   if (trendGranularity === 'daily') trendRefDate.setDate(nowDate.getDate() - trendOffset * 7);
@@ -112,14 +125,15 @@ function StatsTab({ orders, purchases }) {
   else if (trendGranularity === 'monthly') trendRefDate.setMonth(nowDate.getMonth() - trendOffset * 12);
   else if (trendGranularity === 'yearly') trendRefDate.setFullYear(nowDate.getFullYear() - trendOffset * 5);
 
+  // 각 막대: key, label(축 라벨), title(하단 상세 제목), sales, purch, amt(=수익)
   let trendPoints = [];
   if (trendGranularity === 'daily') {
     for (let i = 6; i >= 0; i--) {
       const dt = new Date(trendRefDate);
       dt.setDate(trendRefDate.getDate() - i);
       const dStr = fmtDate(dt);
-      const profit = (salesByDate[dStr] || 0) - (purchByDate[dStr] || 0);
-      trendPoints.push({ key: dStr, label: `${pad(dt.getMonth() + 1)}/${pad(dt.getDate())}`, amt: profit });
+      const { sales, purch } = sumBy(d => d === dStr);
+      trendPoints.push({ key: dStr, label: `${pad(dt.getMonth() + 1)}/${pad(dt.getDate())}`, title: dStr, sales, purch, amt: sales - purch });
     }
   } else if (trendGranularity === 'weekly') {
     const thisSunday = new Date(trendRefDate);
@@ -131,27 +145,28 @@ function StatsTab({ orders, purchases }) {
       end.setDate(start.getDate() + 6);
       const startStr = fmtDate(start);
       const endStr = fmtDate(end);
-      let sum = 0;
-      allDates.forEach(d => { if (d >= startStr && d <= endStr) sum += (salesByDate[d] || 0) - (purchByDate[d] || 0); });
-      trendPoints.push({ key: startStr, label: `${pad(start.getMonth() + 1)}/${pad(start.getDate())}`, amt: sum });
+      const { sales, purch } = sumBy(d => d >= startStr && d <= endStr);
+      trendPoints.push({ key: startStr, label: `${pad(start.getMonth() + 1)}/${pad(start.getDate())}`, title: `${startStr} ~ ${endStr}`, sales, purch, amt: sales - purch });
     }
   } else if (trendGranularity === 'monthly') {
     for (let i = 11; i >= 0; i--) {
       const dt = new Date(trendRefDate.getFullYear(), trendRefDate.getMonth() - i, 1);
       const ymStr = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}`;
-      let sum = 0;
-      allDates.forEach(d => { if (d.slice(0, 7) === ymStr) sum += (salesByDate[d] || 0) - (purchByDate[d] || 0); });
-      trendPoints.push({ key: ymStr, label: `${String(dt.getFullYear()).slice(2)}/${pad(dt.getMonth() + 1)}`, amt: sum });
+      const { sales, purch } = sumBy(d => d.slice(0, 7) === ymStr);
+      trendPoints.push({ key: ymStr, label: `${String(dt.getFullYear()).slice(2)}/${pad(dt.getMonth() + 1)}`, title: `${dt.getFullYear()}년 ${dt.getMonth() + 1}월`, sales, purch, amt: sales - purch });
     }
   } else if (trendGranularity === 'yearly') {
     for (let i = 4; i >= 0; i--) {
       const y = trendRefDate.getFullYear() - i;
-      let sum = 0;
-      allDates.forEach(d => { if (d.slice(0, 4) === String(y)) sum += (salesByDate[d] || 0) - (purchByDate[d] || 0); });
-      trendPoints.push({ key: String(y), label: `${y}`, amt: sum });
+      const { sales, purch } = sumBy(d => d.slice(0, 4) === String(y));
+      trendPoints.push({ key: String(y), label: `${y}`, title: `${y}년`, sales, purch, amt: sales - purch });
     }
   }
   const trendMaxAbs = trendPoints.reduce((m, p) => Math.max(m, Math.abs(p.amt)), 0) || 1;
+
+  // 선택된 막대 (선택값이 없거나 현재 구간에 없으면 맨 오른쪽=가장 최근 막대)
+  const selectedPoint = trendPoints.find(p => p.key === selectedTrendKey) || trendPoints[trendPoints.length - 1];
+  const selectedPointProfit = selectedPoint ? selectedPoint.amt : 0;
 
   return (
     <div className="space-y-4">
@@ -195,6 +210,12 @@ function StatsTab({ orders, purchases }) {
               {periodProfit >= 0 ? '+' : ''}{periodProfit.toLocaleString()}원
             </div>
           </div>
+          <div className="p-4 rounded-xl inline-block" style={{ backgroundColor: periodProfit >= 0 ? '#dcfce7' : '#fee2e2', border: periodProfit >= 0 ? '1px solid #86efac' : '1px solid #fca5a5' }}>
+            <div className="text-[11px] font-bold" style={{ color: periodProfit >= 0 ? '#15803d' : '#b91c1c' }}>수익율</div>
+            <div className="text-lg md:text-2xl font-extrabold mt-1" style={{ color: periodProfit >= 0 ? '#15803d' : '#b91c1c' }}>
+              {fmtRate(periodProfit, periodSales)}
+            </div>
+          </div>
         </div>
 
         <div className="flex items-center gap-3 mt-4 text-[11px] text-slate-500">
@@ -235,49 +256,20 @@ function StatsTab({ orders, purchases }) {
         </div>
       </div>
 
-      {/* 날짜별 수익 */}
-      <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-          <h3 className="text-sm md:text-base font-bold text-slate-900">📆 날짜별 수익</h3>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={e => setSelectedDate(e.target.value)}
-            className="p-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-900"
-          />
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          <div className="p-3 rounded-xl text-center" style={{ backgroundColor: '#fbe7e8', border: '1px solid #f4b8bd' }}>
-            <div className="text-[11px] font-bold" style={{ color: '#be123c' }}>매출</div>
-            <div className="text-sm md:text-lg font-extrabold mt-1" style={{ color: '#be123c' }}>{selectedSales.toLocaleString()}원</div>
-          </div>
-          <div className="p-3 rounded-xl text-center" style={{ backgroundColor: '#e0f2fe', border: '1px solid #93c5fd' }}>
-            <div className="text-[11px] font-bold" style={{ color: '#0369a1' }}>매입</div>
-            <div className="text-sm md:text-lg font-extrabold mt-1" style={{ color: '#0369a1' }}>{selectedPurch.toLocaleString()}원</div>
-          </div>
-          <div className="p-3 rounded-xl text-center" style={{ backgroundColor: selectedProfit >= 0 ? '#dcfce7' : '#fee2e2', border: selectedProfit >= 0 ? '1px solid #86efac' : '1px solid #fca5a5' }}>
-            <div className="text-[11px] font-bold" style={{ color: selectedProfit >= 0 ? '#15803d' : '#b91c1c' }}>수익</div>
-            <div className="text-sm md:text-lg font-extrabold mt-1" style={{ color: selectedProfit >= 0 ? '#15803d' : '#b91c1c' }}>
-              {selectedProfit >= 0 ? '+' : ''}{selectedProfit.toLocaleString()}원
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* 수익 추이 */}
       <div className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
           <h3 className="text-sm md:text-base font-bold text-slate-900">📊 수익 추이</h3>
           <div className="flex gap-1 flex-wrap items-center">
             <button
-              onClick={() => setTrendOffset(o => o + 1)}
+              onClick={() => { setTrendOffset(o => o + 1); setSelectedTrendKey(null); }}
               className="w-6 h-6 flex items-center justify-center rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold cursor-pointer"
               aria-label="이전 구간"
             >
               ‹
             </button>
             <button
-              onClick={() => setTrendOffset(o => Math.max(0, o - 1))}
+              onClick={() => { setTrendOffset(o => Math.max(0, o - 1)); setSelectedTrendKey(null); }}
               disabled={trendOffset === 0}
               className={`w-6 h-6 flex items-center justify-center rounded-lg border text-xs font-bold ${
                 trendOffset === 0
@@ -296,7 +288,7 @@ function StatsTab({ orders, purchases }) {
             ].map(g => (
               <button
                 key={g.id}
-                onClick={() => { setTrendGranularity(g.id); setTrendOffset(0); }}
+                onClick={() => { setTrendGranularity(g.id); setTrendOffset(0); setSelectedTrendKey(null); }}
                 className={`px-2.5 py-1 rounded-lg text-[11px] md:text-xs font-bold cursor-pointer border-2 whitespace-nowrap ${
                   trendGranularity === g.id ? 'bg-emerald-100 border-emerald-400 shadow-sm' : 'bg-white border-transparent hover:bg-slate-100'
                 }`}
@@ -315,10 +307,16 @@ function StatsTab({ orders, purchases }) {
               {trendPoints.map(p => {
                 const barPx = Math.max(2, Math.round((Math.abs(p.amt) / trendMaxAbs) * 65));
                 const isPos = p.amt >= 0;
+                const isSelected = selectedPoint && p.key === selectedPoint.key;
                 return (
                   <div
                     key={p.key}
-                    style={{ flex: '1 1 0%', minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%' }}
+                    onClick={() => setSelectedTrendKey(p.key)}
+                    style={{
+                      flex: '1 1 0%', minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%',
+                      cursor: 'pointer', borderRadius: '6px',
+                      backgroundColor: isSelected ? '#f1f5f9' : 'transparent',
+                    }}
                   >
                     {/* 위쪽 절반: 양수 막대가 아래(0선)에서 위로 자람 */}
                     <div style={{ height: '75px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center' }}>
@@ -351,15 +349,22 @@ function StatsTab({ orders, purchases }) {
             <div style={{ display: 'flex', gap: '4px', width: '100%', marginTop: '4px' }}>
               {trendPoints.map(p => {
                 const [labelTop, labelBottom] = trendGranularity === 'monthly' ? p.label.split('/') : [null, null];
+                const isSelected = selectedPoint && p.key === selectedPoint.key;
+                const labelColor = isSelected ? '#0f172a' : '#94a3b8';
+                const labelWeight = isSelected ? 800 : 400;
                 return (
-                  <div key={p.key} style={{ flex: '1 1 0%', minWidth: 0, textAlign: 'center' }}>
+                  <div
+                    key={p.key}
+                    onClick={() => setSelectedTrendKey(p.key)}
+                    style={{ flex: '1 1 0%', minWidth: 0, textAlign: 'center', cursor: 'pointer' }}
+                  >
                     {trendGranularity === 'monthly' ? (
-                      <div style={{ fontSize: '9px', color: '#94a3b8', lineHeight: '1.2' }}>
+                      <div style={{ fontSize: '9px', color: labelColor, fontWeight: labelWeight, lineHeight: '1.2' }}>
                         <div>{labelTop}</div>
                         <div>{labelBottom}</div>
                       </div>
                     ) : (
-                      <div style={{ fontSize: '9px', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <div style={{ fontSize: '9px', color: labelColor, fontWeight: labelWeight, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {p.label}
                       </div>
                     )}
@@ -367,6 +372,35 @@ function StatsTab({ orders, purchases }) {
                 );
               })}
             </div>
+
+            {/* 선택한 막대의 매출/매입/수익/수익율 */}
+            {selectedPoint && (
+              <div style={{ marginTop: '14px' }}>
+                <div className="text-xs font-bold text-slate-700 mb-2">📌 {selectedPoint.title}</div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <div className="p-3 rounded-xl text-center" style={{ backgroundColor: '#fbe7e8', border: '1px solid #f4b8bd' }}>
+                    <div className="text-[11px] font-bold" style={{ color: '#be123c' }}>매출</div>
+                    <div className="text-sm md:text-lg font-extrabold mt-1" style={{ color: '#be123c' }}>{selectedPoint.sales.toLocaleString()}원</div>
+                  </div>
+                  <div className="p-3 rounded-xl text-center" style={{ backgroundColor: '#e0f2fe', border: '1px solid #93c5fd' }}>
+                    <div className="text-[11px] font-bold" style={{ color: '#0369a1' }}>매입</div>
+                    <div className="text-sm md:text-lg font-extrabold mt-1" style={{ color: '#0369a1' }}>{selectedPoint.purch.toLocaleString()}원</div>
+                  </div>
+                  <div className="p-3 rounded-xl text-center" style={{ backgroundColor: selectedPointProfit >= 0 ? '#dcfce7' : '#fee2e2', border: selectedPointProfit >= 0 ? '1px solid #86efac' : '1px solid #fca5a5' }}>
+                    <div className="text-[11px] font-bold" style={{ color: selectedPointProfit >= 0 ? '#15803d' : '#b91c1c' }}>수익</div>
+                    <div className="text-sm md:text-lg font-extrabold mt-1" style={{ color: selectedPointProfit >= 0 ? '#15803d' : '#b91c1c' }}>
+                      {selectedPointProfit >= 0 ? '+' : ''}{selectedPointProfit.toLocaleString()}원
+                    </div>
+                  </div>
+                  <div className="p-3 rounded-xl text-center" style={{ backgroundColor: selectedPointProfit >= 0 ? '#dcfce7' : '#fee2e2', border: selectedPointProfit >= 0 ? '1px solid #86efac' : '1px solid #fca5a5' }}>
+                    <div className="text-[11px] font-bold" style={{ color: selectedPointProfit >= 0 ? '#15803d' : '#b91c1c' }}>수익율</div>
+                    <div className="text-sm md:text-lg font-extrabold mt-1" style={{ color: selectedPointProfit >= 0 ? '#15803d' : '#b91c1c' }}>
+                      {fmtRate(selectedPointProfit, selectedPoint.sales)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
