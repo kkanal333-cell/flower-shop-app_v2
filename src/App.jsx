@@ -429,7 +429,7 @@ export default function App() {
     customer_notes: '',
     phone: '010-',
     product_name: '꽃다발',
-    amount_thousands: '55',
+    amount_thousands: '',
     pickup_date: nextQuarter.date,
     pickup_time: nextQuarter.time,
     receipt_date: initialKst.date,
@@ -455,7 +455,7 @@ export default function App() {
     customer_notes: '',
     phone: '010-',
     product_name: '꽃다발',
-    amount_thousands: '55',
+    amount_thousands: '',
     payment_method: '신용카드',
     is_delivery: false,
     delivery_date: '',
@@ -548,7 +548,7 @@ export default function App() {
         customer_name: '',
         phone: '010-',
         product_name: '꽃다발',
-        amount_thousands: '55',
+        amount_thousands: '',
         pickup_date: overridePickupDate || nextQ.date,
         pickup_time: overridePickupDate ? '14:00' : nextQ.time,
         receipt_date: kstNow.date,
@@ -986,43 +986,24 @@ export default function App() {
     setOnsiteOrder(prev => ({
       ...prev,
       customer_name: cust.name,
-      customer_notes: cust.notes || '',
       phone: cust.phone || '010-'
     }));
     setOnsiteMatchedCustomerList([]);
+    setCustomerHistoryModal(cust);
   };
 
+  // 목록에서 기존 고객을 선택하면: 성명·휴대폰 번호만 입력창에 채우고(나머지는 자동 입력하지 않음),
+  // 그 고객의 기존 구매 리스트를 팝업으로 보여줍니다.
   const selectCustomerForNewOrder = (cust) => {
-    let hasAutofilledMemo = false;
+    setNewOrder(prev => ({
+      ...prev,
+      customer_name: cust.name,
+      phone: cust.phone || '010-'
+    }));
 
-    setNewOrder(prev => {
-      const updated = {
-        ...prev,
-        customer_name: cust.name,
-        customer_notes: cust.notes || '',
-        phone: cust.phone || '010-'
-      };
-
-      const matchingOrders = orders
-        .filter(o => o.customer_id === cust.id || o.customers?.name === cust.name)
-        .sort((a, b) => b.id - a.id);
-
-      const recentOrder = matchingOrders[0];
-
-      if (recentOrder) {
-        if (recentOrder.product_name) updated.product_name = recentOrder.product_name;
-        if (recentOrder.amount) updated.amount_thousands = String(Math.floor(recentOrder.amount / 1000));
-        if (recentOrder.payment_method) updated.payment_method = recentOrder.payment_method;
-        if (recentOrder.memo) {
-          updated.memo = recentOrder.memo;
-          hasAutofilledMemo = true;
-        }
-      }
-      return updated;
-    });
-
-    setIsMemoAutofilled(hasAutofilledMemo);
+    setIsMemoAutofilled(false);
     setMatchedCustomerList([]);
+    setCustomerHistoryModal(cust);
   };
 
   // 신규주문/수정 발생 시 Supabase Edge Function('notify-order')을 호출해 이메일 알림을 보냅니다.
@@ -1191,7 +1172,7 @@ export default function App() {
       customer_notes: '',
       phone: '010-',
       product_name: '꽃다발',
-      amount_thousands: '55',
+      amount_thousands: '',
       pickup_date: nextQ.date,
       pickup_time: nextQ.time,
       receipt_date: kstNow.date,
@@ -1324,7 +1305,7 @@ export default function App() {
       customer_notes: '',
       phone: '010-',
       product_name: '꽃다발',
-      amount_thousands: '55',
+      amount_thousands: '',
       payment_method: '신용카드',
       is_delivery: false,
       delivery_date: '',
@@ -4753,7 +4734,7 @@ export default function App() {
                         customer_name: '',
                         phone: '010-',
                         product_name: '꽃다발',
-                        amount_thousands: '55',
+                        amount_thousands: '',
                         pickup_date: selectedDate,
                         pickup_time: nextQ.time,
                         receipt_date: kstNow.date,
