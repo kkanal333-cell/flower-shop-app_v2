@@ -5135,7 +5135,7 @@ export default function App() {
                     <div
                       style={{
                         display: 'grid',
-                        gridTemplateColumns: '18px 34px 46px 1fr 40px 60px 16px',
+                        gridTemplateColumns: '20px 36px 46px 1fr 42px 66px 16px',
                         gap: '4px',
                         alignItems: 'center',
                         padding: '4px 2px',
@@ -5163,12 +5163,12 @@ export default function App() {
                           onClick={() => setOrderInfoModal(o)}
                           style={{
                             display: 'grid',
-                            gridTemplateColumns: '18px 34px 46px 1fr 40px 60px 16px',
+                            gridTemplateColumns: '20px 36px 46px 1fr 42px 66px 16px',
                             gap: '4px',
                             alignItems: 'center',
                             padding: '6px 2px',
                             borderBottom: '1px solid #f1f5f9',
-                            fontSize: '11px',
+                            fontSize: '12px',
                             width: '100%',
                             textAlign: 'left',
                             backgroundColor: payhereCheckedIds.includes(o.id) ? '#ecfdf5' : 'transparent',
@@ -5182,7 +5182,7 @@ export default function App() {
                             className={isDeliveryRow ? 'badge-blink' : ''}
                             style={{
                               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                              width: '18px', height: '18px', borderRadius: '4px', fontSize: '12px',
+                              width: '20px', height: '20px', borderRadius: '4px', fontSize: '13px',
                               backgroundColor: isDeliveryRow ? 'transparent' : (isOnsite ? 'transparent' : '#a5b4fc'),
                               color: undefined
                             }}
@@ -5199,9 +5199,9 @@ export default function App() {
                           </span>
                           <span
                             title={o.payment_method || '미지정'}
-                            style={{ color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '10px' }}
+                            style={{ color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
                           >
-                            {({ '신용카드': '카드', '계좌이체': '이체', '전화예약입금': '전화입금' })[o.payment_method] || o.payment_method || '-'}
+                            {({ '신용카드': '카드', '계좌이체': '이체', '전화예약입금': '전화' })[o.payment_method] || o.payment_method || '-'}
                           </span>
                           <span style={{ color: '#000', fontWeight: 'normal', whiteSpace: 'nowrap', textAlign: 'right' }}>
                             {Number(o.amount || 0).toLocaleString()}원
